@@ -19,7 +19,7 @@ debug:
   #       standard (default) >> Warning | Info | Error | Fatal
   #       trace              >> Warning | Info | Error | Fatal | Debug | Trace
   #       debug              >> Warning | Info | Error | Fatal | Debug
-  flag: debug
+  flag: trace
 
 mqtt:
   connection: "tcp://raspberrypi4.fritz.box:1883"
@@ -35,7 +35,7 @@ mqtt:
 meter:
   wallbox:
     gpio: 17
-    bouncetime: 10000
+    bouncetime: 10
     unit: "kW"
     scalefactor: 0.001
     unitflow: "kW/h"
@@ -56,7 +56,7 @@ meter:
     scalefactor: 1000
     unitflow: "l/h"
     scalefactorflow: 0.2777777778
-    mqtttopic: test/portablewater/summary
+ #   mqtttopic: test/portablewater/summary
 
 # webserver configuration
 webserver:

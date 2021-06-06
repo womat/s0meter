@@ -2,14 +2,14 @@ package config
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v2"
 	"log"
 	"os"
+	"s0counter/global"
 	"time"
 
-	"github.com/womat/debug"
+	"gopkg.in/yaml.v2"
 
-	"s0counter/global"
+	"github.com/womat/debug"
 )
 
 // defaultInterval defines the default of dataCollectionInterval and backupInterval (in seconds)
@@ -19,14 +19,16 @@ type yamlDebug struct {
 	File string `yaml:"file"`
 	Flag string `yaml:"flag"`
 }
+
 type MeterConf struct {
-	ScaleFactor     float64 `yaml:"scalefactor"`
-	Gpio            int     `yaml:"gpio"`
-	BounceTime      int     `yaml:"bouncetime"`
-	Unit            string  `yaml:"unit"`
-	UnitFlow        string  `yaml:"unitflow"`
-	ScaleFactorFlow float64 `yaml:"scalefactorflow"`
-	MqttTopic       string  `yaml:"mqtttopic"`
+	ScaleFactor     float64       `yaml:"scalefactor"`
+	Gpio            int           `yaml:"gpio"`
+	BounceTime      time.Duration `yaml:"-"`
+	BounceTimeInt   int           `yaml:"bouncetime"`
+	Unit            string        `yaml:"unit"`
+	UnitFlow        string        `yaml:"unitflow"`
+	ScaleFactorFlow float64       `yaml:"scalefactorflow"`
+	MqttTopic       string        `yaml:"mqtttopic"`
 }
 
 type yamlStruct struct {
@@ -39,15 +41,15 @@ type yamlStruct struct {
 	MQTT                   global.MQTTConf      `yaml:"mqtt"`
 }
 
-func init() {
+func _init() {
 	var err error
-	var flags = flagm{
+	flags := flagm{
 		"version":   {flagType: flagBool, usage: "print version and exit", defaultValue: false},
 		"debugFile": {flagType: flagString, usage: "log file eg. /opt/womat/log/" + global.MODULE + `.log (default "stderr")`, defaultValue: ""},
 		"debugFlag": {flagType: flagString, usage: `"enable debug information (standard | trace | debug) (default "standard")`, defaultValue: ""},
 		"config":    {flagType: flagString, usage: "Config File", defaultValue: "/opt/womat/config/" + global.MODULE + ".yaml"},
 	}
-	var configFile = yamlStruct{
+	configFile := yamlStruct{
 		DataCollectionInterval: defaultInterval,
 		DataFile:               "/opt/womat/data/measurement.yaml",
 		BackupInterval:         defaultInterval,
@@ -120,7 +122,7 @@ func getDebugConfig(flags flagm, d yamlDebug) (c global.DebugConf, err error) {
 	case "stdout":
 		c.File = os.Stdout
 	default:
-		if c.File, err = os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666); err != nil {
+		if c.File, err = os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o666); err != nil {
 			return
 		}
 	}

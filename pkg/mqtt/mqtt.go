@@ -5,72 +5,93 @@ import (
 	"github.com/womat/debug"
 )
 
+// quiesce is the specified number of milliseconds to wait for existing work to be completed.
+const (
+	quiesce = 250
+)
+
+// Handler contains the handler of the mqtt broker
 type Handler struct {
 	handler mqttlib.Client
-	C       chan Message
+	// C is the channel to service the mqtt message
+	// sending a message to channel C will sent the message
+	C chan Message
 }
 
+// Message contains the properties of the mqtt message
 type Message struct {
-	Topic   string
-	Payload []byte
+	Topic    string
+	Payload  []byte
+	Qos      byte
+	Retained bool
 }
 
-func NewMqtt() *Handler {
+// New generate a new mqtt broker client
+func New() *Handler {
 	return &Handler{
 		C: make(chan Message),
 	}
 }
 
-func (m *Handler) Connect(c string) error {
-	if c == "" {
+// Connect connects to the mqtt broker
+// if no broker is defined, mo mqtt message are send
+func (m *Handler) Connect(broker string) error {
+	if broker == "" {
 		return nil
 	}
 
-	opts := mqttlib.NewClientOptions().AddBroker(c)
+	opts := mqttlib.NewClientOptions().AddBroker(broker)
 	m.handler = mqttlib.NewClient(opts)
-	err := m.ReConnect()
-	return err
+	return m.ReConnect()
 }
 
+// ReConnect reconnects to the defined mqtt broker
 func (m *Handler) ReConnect() error {
-	token := m.handler.Connect()
-	token.Wait()
-	err := token.Error()
-	return err
+	t := m.handler.Connect()
+	<-t.Done()
+	return t.Error()
 }
 
+// Disconnect will end the connection to the broker
 func (m *Handler) Disconnect() error {
 	if m.handler == nil {
 		return nil
 	}
 
-	m.handler.Disconnect(250)
+	m.handler.Disconnect(quiesce)
 	return nil
 }
 
+// Service listens to a message on the channel C and sends the message
+// if no handler or topic is defined, the message will be ignored
 func (m *Handler) Service() {
 	for data := range m.C {
+		if m.handler == nil || data.Topic == "" {
+			continue
+		}
+
 		data := data
-
 		go func() {
-			if m.handler == nil {
-				return
-			}
-
 			if !m.handler.IsConnected() {
+				debug.TraceLog.Printf("mqtt broker isn't connected, reconnect it")
+
 				if err := m.ReConnect(); err != nil {
 					debug.ErrorLog.Printf("can't reconnect to mqtt broker /%v", err)
-
 					return
 				}
 			}
 
-			token := m.handler.Publish(data.Topic, 0, false, data.Payload) //nolint:wsl
-			token.Wait()
+			debug.DebugLog.Printf("publishing %v bytes to topic %v: ", len(data.Payload), data.Topic)
+			t := m.handler.Publish(data.Topic, data.Qos, data.Retained, data.Payload)
 
-			if err := token.Error(); err != nil {
-				debug.ErrorLog.Printf("publishing topic %v: %v", data.Topic, err)
-			}
+			// the asynchronous nature of this library makes it easy to forget to check for errors.
+			// Consider using a go routine to log these
+			go func() {
+				<-t.Done()
+				if err := t.Error(); err != nil {
+					debug.ErrorLog.Printf("publishing topic %v: %v", data.Topic, err)
+				}
+			}()
 		}()
 	}
 }

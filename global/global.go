@@ -16,8 +16,10 @@ import (
 // VERSION differs from semantic versioning as described in https://semver.org/
 // but we keep the correct syntax.
 //TODO: increase version number to 1.0.1+2020xxyy
-const VERSION = "1.0.6+20210504"
-const MODULE = "s0counter"
+const (
+	VERSION = "1.0.6+20210504"
+	MODULE  = "s0counter"
+)
 
 type DebugConf struct {
 	File io.WriteCloser
@@ -75,10 +77,12 @@ type Meter struct {
 type MetersMap = map[string]*Meter
 
 // Config holds the global configuration
-var Config Configuration
-var AllMeters = MetersMap{}
+var (
+	Config    Configuration
+	AllMeters = MetersMap{}
+)
 
-func init() {
+func _init() {
 	Config = Configuration{
 		Meter:     map[string]MeterConf{},
 		Webserver: WebserverConf{Webservices: map[string]bool{}},

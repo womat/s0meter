@@ -1,11 +1,10 @@
 // +build windows
 
-package main
+package app
 
 import (
-	"time"
-
 	"s0counter/pkg/raspberry"
+	"time"
 )
 
 func testPinEmu(l *raspberry.Line) {
@@ -14,6 +13,6 @@ func testPinEmu(l *raspberry.Line) {
 	}
 }
 
-func handler(l *raspberry.Line) {
-	increaseImpulse(l.Pin())
+func (app *App) handler(l *raspberry.Line) {
+	app.increaseImpulse(l.Pin())
 }
