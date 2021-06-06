@@ -7,144 +7,95 @@ import (
 	"time"
 )
 
-type Line struct {
-	pin  int
-	edge Edge
+type WinPin struct {
+	gpioPin int
+	edge    Edge
 	// the bounceTime defines the key bounce time (ms)
 	// the value 0 ignores key bouncing
 	bounceTime time.Duration
 	// while bounceTimer is running, new signal are ignored (suppress key bouncing)
 	bounceTimer *time.Timer
 	lastLevel   bool
-	handler     func(*Line)
+	handler     func(Pin)
 }
 
-type Chip struct {
+type WinChip struct {
+	pins map[int]Pin
 }
 
-func Open() (*Chip, error) {
-	lines = map[int]*Line{}
-	return &Chip{}, nil
+func Open() (*WinChip, error) {
+	return &WinChip{pins: map[int]Pin{}}, nil
 }
 
-func (c *Chip) Close() error {
+func (c *WinChip) Close() error {
 	return nil
 }
 
-func (c *Chip) NewPin(p int) (*Line, error) {
-	if _, ok := lines[p]; ok {
+func (c *WinChip) NewPin(p int) (Pin, error) {
+	if _, ok := c.pins[p]; ok {
 		return nil, fmt.Errorf("pin %v already used", p)
 	}
 
-	lines[p] = &Line{pin: p, bounceTimer: time.NewTimer(0)}
-	return lines[p], nil
+	l := WinPin{gpioPin: p, bounceTimer: time.NewTimer(0)}
+	c.pins[p] = &l
+	return c.pins[p], nil
 }
 
-func (l *Line) Watch(edge Edge, handler func(*Line)) error {
-	l.handler = handler
-	l.edge = edge
+func (p *WinPin) Watch(edge Edge, handler func(Pin)) error {
+	p.handler = handler
+	p.edge = edge
 	return nil
 }
 
-func (l *Line) SetBounceTime(t time.Duration) *Line {
-	l.bounceTime = t
-	return l
+func (p *WinPin) Unwatch() {
 }
 
-func (l *Line) BounceTime() time.Duration {
-	return l.bounceTime
+func (p *WinPin) SetBounceTime(t time.Duration) {
+	p.bounceTime = t
+	return
 }
 
-func (l *Line) Unwatch() {
+func (p *WinPin) BounceTimer() *time.Timer {
+	return p.bounceTimer
 }
 
-func (l *Line) TestPin(edge Edge) {
-	switch {
-	case l.edge == EdgeNone, edge == EdgeNone:
-		return
-
-	case edge == EdgeBoth:
-		// if edge is EdgeBoth, handler is called twice
-		if l.edge == EdgeBoth {
-			handler(l)
-		}
-
-		if l.edge == EdgeBoth || l.edge == EdgeFalling || l.edge == EdgeRising {
-			handler(l)
-		}
-	case edge == EdgeFalling:
-		if l.edge == EdgeBoth || l.edge == EdgeFalling {
-			handler(l)
-		}
-	case edge == EdgeRising:
-		if l.edge == EdgeBoth || l.edge == EdgeRising {
-			handler(l)
-		}
-	}
+func (p *WinPin) BounceTime() time.Duration {
+	return p.bounceTime
 }
 
-func (l *Line) Input() {
+func (p *WinPin) SetLastLevel(b bool) {
+	p.lastLevel = b
 }
 
-func (l *Line) PullUp() {
+func (p *WinPin) LastLevel() bool {
+	return p.lastLevel
 }
 
-func (l *Line) PullDown() {
+func (p *WinPin) Edge() Edge {
+	return p.edge
 }
 
-func (l *Line) Pin() int {
-	return l.pin
+func (p *WinPin) Handler() func(Pin) {
+	return p.handler
 }
 
-func (l *Line) Read() bool {
+func (p *WinPin) Input() {
+}
+
+func (p *WinPin) PullUp() {
+}
+
+func (p *WinPin) PullDown() {
+}
+
+func (p *WinPin) Pin() int {
+	return p.gpioPin
+}
+
+func (p *WinPin) Read() bool {
 	return false
 }
 
-func handler(pin *Line) {
-	// check if map with pin struct exists
-	l, ok := lines[pin.Pin()]
-	if !ok {
-		return
-	}
-
-	// if debounce is inactive, call handler function and returns
-	if l.bounceTime == 0 {
-		l.lastLevel = l.Read()
-		l.handler(pin)
-		return
-	}
-
-	select {
-	case <-l.bounceTimer.C:
-		// if bounce Timer is expired, accept new signals
-		l.bounceTimer.Reset(l.bounceTime)
-	default:
-		// if bounce Timer is still running, ignore single
-		return
-	}
-
-	go func(l *Line) {
-		// wait until bounce Timer is expired and check if the pin has still the correct level
-		// the correct level depends on the edge configuration
-		<-l.bounceTimer.C
-		l.bounceTimer.Reset(0)
-
-		switch l.edge {
-		case EdgeBoth:
-			if l.Read() != l.lastLevel {
-				l.lastLevel = l.Read()
-				l.handler(pin)
-			}
-		case EdgeFalling:
-			if !l.Read() {
-				l.lastLevel = l.Read()
-				l.handler(pin)
-			}
-		case EdgeRising:
-			if l.Read() {
-				l.lastLevel = l.Read()
-				l.handler(pin)
-			}
-		}
-	}(l)
+func (p *WinPin) HW() int {
+	return Windows
 }

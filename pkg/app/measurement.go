@@ -6,10 +6,10 @@ import (
 	"s0counter/pkg/mqtt"
 	"time"
 
-	"github.com/womat/debug"
-
-	"github.com/womat/tools"
 	"gopkg.in/yaml.v2"
+
+	"github.com/womat/debug"
+	"github.com/womat/tools"
 )
 
 type SavedRecord struct {
@@ -122,7 +122,7 @@ func (app *App) saveMeasurements() error {
 	}
 
 	if err := os.WriteFile(app.config.DataFile, data, 0o600); err != nil {
-		debug.ErrorLog.Printf("backupMeasurements write file: %v\n", err)
+		debug.ErrorLog.Printf("backupMeasurements write file: %v", err)
 		return err
 	}
 

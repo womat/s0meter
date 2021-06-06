@@ -65,4 +65,5 @@ webserver:
   # enable/disable webservices (default: disabled)
   webservices:
     version: true
+    health: true
     currentdata: true

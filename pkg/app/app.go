@@ -31,25 +31,19 @@ type App struct {
 	// MetersMap must be a pointer to the Meter type, otherwise RWMutex doesn't work!
 	meters map[string]*meter.Meter
 
-	chip *raspberry.Chip
+	chip raspberry.Chip
 
 	// restart signals application restart
 	restart chan struct{}
 	// shutdown signals application shutdown
 	shutdown chan struct{}
-	// power signals to check power consumption for forced activation
-	power chan struct{}
-	// ls signals to check consumption for load shedding
-	ls chan struct{}
-	// temperature signals to check temperature thresholds
-	temperature chan struct{}
 }
 
 // New checks the Web server URL and initialize the main app structure
 func New(config *config.Config) *App {
 	u, err := url.Parse(config.Webserver.URL)
 	if err != nil {
-		log.Printf("Error parsing url %q: %s", config.Webserver.URL, err.Error())
+		log.Printf("Error parsing url %q: %s\n", config.Webserver.URL, err.Error())
 		os.Exit(1)
 	}
 
@@ -61,11 +55,8 @@ func New(config *config.Config) *App {
 		meters: meter.New(),
 		mqtt:   mqtt.New(),
 
-		restart:     make(chan struct{}),
-		shutdown:    make(chan struct{}),
-		power:       make(chan struct{}),
-		ls:          make(chan struct{}),
-		temperature: make(chan struct{}),
+		restart:  make(chan struct{}),
+		shutdown: make(chan struct{}),
 	}
 }
 
@@ -84,8 +75,7 @@ func (app *App) Run() error {
 	go app.backupMeasurements()
 	go app.runWebServer()
 
-	select {}
-	// return nil
+	return nil
 }
 
 // init initializes the application.
@@ -100,13 +90,11 @@ func (app *App) init() (err error) {
 
 	if err = app.loadMeasurements(); err != nil {
 		debug.ErrorLog.Printf("can't open data file: %v", err)
-		// os.Exit(1)
 		return err
 	}
 
 	if app.chip, err = raspberry.Open(); err != nil {
-		debug.ErrorLog.Printf("can't open gpio: %v\n", err)
-		// os.Exit(1)
+		debug.ErrorLog.Printf("can't open gpio: %v", err)
 		return err
 	}
 
@@ -154,11 +142,13 @@ func (app *App) Shutdown() <-chan struct{} {
 }
 
 func (app *App) Close() error {
+	debug.InfoLog.Printf("Got shutdown signal. Aborting...")
+
 	for _, m := range app.meters {
 		m.LineHandler.Unwatch()
 	}
 
-	app.mqtt.Disconnect()
-	app.chip.Close()
+	_ = app.mqtt.Disconnect()
+	_ = app.chip.Close()
 	return app.saveMeasurements()
 }

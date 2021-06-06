@@ -1,8 +1,6 @@
 package app
 
 import (
-	"s0counter/global"
-
 	"github.com/gofiber/fiber/v2"
 	"github.com/womat/debug"
 )
@@ -18,14 +16,14 @@ func (app *App) runWebServer() {
 
 func (app *App) HandleCurrentData() fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
-		debug.DebugLog.Println("web request current data")
+		debug.DebugLog.Println("web request currentdata")
 
 		// Lock all Meters to marshal data
-		for _, m := range global.AllMeters {
+		for _, m := range app.meters {
 			m.RLock()
 			defer m.RUnlock()
 		}
 
-		return ctx.JSON(global.AllMeters)
+		return ctx.JSON(app.meters)
 	}
 }

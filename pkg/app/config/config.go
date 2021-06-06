@@ -107,7 +107,7 @@ func (c *Config) LoadConfig() error {
 	c.BackupInterval = time.Duration(c.BackupIntervalInt) * time.Second
 
 	for name, meter := range c.Meter {
-		meter.BounceTime = time.Duration(meter.BounceTimeInt) * time.Second
+		meter.BounceTime = time.Duration(meter.BounceTimeInt) * time.Millisecond
 		c.Meter[name] = meter
 	}
 

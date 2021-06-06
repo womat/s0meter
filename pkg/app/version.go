@@ -3,6 +3,8 @@ package app
 import (
 	"strings"
 
+	"github.com/womat/debug"
+
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -23,6 +25,8 @@ const (
 // HandleVersion is the get application version web handler.
 func (app *App) HandleVersion() fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
+		debug.DebugLog.Println("web request version")
+
 		return ctx.JSON(fiber.Map{
 			"version":     VERSION,
 			"description": MODULE,

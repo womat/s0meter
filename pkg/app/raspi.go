@@ -1,12 +1,25 @@
 package app
 
 import (
+	"s0counter/pkg/raspberry"
 	"time"
 
 	"github.com/womat/debug"
 )
 
-func (app *App) increaseImpulse(pin int) {
+func testPinEmu(p raspberry.Pin) {
+	if p.HW() == raspberry.Raspberrypi {
+		return
+	}
+
+	for range time.Tick(time.Duration(p.Pin()/2) * time.Second) {
+		raspberry.TestPin(p, raspberry.EdgeFalling)
+	}
+}
+
+func (app *App) handler(p raspberry.Pin) {
+	pin := p.Pin()
+
 	for _, m := range app.meters {
 		// find the measuring device based on the pin configuration
 		if m.Config.Gpio == pin {

@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/womat/debug"
+
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -21,6 +23,8 @@ func (app *App) HandleHealth() fiber.Handler {
 	host, _ := os.Hostname()
 
 	return func(ctx *fiber.Ctx) error {
+		debug.DebugLog.Println("web request health")
+
 		var m runtime.MemStats
 		runtime.ReadMemStats(&m)
 
