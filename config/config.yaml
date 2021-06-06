@@ -1,6 +1,6 @@
 # datacollectionintervall defines the interval in seconds, in which the average values are calculated
 # default 60 seconds
-datacollectioninterval: 300
+datacollectioninterval: 5
 
 # datafile defines the file in which the measured values are saved
 # default /opt/womat/data/measurement.yaml
@@ -21,6 +21,9 @@ debug:
   #       debug              >> Warning | Info | Error | Fatal | Debug
   flag: debug
 
+mqtt:
+  connection: "tcp://raspberrypi4.fritz.box:1883"
+
 # meter configurations
 # key >> name of device
 #    gpio >> S0 input gpio pin
@@ -37,6 +40,7 @@ meter:
     scalefactor: 0.001
     unitflow: "kW/h"
     scalefactorflow: 1
+    mqtttopic: test/wallbox/summary
   rawwater:
     gpio: 27
     bouncetime: 10
@@ -44,6 +48,7 @@ meter:
     scalefactor: 0.001
     unitflow: "l/h"
     scalefactorflow: 0.001
+    mqtttopic: test/rawwater/summary
   portablewater:
     gpio: 22
     bouncetime: 10
@@ -51,6 +56,7 @@ meter:
     scalefactor: 1000
     unitflow: "l/h"
     scalefactorflow: 0.2777777778
+    mqtttopic: test/portablewater/summary
 
 # webserver configuration
 webserver:

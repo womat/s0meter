@@ -5,6 +5,7 @@ package main
 // TODO: Use package gpiod https://github.com/warthog618/gpiod
 
 import (
+	"encoding/json"
 	"gopkg.in/yaml.v2"
 	"os"
 	"os/signal"
@@ -16,6 +17,7 @@ import (
 
 	"s0counter/global"
 	_ "s0counter/pkg/config"
+	"s0counter/pkg/mqtt"
 	"s0counter/pkg/raspberry"
 	_ "s0counter/pkg/webservice"
 )
@@ -69,7 +71,11 @@ func main() {
 		}
 	}
 
-	go calcFlow(global.AllMeters, global.Config.DataCollectionInterval)
+	mqttServer := mqtt.NewMqtt()
+	mqttServer.Connect(global.Config.MQTT.Connection)
+
+	go mqttServer.Service()
+	go calcFlow(global.AllMeters, global.Config.DataCollectionInterval, mqttServer.C)
 	go backupMeasurements(global.Config.DataFile, global.AllMeters, global.Config.BackupInterval)
 
 	// capture exit signals to ensure resources are released on exit.
@@ -80,6 +86,8 @@ func main() {
 	// wait for am os.Interrupt signal (CTRL C)
 	sig := <-quit
 	debug.InfoLog.Printf("Got %s signal. Aborting...\n", sig)
+
+	_ = mqttServer.Disconnect()
 	for _, meter := range global.AllMeters {
 		meter.LineHandler.Unwatch()
 	}
@@ -88,7 +96,7 @@ func main() {
 	os.Exit(1)
 }
 
-func calcFlow(meters global.MetersMap, period time.Duration) {
+func calcFlow(meters global.MetersMap, period time.Duration, c chan mqtt.Message) {
 	for range time.Tick(period) {
 		debug.DebugLog.Println("calc average values")
 
@@ -99,6 +107,17 @@ func calcFlow(meters global.MetersMap, period time.Duration) {
 				m.Flow = float64(m.S0.Counter-m.S0.LastCounter) / period.Hours() * m.Config.ScaleFactor * m.Config.ScaleFactorFlow
 				m.S0.LastCounter = m.S0.Counter
 				m.TimeStamp = time.Now()
+				b, err := json.MarshalIndent(m, "", "  ")
+
+				if err != nil {
+					debug.ErrorLog.Println(err)
+					return
+				}
+
+				c <- mqtt.Message{
+					Topic:   m.Config.MqttTopic,
+					Payload: b,
+				}
 			}()
 		}
 	}

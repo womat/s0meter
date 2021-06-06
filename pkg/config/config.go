@@ -26,6 +26,7 @@ type MeterConf struct {
 	Unit            string  `yaml:"unit"`
 	UnitFlow        string  `yaml:"unitflow"`
 	ScaleFactorFlow float64 `yaml:"scalefactorflow"`
+	MqttTopic       string  `yaml:"mqtttopic"`
 }
 
 type yamlStruct struct {
@@ -35,6 +36,7 @@ type yamlStruct struct {
 	Debug                  yamlDebug            `yaml:"debug"`
 	Meter                  map[string]MeterConf `yaml:"meter"`
 	Webserver              global.WebserverConf `yaml:"webserver"`
+	MQTT                   global.MQTTConf      `yaml:"mqtt"`
 }
 
 func init() {
@@ -52,6 +54,7 @@ func init() {
 		Debug:                  yamlDebug{File: "stderr", Flag: "standard"},
 		Meter:                  map[string]MeterConf{},
 		Webserver:              global.WebserverConf{Port: 4000, Webservices: map[string]bool{"version": false, "currentdata": false}},
+		MQTT:                   global.MQTTConf{Connection: "localhost:1883"},
 	}
 
 	parse(flags)
@@ -72,6 +75,7 @@ func init() {
 	global.Config.BackupInterval = time.Duration(configFile.BackupInterval) * time.Second
 	global.Config.DataCollectionInterval = time.Duration(configFile.DataCollectionInterval) * time.Second
 	global.Config.Webserver = configFile.Webserver
+	global.Config.MQTT = configFile.MQTT
 	for name, c := range configFile.Meter {
 		global.Config.Meter[name] = global.MeterConf{
 			ScaleFactor:     c.ScaleFactor,
@@ -80,6 +84,7 @@ func init() {
 			UnitFlow:        c.UnitFlow,
 			Gpio:            c.Gpio,
 			BounceTime:      time.Duration(c.BounceTime) * time.Millisecond,
+			MqttTopic:       c.MqttTopic,
 		}
 	}
 }

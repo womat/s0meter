@@ -31,11 +31,16 @@ type MeterConf struct {
 	ScaleFactor     float64
 	UnitFlow        string
 	ScaleFactorFlow float64
+	MqttTopic       string
 }
 
 type WebserverConf struct {
 	Port        int             `yaml:"port"`
 	Webservices map[string]bool `yaml:"webservices"`
+}
+
+type MQTTConf struct {
+	Connection string `yaml:"connection"`
 }
 
 type Configuration struct {
@@ -45,6 +50,7 @@ type Configuration struct {
 	Debug                  DebugConf
 	Meter                  map[string]MeterConf
 	Webserver              WebserverConf
+	MQTT                   MQTTConf
 }
 
 type S0 struct {
