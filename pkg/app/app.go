@@ -1,9 +1,7 @@
 package app
 
 import (
-	"log"
 	"net/url"
-	"os"
 	"s0counter/pkg/app/config"
 	"s0counter/pkg/meter"
 	"s0counter/pkg/mqtt"
@@ -40,16 +38,23 @@ type App struct {
 }
 
 // New checks the Web server URL and initialize the main app structure
-func New(config *config.Config) *App {
+func New(config *config.Config) (*App, error) {
 	u, err := url.Parse(config.Webserver.URL)
 	if err != nil {
-		log.Printf("Error parsing url %q: %s\n", config.Webserver.URL, err.Error())
-		os.Exit(1)
+		debug.ErrorLog.Printf("Error parsing url %q: %s", config.Webserver.URL, err.Error())
+		return &App{}, err
+	}
+
+	chip, err := raspberry.Open()
+	if err != nil {
+		debug.ErrorLog.Printf("can't open gpio: %v", err)
+		return &App{}, err
 	}
 
 	return &App{
 		config:    config,
 		urlParsed: u,
+		chip:      chip,
 
 		web:    fiber.New(),
 		meters: meter.New(),
@@ -57,7 +62,7 @@ func New(config *config.Config) *App {
 
 		restart:  make(chan struct{}),
 		shutdown: make(chan struct{}),
-	}
+	}, err
 }
 
 // Run starts the application.
@@ -90,11 +95,6 @@ func (app *App) init() (err error) {
 
 	if err = app.loadMeasurements(); err != nil {
 		debug.ErrorLog.Printf("can't open data file: %v", err)
-		return err
-	}
-
-	if app.chip, err = raspberry.Open(); err != nil {
-		debug.ErrorLog.Printf("can't open gpio: %v", err)
 		return err
 	}
 
@@ -142,13 +142,13 @@ func (app *App) Shutdown() <-chan struct{} {
 }
 
 func (app *App) Close() error {
-	debug.InfoLog.Printf("Got shutdown signal. Aborting...")
+	// app.chip.Close() unwatch all pins and release the gpio memory!
+	_ = app.chip.Close()
 
-	for _, m := range app.meters {
-		m.LineHandler.Unwatch()
+	if app.mqtt != nil {
+		_ = app.mqtt.Disconnect()
 	}
 
-	_ = app.mqtt.Disconnect()
-	_ = app.chip.Close()
-	return app.saveMeasurements()
+	_ = app.saveMeasurements()
+	return nil
 }

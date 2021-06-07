@@ -19,6 +19,11 @@ import (
 const defaultConfigFile = "/opt/womat/config/" + app.MODULE + ".yaml"
 
 func main() {
+	exitCode := 1
+	defer func() {
+		os.Exit(exitCode)
+	}()
+
 	debug.SetDebug(os.Stderr, debug.Standard)
 	cfg := config.NewConfig()
 
@@ -29,22 +34,39 @@ func main() {
 
 	if cfg.Flag.Version {
 		fmt.Println(app.Version())
-		os.Exit(1)
+		exitCode = 0
+		return
 	}
 
 	if err := cfg.LoadConfig(); err != nil {
 		fmt.Println(err)
-		os.Exit(1)
+		exitCode = 1
+		return
 	}
 
 	debug.SetDebug(cfg.Debug.File, cfg.Debug.Flag)
+	defer func() {
+		debug.InfoLog.Printf("closing debug file %s", cfg.Debug.FileString)
+		_ = cfg.Debug.File.Close()
+	}()
 
-	a := app.New(cfg)
 	debug.InfoLog.Printf("starting app %s", app.Version())
+	a, err := app.New(cfg)
+	defer func() {
+		debug.InfoLog.Printf("closing app %s", app.Version())
+		_ = a.Close()
+	}()
+
+	if err != nil {
+		debug.FatalLog.Print(err)
+		exitCode = 1
+		return
+	}
 
 	if err := a.Run(); err != nil {
 		debug.FatalLog.Print(err)
-		os.Exit(1)
+		exitCode = 1
+		return
 	}
 
 	// capture exit signals to ensure resources are released on exit.
@@ -56,8 +78,6 @@ func main() {
 	sig := <-quit
 	debug.InfoLog.Printf("Got %s signal. Aborting...", sig)
 
-	a.Close()
-	cfg.Debug.File.Close()
-
-	os.Exit(1)
+	exitCode = 1
+	return
 }
