@@ -3,9 +3,9 @@ package app
 import (
 	"strings"
 
-	"github.com/womat/debug"
-
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/womat/debug"
 )
 
 // VERSION holds the version information with the following logic in mind
@@ -18,14 +18,14 @@ import (
 // but we keep the correct syntax.
 //TODO: increase version number to 1.0.1+2020xxyy
 const (
-	VERSION = "1.1.0+20210605"
+	VERSION = "1.1.0+20210608"
 	MODULE  = "s0counter"
 )
 
 // HandleVersion is the get application version web handler.
 func (app *App) HandleVersion() fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
-		debug.DebugLog.Println("web request version")
+		debug.InfoLog.Println("web request version")
 
 		return ctx.JSON(fiber.Map{
 			"version":     VERSION,

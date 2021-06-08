@@ -1,8 +1,7 @@
 package main
 
-// https://github.com/stianeikeland/go-rpio
-// https://github.com/davecheney/gpio/blob/a6de66e7e470/examples/watch/watch.go
-// TODO: Use package gpiod https://github.com/warthog618/gpiod
+// TODO: documentation
+// TODO: send only changes to mqtt
 
 import (
 	"flag"

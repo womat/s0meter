@@ -16,7 +16,7 @@ func (app *App) runWebServer() {
 
 func (app *App) HandleCurrentData() fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
-		debug.DebugLog.Println("web request currentdata")
+		debug.InfoLog.Println("web request currentdata")
 
 		// Lock all Meters to marshal data
 		for _, m := range app.meters {

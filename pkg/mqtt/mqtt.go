@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	mqttlib "github.com/eclipse/paho.mqtt.golang"
+
 	"github.com/womat/debug"
 )
 
@@ -73,7 +74,7 @@ func (m *Handler) Service() {
 		data := data
 		go func() {
 			if !m.handler.IsConnected() {
-				debug.TraceLog.Printf("mqtt broker isn't connected, reconnect it")
+				debug.DebugLog.Printf("mqtt broker isn't connected, reconnect it")
 
 				if err := m.ReConnect(); err != nil {
 					debug.ErrorLog.Printf("can't reconnect to mqtt broker /%v", err)

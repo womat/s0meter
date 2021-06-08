@@ -8,12 +8,8 @@ import (
 )
 
 func testPinEmu(p raspberry.Pin) {
-	if p.HW() == raspberry.Raspberrypi {
-		return
-	}
-
 	for range time.Tick(time.Duration(p.Pin()/2) * time.Second) {
-		raspberry.TestPin(p, raspberry.EdgeFalling)
+		p.EmuEdge(raspberry.EdgeFalling)
 	}
 }
 
@@ -24,7 +20,7 @@ func (app *App) handler(p raspberry.Pin) {
 		// find the measuring device based on the pin configuration
 		if m.Config.Gpio == pin {
 			// add current counter & set time stamp
-			debug.DebugLog.Printf("receive an impulse on pin: %v", pin)
+			debug.TraceLog.Printf("receive an impulse on pin: %v", pin)
 
 			func() {
 				m.Lock()

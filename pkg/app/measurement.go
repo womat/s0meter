@@ -32,7 +32,7 @@ func (app *App) calcFlow() {
 				m.TimeStamp = time.Now()
 				b, err := json.MarshalIndent(m, "", "  ")
 				if err != nil {
-					debug.ErrorLog.Println(err)
+					debug.ErrorLog.Printf("calcFlow marshal: %v\n", err)
 					return
 				}
 
@@ -117,12 +117,10 @@ func (app *App) saveMeasurements() error {
 	// marshal the byte slice which contains the yaml file's content into SaveMeters struct
 	data, err := yaml.Marshal(&s)
 	if err != nil {
-		debug.ErrorLog.Printf("backupMeasurements marshal: %v\n", err)
 		return err
 	}
 
-	if err := os.WriteFile(app.config.DataFile, data, 0o600); err != nil {
-		debug.ErrorLog.Printf("backupMeasurements write file: %v", err)
+	if err = os.WriteFile(app.config.DataFile, data, 0o600); err != nil {
 		return err
 	}
 

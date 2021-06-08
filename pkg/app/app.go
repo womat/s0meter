@@ -29,7 +29,7 @@ type App struct {
 	// MetersMap must be a pointer to the Meter type, otherwise RWMutex doesn't work!
 	meters map[string]*meter.Meter
 
-	chip raspberry.Chip
+	gpio raspberry.GPIO
 
 	// restart signals application restart
 	restart chan struct{}
@@ -45,7 +45,7 @@ func New(config *config.Config) (*App, error) {
 		return &App{}, err
 	}
 
-	chip, err := raspberry.Open()
+	gpio, err := raspberry.Open()
 	if err != nil {
 		debug.ErrorLog.Printf("can't open gpio: %v", err)
 		return &App{}, err
@@ -54,7 +54,7 @@ func New(config *config.Config) (*App, error) {
 	return &App{
 		config:    config,
 		urlParsed: u,
-		chip:      chip,
+		gpio:      gpio,
 
 		web:    fiber.New(),
 		meters: meter.New(),
@@ -100,7 +100,7 @@ func (app *App) init() (err error) {
 
 	for name, meterConfig := range app.config.Meter {
 		if m, ok := app.meters[name]; ok {
-			if m.LineHandler, err = app.chip.NewPin(meterConfig.Gpio); err != nil {
+			if m.LineHandler, err = app.gpio.NewPin(meterConfig.Gpio); err != nil {
 				debug.ErrorLog.Printf("can't open pin: %v", err)
 				return
 			}
@@ -143,7 +143,7 @@ func (app *App) Shutdown() <-chan struct{} {
 
 func (app *App) Close() error {
 	// app.chip.Close() unwatch all pins and release the gpio memory!
-	_ = app.chip.Close()
+	_ = app.gpio.Close()
 
 	if app.mqtt != nil {
 		_ = app.mqtt.Disconnect()

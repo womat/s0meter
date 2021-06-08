@@ -60,7 +60,8 @@ meter:
 
 # webserver configuration
 webserver:
-  # port defines the port number (default: 4000)
+  # url defines the bound of host (default: 0.0.0.0:4000)
+  url: http://0.0.0.0:4020
   port: 4010
   # enable/disable webservices (default: disabled)
   webservices:

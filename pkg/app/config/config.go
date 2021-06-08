@@ -72,7 +72,7 @@ func NewConfig() *Config {
 		Flag:                      FlagConfig{},
 		DataCollectionInterval:    0,
 		DataCollectionIntervalInt: 0,
-		DataFile:                  "",
+		DataFile:                  "/opt/womat/data/measurement.yaml",
 		BackupInterval:            0,
 		BackupIntervalInt:         0,
 		Debug: DebugConfig{
@@ -81,7 +81,7 @@ func NewConfig() *Config {
 		},
 		Meter: map[string]MeterConfig{},
 		Webserver: WebserverConfig{
-			URL: "http://0.0.0.0:4010",
+			URL: "http://0.0.0.0:4000",
 			Webservices: map[string]bool{
 				"version":     true,
 				"currentdata": true,

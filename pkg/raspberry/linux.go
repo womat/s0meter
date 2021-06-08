@@ -17,29 +17,33 @@ type RpiPin struct {
 	bounceTime time.Duration
 	// while bounceTimer is running, new signal are ignored (suppress key bouncing)
 	bounceTimer *time.Timer
-	lastLevel   bool
+	shadow      bool
 	handler     func(Pin)
 }
 
 // must be global in package, because handler function handler(pin *gpio.Pin) need this line Infos
-var pins map[int]Pin
+var pins map[int]*RpiPin
 
-type RpiChip struct{}
+type RpiGPIO struct{}
 
-func Open() (*RpiChip, error) {
-	pins = map[int]Pin{}
+// Open GPIO memory range from /dev/gpiomem .
+func Open() (*RpiGPIO, error) {
+	pins = map[int]*RpiPin{}
 
 	if err := gpio.Open(); err != nil {
 		return nil, err
 	}
-	return &RpiChip{}, nil
+	return &RpiGPIO{}, nil
 }
 
-func (c *RpiChip) Close() (err error) {
+// Close removes the interrupt handlers and unmaps GPIO memory
+func (c *RpiGPIO) Close() (err error) {
 	return gpio.Close()
 }
 
-func (c *RpiChip) NewPin(p int) (Pin, error) {
+// NewPin creates a new pin object.
+// The pin number provided is the BCM GPIO number.
+func (c *RpiGPIO) NewPin(p int) (Pin, error) {
 	if _, ok := pins[p]; ok {
 		return nil, fmt.Errorf("pin %v already used", p)
 	}
@@ -49,76 +53,107 @@ func (c *RpiChip) NewPin(p int) (Pin, error) {
 	return pins[p], nil
 }
 
+// Watch the pin for changes to level.
+// The handler is called after bounce timeout and the state is still changed from shadow
+// The edge determines which edge to watch.
+// There can only be one watcher on the pin at a time.
 func (p *RpiPin) Watch(edge Edge, handler func(Pin)) error {
 	p.handler = handler
 	p.edge = edge
 	p.gpioPin.Mode()
-	return p.gpioPin.Watch(gpio.Edge(edge), rpiHandler)
+	return p.gpioPin.Watch(gpio.Edge(edge), debounce)
 }
 
+// Unwatch removes any watch from the pin.
 func (p *RpiPin) Unwatch() {
 	p.gpioPin.Unwatch()
 }
 
-func (p *RpiPin) BounceTime() time.Duration {
-	return p.bounceTime
-}
-
+// SetBounceTime defines Timer which has to expired to check if the pin has still the correct level
 func (p *RpiPin) SetBounceTime(t time.Duration) {
 	p.bounceTime = t
 	return
 }
 
-func (p *RpiPin) BounceTimer() *time.Timer {
-	return p.bounceTimer
-}
-
-func (p *RpiPin) LastLevel() bool {
-	return p.lastLevel
-}
-
-func (p *RpiPin) SetLastLevel(b bool) {
-	p.lastLevel = b == true
-}
-
+// Input sets pin as Input.
 func (p *RpiPin) Input() {
+	p.shadow = p.Read()
 	p.gpioPin.Input()
 }
 
+// PullUp sets the pull state of the pin to PullUp
 func (p *RpiPin) PullUp() {
 	p.gpioPin.PullUp()
 }
 
+// PullDown sets the pull state of the pin to PullDown
 func (p *RpiPin) PullDown() {
 	p.gpioPin.PullDown()
 }
 
+// Pin returns the pin number that this Pin represents.
 func (p *RpiPin) Pin() int {
 	return p.gpioPin.Pin()
 }
 
+// Read pin state (high/low)
 func (p *RpiPin) Read() bool {
 	return bool(p.gpioPin.Read())
 }
 
-func (p *RpiPin) Handler() func(Pin) {
-	return p.handler
+// EmuEdge emulate a statechange of given pin on windows systems
+// not supported for linux
+func (p *RpiPin) EmuEdge(edge Edge) {
+	return
 }
 
-func (p *RpiPin) Edge() Edge {
-	return p.edge
-}
-
-func rpiHandler(pin *gpio.Pin) {
+// debounce ensures that state change lasts for at least the BounceTime without interruption and only then the handler is called
+func debounce(g *gpio.Pin) {
 	// check if map with pin struct exists
-	p, ok := pins[pin.Pin()]
+	pin, ok := pins[g.Pin()]
 	if !ok {
 		return
 	}
 
-	Handler(p)
-}
+	// if debounce is inactive, call handler function and returns
+	if pin.bounceTime == 0 {
+		pin.shadow = pin.Read()
+		pin.handler(pin)
+		return
+	}
 
-func (p *RpiPin) HW() int {
-	return Raspberrypi
+	select {
+	case <-pin.bounceTimer.C:
+		// if bounce Timer is expired, accept new signals
+		pin.bounceTimer.Reset(pin.bounceTime)
+	default:
+		// if bounce Timer is still running, ignore the signal
+		return
+	}
+
+	go func(p *RpiPin) {
+		// wait until bounce Timer is expired and check if the pin has still the correct level
+		// the correct level depends on the edge configuration
+		<-p.bounceTimer.C
+		p.bounceTimer.Reset(0)
+
+		switch p.edge {
+		case EdgeBoth:
+			if pin.Read() != p.shadow {
+				p.shadow = p.Read()
+				pin.handler(p)
+			}
+		case EdgeFalling:
+			if !p.Read() {
+				p.shadow = p.Read()
+				pin.handler(p)
+			}
+		case EdgeRising:
+			if p.Read() {
+				p.shadow = p.Read()
+				pin.handler(p)
+			}
+		}
+	}(pin)
+	return
 }

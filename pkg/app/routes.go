@@ -14,4 +14,16 @@ func (app *App) initDefaultRoutes() {
 	if app.config.Webserver.Webservices["currentdata"] {
 		api.Get("/currentdata", app.HandleCurrentData())
 	}
+
+	// TODO: compatibility reason
+	api = app.web.Group("/")
+	if app.config.Webserver.Webservices["version"] {
+		api.Get("/version", app.HandleVersion())
+	}
+	if app.config.Webserver.Webservices["health"] {
+		api.Get("/health", app.HandleHealth())
+	}
+	if app.config.Webserver.Webservices["currentdata"] {
+		api.Get("/currentdata", app.HandleCurrentData())
+	}
 }
