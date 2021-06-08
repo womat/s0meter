@@ -11,12 +11,12 @@ import (
 //  See app.Run()
 func (app *App) runWebServer() {
 	err := app.web.Listen(app.urlParsed.Host)
-	debug.FatalLog.Print(err)
+	debug.ErrorLog.Print(err)
 }
 
 func (app *App) HandleCurrentData() fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
-		debug.InfoLog.Println("web request currentdata")
+		debug.InfoLog.Print("web request currentdata")
 
 		// Lock all Meters to marshal data
 		for _, m := range app.meters {

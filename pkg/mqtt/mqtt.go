@@ -77,12 +77,12 @@ func (m *Handler) Service() {
 				debug.DebugLog.Printf("mqtt broker isn't connected, reconnect it")
 
 				if err := m.ReConnect(); err != nil {
-					debug.ErrorLog.Printf("can't reconnect to mqtt broker /%v", err)
+					debug.ErrorLog.Printf("can't reconnect to mqtt broker %v", err)
 					return
 				}
 			}
 
-			debug.DebugLog.Printf("publishing %v bytes to topic %v: ", len(data.Payload), data.Topic)
+			debug.DebugLog.Printf("publishing %v bytes to topic %v", len(data.Payload), data.Topic)
 			t := m.handler.Publish(data.Topic, data.Qos, data.Retained, data.Payload)
 
 			// the asynchronous nature of this library makes it easy to forget to check for errors.

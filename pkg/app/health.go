@@ -23,7 +23,7 @@ func (app *App) HandleHealth() fiber.Handler {
 	host, _ := os.Hostname()
 
 	return func(ctx *fiber.Ctx) error {
-		debug.InfoLog.Println("web request health")
+		debug.InfoLog.Print("web request health")
 
 		var m runtime.MemStats
 		runtime.ReadMemStats(&m)

@@ -25,7 +25,7 @@ const (
 // HandleVersion is the get application version web handler.
 func (app *App) HandleVersion() fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
-		debug.InfoLog.Println("web request version")
+		debug.InfoLog.Print("web request version")
 
 		return ctx.JSON(fiber.Map{
 			"version":     VERSION,

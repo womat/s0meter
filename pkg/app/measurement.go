@@ -21,7 +21,7 @@ type SaveMeters map[string]SavedRecord
 func (app *App) calcFlow() {
 	p := app.config.DataCollectionInterval
 	for range time.Tick(p) {
-		debug.DebugLog.Println("calc average values")
+		debug.DebugLog.Print("calc average values")
 
 		for _, m := range app.meters {
 			func() {
@@ -32,7 +32,7 @@ func (app *App) calcFlow() {
 				m.TimeStamp = time.Now()
 				b, err := json.MarshalIndent(m, "", "  ")
 				if err != nil {
-					debug.ErrorLog.Printf("calcFlow marshal: %v\n", err)
+					debug.ErrorLog.Printf("calcFlow marshal: %v", err)
 					return
 				}
 
@@ -102,7 +102,7 @@ func (app *App) backupMeasurements() {
 }
 
 func (app *App) saveMeasurements() error {
-	debug.DebugLog.Println("saveMeasurements measurements to file")
+	debug.DebugLog.Print("saveMeasurements measurements to file")
 
 	s := SaveMeters{}
 
