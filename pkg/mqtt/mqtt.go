@@ -66,13 +66,12 @@ func (m *Handler) Disconnect() error {
 // Service listens to a message on the channel C and sends the message
 // if no handler or topic is defined, the message will be ignored
 func (m *Handler) Service() {
-	for data := range m.C {
-		if m.handler == nil || data.Topic == "" {
+	for d := range m.C {
+		if m.handler == nil || d.Topic == "" {
 			continue
 		}
 
-		data := data
-		go func() {
+		go func(msg Message) {
 			if !m.handler.IsConnected() {
 				debug.DebugLog.Printf("mqtt broker isn't connected, reconnect it")
 
@@ -82,17 +81,17 @@ func (m *Handler) Service() {
 				}
 			}
 
-			debug.DebugLog.Printf("publishing %v bytes to topic %v", len(data.Payload), data.Topic)
-			t := m.handler.Publish(data.Topic, data.Qos, data.Retained, data.Payload)
+			debug.DebugLog.Printf("publishing %v bytes to topic %v", len(msg.Payload), msg.Topic)
+			t := m.handler.Publish(msg.Topic, msg.Qos, msg.Retained, msg.Payload)
 
 			// the asynchronous nature of this library makes it easy to forget to check for errors.
 			// Consider using a go routine to log these
 			go func() {
 				<-t.Done()
 				if err := t.Error(); err != nil {
-					debug.ErrorLog.Printf("publishing topic %v: %v", data.Topic, err)
+					debug.ErrorLog.Printf("publishing topic %v: %v", msg.Topic, err)
 				}
 			}()
-		}()
+		}(d)
 	}
 }
