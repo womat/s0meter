@@ -57,14 +57,14 @@ type DebugConfig struct {
 
 // MeterConfig defines the struct of the meter configuration and configuration file
 type MeterConfig struct {
-	ScaleFactor     float64       `yaml:"scalefactor"`
-	Gpio            int           `yaml:"gpio"`
-	BounceTimeInt   int           `yaml:"bouncetime"`
-	BounceTime      time.Duration `yaml:"bo-uncetime"`
-	Unit            string        `yaml:"unit"`
-	UnitFlow        string        `yaml:"unitflow"`
-	ScaleFactorFlow float64       `yaml:"scalefactorflow"`
-	MqttTopic       string        `yaml:"mqtttopic"`
+	Gpio               int           `yaml:"gpio"`
+	BounceTimeInt      int           `yaml:"bouncetime"`
+	BounceTime         time.Duration `yaml:"-"`
+	ScaleFactorCounter float64       `yaml:"scalefactorcounter"`
+	UnitCounter        string        `yaml:"unitcounter"`
+	ScaleFactorGauge   float64       `yaml:"scalefactorgauge"`
+	UnitGauge          string        `yaml:"unitgauge"`
+	MqttTopic          string        `yaml:"mqtttopic"`
 }
 
 func NewConfig() *Config {

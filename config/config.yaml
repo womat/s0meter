@@ -1,12 +1,12 @@
-# datacollectionintervall defines the interval in seconds, in which the average values are calculated
+# datacollectioninterval defines the interval in seconds, in which the gauges are calculated
 # default 60 seconds
 datacollectioninterval: 5
 
-# datafile defines the file in which the measured values are saved
+# datafile defines the file in which the counters are saved
 # default /opt/womat/data/measurement.yaml
 datafile: C:\temp\measurement.yaml
 
-# backupintervall defines the interval, in which measurements are saved to datafile
+# backupinterval defines the interval, in which counters are saved to datafile
 # default 60 seconds
 backupinterval: 313
 
@@ -22,47 +22,48 @@ debug:
   flag: trace
 
 mqtt:
+# connection >> defines the connection string to the mqtt broker
   connection: "tcp://raspberrypi4.fritz.box:1883"
 
 # meter configurations
 # key >> name of device
 #    gpio >> S0 input gpio pin
 #    bouncetime >> time to wait for a stable signal on gpio pin (ms) to get a "clean" level (suppress key bouncing)
-#    unit >> unit of meter eg "kWh, m³, ..."
-#    scalefactor >> e.g. scale factor: 1000 >>  1000pulse 1kWh
-#    unitflow >> unit of flow (unit/t) eg "kW, l/h, ..."
-#    scalefactorflow >>scale factor of flow, based on hour: eg 1000: m³/h >> l/h,  0.27777778 m3/h >> l/s
+#    unitcounter >> unit of counter eg "kWh, m³, ..."
+#    scalefactorcounter >> e.g. scale factor of counter: 1000 >>  1000pulse 1kWh
+#    unitgauge >> unit of gauge (unit/t) eg "kW, l/h, ..."
+#    scalefactorgauge >> scale factor of gauge, based on hour: eg 1000: m³/h >> l/h,  0.27777778 m3/h >> l/s
+#    mqtttopic >> mqtt topic, if it isn't defined, values aren't send to the mqtt broker
 meter:
   wallbox:
     gpio: 17
     bouncetime: 10
-    unit: "kW"
-    scalefactor: 0.001
-    unitflow: "kW/h"
-    scalefactorflow: 1
+    unitcounter: "kWh"
+    scalefactorcounter: 0.001
+    unitgauge: "kW"
+    scalefactorgauge: 1
     mqtttopic: test/wallbox/summary
   rawwater:
     gpio: 27
     bouncetime: 10
-    unit: "m³"
-    scalefactor: 0.001
-    unitflow: "l/h"
-    scalefactorflow: 0.001
+    unitcounter: "m³"
+    scalefactorcounter: 0.001
+    unitgauge: "l/h"
+    scalefactorgauge: 0.001
     mqtttopic: test/rawwater/summary
   portablewater:
     gpio: 22
     bouncetime: 10
-    unit: "m³"
-    scalefactor: 1000
-    unitflow: "l/h"
-    scalefactorflow: 0.2777777778
+    unitcounter: "m³"
+    scalefactorcounter: 1000
+    unitgauge: "l/h"
+    scalefactorgauge: 0.2777777778
  #   mqtttopic: test/portablewater/summary
 
 # webserver configuration
 webserver:
   # url defines the bound of host (default: 0.0.0.0:4000)
   url: http://0.0.0.0:4020
-  port: 4010
   # enable/disable webservices (default: disabled)
   webservices:
     version: true

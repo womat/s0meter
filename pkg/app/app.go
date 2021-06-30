@@ -25,10 +25,13 @@ type App struct {
 	// url: https://0.0.0.0:7844/?minTls=1.2&bodyLimit=50MB
 	urlParsed *url.URL
 
+	// mqtt is the handler to the mqtt broker
 	mqtt *mqtt.Handler
+
 	// MetersMap must be a pointer to the Meter type, otherwise RWMutex doesn't work!
 	meters map[string]*meter.Meter
 
+	// qpio is the handler to the rpi qpio memory
 	gpio raspberry.GPIO
 
 	// restart signals application restart
@@ -76,7 +79,7 @@ func (app *App) Run() error {
 	}
 
 	go app.mqtt.Service()
-	go app.calcFlow()
+	go app.calcGauge()
 	go app.backupMeasurements()
 	go app.runWebServer()
 
@@ -87,9 +90,7 @@ func (app *App) Run() error {
 func (app *App) init() (err error) {
 	for meterName, meterConfig := range app.config.Meter {
 		app.meters[meterName] = &meter.Meter{
-			Config:           meterConfig,
-			UnitMeterReading: meterConfig.Unit,
-			UnitFlow:         meterConfig.UnitFlow,
+			Config: meterConfig,
 		}
 	}
 

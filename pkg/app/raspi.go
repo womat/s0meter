@@ -7,6 +7,7 @@ import (
 	"github.com/womat/debug"
 )
 
+// testPinEmu emulate ticks on gpio pin, only for testing in windows mode
 func testPinEmu(p raspberry.Pin) {
 	for range time.Tick(time.Duration(p.Pin()/2) * time.Second) {
 		p.EmuEdge(raspberry.EdgeFalling)
@@ -22,14 +23,11 @@ func (app *App) handler(p raspberry.Pin) {
 			// add current counter & set time stamp
 			debug.TraceLog.Printf("receive an impulse on pin: %v", pin)
 
-			func() {
-				m.Lock()
-				defer m.Unlock()
-				m.MeterReading += m.Config.ScaleFactor
-				m.S0.Counter++
-				m.S0.TimeStamp = time.Now()
-			}()
-
+			m.Lock()
+			m.Counter += m.Config.ScaleFactorCounter
+			m.S0.Counter++
+			m.S0.TimeStamp = time.Now()
+			m.Unlock()
 			return
 		}
 	}

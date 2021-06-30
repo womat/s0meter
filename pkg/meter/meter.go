@@ -13,16 +13,23 @@ type S0 struct {
 	TimeStamp   time.Time // time of last s0 pulse
 }
 
+type MQTT struct {
+	LastCounter   float64   // counter of last mqtt message
+	LastGauge     float64   // gauge of last mqtt message
+	LastTimeStamp time.Time // time of last mqtt message
+}
+
 type Meter struct {
 	sync.RWMutex
-	LineHandler      raspberry.Pin      `json:"-"`
-	Config           config.MeterConfig `json:"-"`
-	TimeStamp        time.Time          // time of last throughput calculation
-	MeterReading     float64            // current meter reading (aktueller Zählerstand), eg kWh, l, m³
-	UnitMeterReading string             // unit of current meter reading eg kWh, l, m³
-	Flow             float64            // mass flow rate per time unit  (= flow/time(h)), eg kW, l/h, m³/h
-	UnitFlow         string             // unit of mass flow rate per time unit, eg Wh, l/s, m³/h
-	S0               S0                 `json:"-"`
+	LineHandler raspberry.Pin
+	Config      config.MeterConfig
+	TimeStamp   time.Time // timestamp of last gauge calculation
+	Counter     float64   // current counter (aktueller Zählerstand), eg kWh, l, m³
+	Gauge       float64   // mass flow rate per time unit  (= counter/time(h)), eg kW, l/h, m³/h
+	LastGauge   float64
+	LastCounter float64
+	S0          S0
+	MQTT        MQTT
 }
 
 func New() map[string]*Meter {

@@ -13,37 +13,73 @@ import (
 )
 
 type SavedRecord struct {
-	MeterReading float64   `yaml:"meterreading"` // current meter reading (aktueller Zählerstand), eg kWh, l, m³
-	TimeStamp    time.Time `yaml:"timestamp"`    // time of last s0 pulse
+	Counter   float64   `yaml:"counter"`   // current meter counter (aktueller Zählerstand), eg kWh, l, m³
+	TimeStamp time.Time `yaml:"timestamp"` // time of last s0 pulse
 }
 type SaveMeters map[string]SavedRecord
 
-func (app *App) calcFlow() {
+type MQTTRecord struct {
+	TimeStamp   time.Time // timestamp of last gauge calculation
+	Counter     float64   // current counter (aktueller Zählerstand), eg kWh, l, m³
+	UnitCounter string    // unit of current meter counter eg kWh, l, m³
+	Gauge       float64   // mass flow rate per time unit  (= counter/time(h)), eg kW, l/h, m³/h
+	UnitGauge   string    // unit of gauge, eg Wh, l/s, m³/h
+}
+
+func (app *App) calcGauge() {
 	p := app.config.DataCollectionInterval
 	for range time.Tick(p) {
-		debug.DebugLog.Print("calc average values")
+		debug.DebugLog.Print("calc gauge")
 
-		for _, m := range app.meters {
-			func() {
-				m.Lock()
-				defer m.Unlock()
-				m.Flow = float64(m.S0.Counter-m.S0.LastCounter) / p.Hours() * m.Config.ScaleFactor * m.Config.ScaleFactorFlow
-				m.S0.LastCounter = m.S0.Counter
-				m.TimeStamp = time.Now()
-				b, err := json.MarshalIndent(m, "", "  ")
-				if err != nil {
-					debug.ErrorLog.Printf("calcFlow marshal: %v", err)
-					return
-				}
+		for n, m := range app.meters {
+			m.Lock()
+			m.Gauge = float64(m.S0.Counter-m.S0.LastCounter) / p.Hours() * m.Config.ScaleFactorCounter * m.Config.ScaleFactorGauge
+			m.S0.LastCounter = m.S0.Counter
+			m.TimeStamp = time.Now()
+			m.Unlock()
 
-				app.mqtt.C <- mqtt.Message{
-					Qos:      0,
-					Retained: true,
-					Topic:    m.Config.MqttTopic,
-					Payload:  b,
-				}
-			}()
+			go app.sendMQTT(n)
 		}
+	}
+}
+
+func (app *App) sendMQTT(n string) {
+	m, ok := app.meters[n]
+	if !ok {
+		return
+	}
+
+	m.Lock()
+	defer m.Unlock()
+
+	if m.Counter != m.MQTT.LastCounter || m.Gauge != m.MQTT.LastGauge {
+		m.MQTT.LastCounter = m.Counter
+		m.MQTT.LastGauge = m.Gauge
+		m.MQTT.LastTimeStamp = m.TimeStamp
+
+		go func(t string, r MQTTRecord) {
+			debug.TraceLog.Printf("prepare mqtt message %v %v", t, r)
+
+			b, err := json.MarshalIndent(r, "", "  ")
+			if err != nil {
+				debug.ErrorLog.Printf("sendMQTT marshal: %v", err)
+				return
+			}
+
+			app.mqtt.C <- mqtt.Message{
+				Qos:      0,
+				Retained: true,
+				Topic:    t,
+				Payload:  b,
+			}
+		}(m.Config.MqttTopic,
+			MQTTRecord{
+				TimeStamp:   m.TimeStamp,
+				Counter:     m.Counter,
+				UnitCounter: m.Config.UnitCounter,
+				Gauge:       m.Gauge,
+				UnitGauge:   m.Config.UnitGauge,
+			})
 	}
 }
 
@@ -54,7 +90,7 @@ func (app *App) loadMeasurements() (err error) {
 		s := SaveMeters{}
 
 		for name := range app.meters {
-			s[name] = SavedRecord{MeterReading: 0, TimeStamp: time.Time{}}
+			s[name] = SavedRecord{Counter: 0, TimeStamp: time.Time{}}
 		}
 
 		// marshal the byte slice which contains the yaml file's content into SaveMeters struct
@@ -83,12 +119,10 @@ func (app *App) loadMeasurements() (err error) {
 
 	for name, loadedMeter := range s {
 		if meter, ok := app.meters[name]; ok {
-			func() {
-				meter.Lock()
-				defer meter.Unlock()
-				meter.MeterReading = loadedMeter.MeterReading
-				meter.TimeStamp = loadedMeter.TimeStamp
-			}()
+			meter.Lock()
+			meter.Counter = loadedMeter.Counter
+			meter.TimeStamp = loadedMeter.TimeStamp
+			meter.Unlock()
 		}
 	}
 
@@ -107,11 +141,9 @@ func (app *App) saveMeasurements() error {
 	s := SaveMeters{}
 
 	for name, m := range app.meters {
-		func() {
-			m.RLock()
-			defer m.RUnlock()
-			s[name] = SavedRecord{MeterReading: m.MeterReading, TimeStamp: m.TimeStamp}
-		}()
+		m.RLock()
+		s[name] = SavedRecord{Counter: m.Counter, TimeStamp: m.TimeStamp}
+		m.RUnlock()
 	}
 
 	// marshal the byte slice which contains the yaml file's content into SaveMeters struct

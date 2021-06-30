@@ -1,7 +1,6 @@
 package main
 
 // TODO: documentation
-// TODO: send only changes to mqtt
 
 import (
 	"flag"

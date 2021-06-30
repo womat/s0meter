@@ -18,7 +18,7 @@ import (
 // but we keep the correct syntax.
 //TODO: increase version number to 1.0.1+2020xxyy
 const (
-	VERSION = "1.1.0+20210608beta"
+	VERSION = "2.0.0+20210622beta"
 	MODULE  = "s0counter"
 )
 
