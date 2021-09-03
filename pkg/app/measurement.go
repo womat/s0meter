@@ -109,14 +109,7 @@ func (app *App) loadMeasurements() (err error) {
 	for name, loadedMeter := range s {
 		if m, ok := app.meters[name]; ok {
 			m.Lock()
-			m.S0.LastTimeStamp = loadedMeter.TimeStamp
-			m.S0.TimeStamp = time.Now()
-
-			// compatibility: calculate s0 Tick
-			if loadedMeter.Ticks == 0 && loadedMeter.Counter > 0 {
-				loadedMeter.Ticks = uint64(loadedMeter.Counter * m.Config.CounterConstant)
-			}
-
+			m.S0.TimeStamp = loadedMeter.TimeStamp
 			m.S0.Tick = loadedMeter.Ticks
 			m.Unlock()
 		}
