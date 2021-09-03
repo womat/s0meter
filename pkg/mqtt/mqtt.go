@@ -15,7 +15,7 @@ const (
 type Handler struct {
 	handler mqttlib.Client
 	// C is the channel to service the mqtt message
-	// sending a message to channel C will sent the message
+	// sending a message to channel C will send the message
 	C chan Message
 }
 

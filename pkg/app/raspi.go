@@ -23,10 +23,11 @@ func (app *App) handler(p raspberry.Pin) {
 			// add current counter & set time stamp
 			debug.TraceLog.Printf("receive an impulse on pin: %v", pin)
 
+			t := time.Now()
 			m.Lock()
-			m.Counter += m.Config.ScaleFactorCounter
-			m.S0.Counter++
-			m.S0.TimeStamp = time.Now()
+			m.S0.LastTimeStamp = m.S0.TimeStamp
+			m.S0.TimeStamp = t
+			m.S0.Tick++
 			m.Unlock()
 			return
 		}

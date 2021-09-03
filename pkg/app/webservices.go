@@ -10,8 +10,8 @@ import (
 type resp struct {
 	TimeStamp   time.Time // timestamp of last gauge calculation
 	Counter     float64   // current counter (aktueller Zählerstand), eg kWh, l, m³
-	UnitCounter string    // unit of current meter counter eg kWh, l, m³
-	Gauge       float64   // mass flow rate per time unit  (= counter/time(h)), eg kW, l/h, m³/h
+	UnitCounter string    // unit of current meter counter e.g. kWh, l, m³
+	Gauge       float64   // mass flow rate per time unit  (= counter/time(h)), e.g. kW, l/h, m³/h
 	UnitGauge   string    // unit of gauge, eg Wh, l/s, m³/h
 }
 
@@ -32,10 +32,10 @@ func (app *App) HandleCurrentData() fiber.Handler {
 		for n, m := range app.meters {
 			m.RLock()
 			res[n] = resp{
-				TimeStamp:   m.TimeStamp,
-				Counter:     m.Counter,
+				TimeStamp:   time.Now(),
+				Counter:     calcCounter(m),
 				UnitCounter: m.Config.UnitCounter,
-				Gauge:       m.Gauge,
+				Gauge:       calcGauge(m),
 				UnitGauge:   m.Config.UnitGauge,
 			}
 			m.RUnlock()

@@ -101,7 +101,7 @@ func (p *RpiPin) Read() bool {
 	return bool(p.gpioPin.Read())
 }
 
-// EmuEdge emulate a statechange of given pin on windows systems
+// EmuEdge emulate a statechange of given pin on Windows systems
 // not supported for linux
 func (p *RpiPin) EmuEdge(edge Edge) {
 	return

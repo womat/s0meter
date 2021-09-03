@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"os"
+	"s0counter/pkg/meter"
 	"s0counter/pkg/mqtt"
 	"time"
 
@@ -13,7 +14,8 @@ import (
 )
 
 type SavedRecord struct {
-	Counter   float64   `yaml:"counter"`   // current meter counter (aktueller Zählerstand), eg kWh, l, m³
+	Ticks     uint64    `yaml:"ticks"`     // current s0 ticks
+	Counter   float64   `yaml:"counter"`   // current meter counter (aktueller Zählerstand), eg kWh, l, m³ >> is not needed anymore, compatibility reason
 	TimeStamp time.Time `yaml:"timestamp"` // time of last s0 pulse
 }
 type SaveMeters map[string]SavedRecord
@@ -21,23 +23,15 @@ type SaveMeters map[string]SavedRecord
 type MQTTRecord struct {
 	TimeStamp   time.Time // timestamp of last gauge calculation
 	Counter     float64   // current counter (aktueller Zählerstand), eg kWh, l, m³
-	UnitCounter string    // unit of current meter counter eg kWh, l, m³
-	Gauge       float64   // mass flow rate per time unit  (= counter/time(h)), eg kW, l/h, m³/h
+	UnitCounter string    // unit of current meter counter e.g. kWh, l, m³
+	Gauge       float64   // mass flow rate per time unit  (= counter/time(h)), e.g. kW, l/h, m³/h
 	UnitGauge   string    // unit of gauge, eg Wh, l/s, m³/h
 }
 
 func (app *App) calcGauge() {
 	p := app.config.DataCollectionInterval
 	for range time.Tick(p) {
-		debug.DebugLog.Print("calc gauge")
-
-		for n, m := range app.meters {
-			m.Lock()
-			m.Gauge = float64(m.S0.Counter-m.S0.LastCounter) / p.Hours() * m.Config.ScaleFactorCounter * m.Config.ScaleFactorGauge
-			m.S0.LastCounter = m.S0.Counter
-			m.TimeStamp = time.Now()
-			m.Unlock()
-
+		for n := range app.meters {
 			go app.sendMQTT(n)
 		}
 	}
@@ -49,42 +43,36 @@ func (app *App) sendMQTT(n string) {
 		return
 	}
 
-	m.Lock()
-	defer m.Unlock()
+	m.RLock()
+	defer m.RUnlock()
 
-	if m.Counter != m.MQTT.LastCounter || m.Gauge != m.MQTT.LastGauge {
-		m.MQTT.LastCounter = m.Counter
-		m.MQTT.LastGauge = m.Gauge
-		m.MQTT.LastTimeStamp = m.TimeStamp
+	go func(t string, r MQTTRecord) {
+		debug.TraceLog.Printf("prepare mqtt message %v %v", t, r)
 
-		go func(t string, r MQTTRecord) {
-			debug.TraceLog.Printf("prepare mqtt message %v %v", t, r)
+		b, err := json.MarshalIndent(r, "", "  ")
+		if err != nil {
+			debug.ErrorLog.Printf("sendMQTT marshal: %v", err)
+			return
+		}
 
-			b, err := json.MarshalIndent(r, "", "  ")
-			if err != nil {
-				debug.ErrorLog.Printf("sendMQTT marshal: %v", err)
-				return
-			}
-
-			app.mqtt.C <- mqtt.Message{
-				Qos:      0,
-				Retained: true,
-				Topic:    t,
-				Payload:  b,
-			}
-		}(m.Config.MqttTopic,
-			MQTTRecord{
-				TimeStamp:   m.TimeStamp,
-				Counter:     m.Counter,
-				UnitCounter: m.Config.UnitCounter,
-				Gauge:       m.Gauge,
-				UnitGauge:   m.Config.UnitGauge,
-			})
-	}
+		app.mqtt.C <- mqtt.Message{
+			Qos:      0,
+			Retained: true,
+			Topic:    t,
+			Payload:  b,
+		}
+	}(m.Config.MqttTopic,
+		MQTTRecord{
+			TimeStamp:   time.Now(),
+			Counter:     calcCounter(m),
+			UnitCounter: m.Config.UnitCounter,
+			Gauge:       calcGauge(m),
+			UnitGauge:   m.Config.UnitGauge,
+		})
 }
 
 func (app *App) loadMeasurements() (err error) {
-	// if file doesn't exists, create an empty file
+	// if file doesn't exist, create an empty file
 	fileName := app.config.DataFile
 	if !tools.FileExists(fileName) {
 		s := SaveMeters{}
@@ -118,11 +106,18 @@ func (app *App) loadMeasurements() (err error) {
 	}
 
 	for name, loadedMeter := range s {
-		if meter, ok := app.meters[name]; ok {
-			meter.Lock()
-			meter.Counter = loadedMeter.Counter
-			meter.TimeStamp = loadedMeter.TimeStamp
-			meter.Unlock()
+		if m, ok := app.meters[name]; ok {
+			m.Lock()
+			m.S0.LastTimeStamp = loadedMeter.TimeStamp
+			m.S0.TimeStamp = time.Now()
+
+			// compatibility: calculate s0 Tick
+			if loadedMeter.Ticks == 0 && loadedMeter.Counter > 0 {
+				loadedMeter.Ticks = uint64(loadedMeter.Counter * m.Config.CounterConstant)
+			}
+
+			m.S0.Tick = loadedMeter.Ticks
+			m.Unlock()
 		}
 	}
 
@@ -142,7 +137,7 @@ func (app *App) saveMeasurements() error {
 
 	for name, m := range app.meters {
 		m.RLock()
-		s[name] = SavedRecord{Counter: m.Counter, TimeStamp: m.TimeStamp}
+		s[name] = SavedRecord{Ticks: m.S0.Tick, Counter: calcCounter(m), TimeStamp: m.S0.TimeStamp}
 		m.RUnlock()
 	}
 
@@ -157,4 +152,24 @@ func (app *App) saveMeasurements() error {
 	}
 
 	return nil
+}
+
+func calcGauge(m *meter.Meter) (f float64) {
+	dt := m.S0.TimeStamp.Sub(m.S0.LastTimeStamp) // duration between last two ticks
+
+	// if duration between "now and last tick" is greater than the duration between "last two ticks"
+	// increase duration between "last two ticks" to duration between "now and the penultimate tick".
+	// this ensures that the value of the gauge value changes if no new pulse has been received
+	if time.Since(m.S0.TimeStamp) > dt {
+		dt = time.Since(m.S0.LastTimeStamp)
+	}
+
+	// P = 3600 / (t * Cz) (Zählerkonstante in Imp/kWh)
+	f = 3600 / (dt.Seconds() * m.Config.CounterConstant) * m.Config.ScaleFactor
+	return f
+}
+
+func calcCounter(m *meter.Meter) (f float64) {
+	f = float64(m.S0.Tick) / m.Config.CounterConstant
+	return f
 }

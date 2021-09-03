@@ -31,7 +31,7 @@ type App struct {
 	// MetersMap must be a pointer to the Meter type, otherwise RWMutex doesn't work!
 	meters map[string]*meter.Meter
 
-	// qpio is the handler to the rpi qpio memory
+	// gpio is the handler to the rpi gpio memory
 	gpio raspberry.GPIO
 
 	// restart signals application restart

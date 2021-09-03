@@ -79,7 +79,7 @@ func (p *WinPin) Read() bool {
 	return false
 }
 
-// EmuEdge emulate a statechange of given pin on windows systems
+// EmuEdge emulate a statechange of given pin on Windows systems
 func (p *WinPin) EmuEdge(edge Edge) {
 	switch {
 	case p.edge == EdgeNone, edge == EdgeNone:

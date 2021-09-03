@@ -1,7 +1,7 @@
 package app
 
 // initDefaultRoutes initializes the applications default routes.
-//  This are the routes which always are the same in every application.
+//  These are the routes which always are the same in every application.
 //  Things like user api, version, ...
 func (app *App) initDefaultRoutes() {
 	api := app.web.Group("/")

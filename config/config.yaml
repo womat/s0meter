@@ -22,7 +22,7 @@ debug:
   flag: trace
 
 mqtt:
-# connection >> defines the connection string to the mqtt broker
+  # connection >> defines the connection string to the mqtt broker
   connection: "tcp://raspberrypi4.fritz.box:1883"
 
 # meter configurations
@@ -30,35 +30,35 @@ mqtt:
 #    gpio >> S0 input gpio pin
 #    bouncetime >> time to wait for a stable signal on gpio pin (ms) to get a "clean" level (suppress key bouncing)
 #    unitcounter >> unit of counter eg "kWh, m³, ..."
-#    scalefactorcounter >> e.g. scale factor of counter: 1000 >>  1000pulse 1kWh
+#    counterconstant >> (Zählerkonstante) >> ticks/unitcounter: e.g. ticks/kWh
 #    unitgauge >> unit of gauge (unit/t) eg "kW, l/h, ..."
-#    scalefactorgauge >> scale factor of gauge, based on hour: eg 1000: m³/h >> l/h,  0.27777778 m3/h >> l/s
+#    scalefactor >> scale factor of gauge, based on hour: eg 1000: m³/h >> l/h,  0.27777778 m3/h >> l/s
 #    mqtttopic >> mqtt topic, if it isn't defined, values aren't send to the mqtt broker
 meter:
   wallbox:
     gpio: 17
-    bouncetime: 10
+    bouncetime: 1
     unitcounter: "kWh"
-    scalefactorcounter: 0.001
+    counterconstant: 1000
     unitgauge: "kW"
-    scalefactorgauge: 1
-    mqtttopic: test/wallbox/summary
+    scalefactor: 1
+  #  mqtttopic: testt/wallbox/summary
   rawwater:
     gpio: 27
-    bouncetime: 10
-    unitcounter: "m³"
-    scalefactorcounter: 0.001
+    bouncetime: 1
+    unitcounter: "l"
+    counterconstant: 1
     unitgauge: "l/h"
-    scalefactorgauge: 0.001
-    mqtttopic: test/rawwater/summary
+    scalefactor: 1
+  #  mqtttopic: testt/rawwater/summary
   portablewater:
     gpio: 22
-    bouncetime: 10
+    bouncetime: 1
     unitcounter: "m³"
-    scalefactorcounter: 1000
-    unitgauge: "l/h"
-    scalefactorgauge: 0.2777777778
- #   mqtttopic: test/portablewater/summary
+    counterconstant: 1000
+    unitgauge: "l/s"
+    scalefactor: 0.2777777778
+  #  mqtttopic: test/portablewater/summary
 
 # webserver configuration
 webserver:
