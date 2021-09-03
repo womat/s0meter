@@ -63,6 +63,7 @@ type MeterConfig struct {
 	CounterConstant float64       `yaml:"counterconstant"`
 	UnitCounter     string        `yaml:"unitcounter"`
 	ScaleFactor     float64       `yaml:"scalefactor"`
+	Precision       int           `yaml:"precision "`
 	UnitGauge       string        `yaml:"unitgauge"`
 	MqttTopic       string        `yaml:"mqtttopic"`
 }

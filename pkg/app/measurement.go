@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"s0counter/pkg/meter"
 	"s0counter/pkg/mqtt"
@@ -166,10 +167,15 @@ func calcGauge(m *meter.Meter) (f float64) {
 
 	// P = 3600 / (t * Cz) (Zählerkonstante in Imp/kWh)
 	f = 3600 / (dt.Seconds() * m.Config.CounterConstant) * m.Config.ScaleFactor
-	return f
+	return toFixed(f, m.Config.Precision)
 }
 
 func calcCounter(m *meter.Meter) (f float64) {
 	f = float64(m.S0.Tick) / m.Config.CounterConstant
 	return f
+}
+
+func toFixed(num float64, precision int) float64 {
+	p := math.Pow(10, float64(precision))
+	return math.Round(num*p) / p
 }

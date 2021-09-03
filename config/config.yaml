@@ -33,6 +33,7 @@ mqtt:
 #    counterconstant >> (Zählerkonstante) >> ticks/unitcounter: e.g. ticks/kWh
 #    unitgauge >> unit of gauge (unit/t) eg "kW, l/h, ..."
 #    scalefactor >> scale factor of gauge, based on hour: eg 1000: m³/h >> l/h,  0.27777778 m3/h >> l/s
+#    precision >> rounding gauge to a specified number of decimals
 #    mqtttopic >> mqtt topic, if it isn't defined, values aren't send to the mqtt broker
 meter:
   wallbox:
@@ -42,6 +43,7 @@ meter:
     counterconstant: 1000
     unitgauge: "kW"
     scalefactor: 1
+    precision: 0
   #  mqtttopic: testt/wallbox/summary
   rawwater:
     gpio: 27
@@ -50,6 +52,7 @@ meter:
     counterconstant: 1
     unitgauge: "l/h"
     scalefactor: 1
+    precision: 0
   #  mqtttopic: testt/rawwater/summary
   portablewater:
     gpio: 22
@@ -58,6 +61,7 @@ meter:
     counterconstant: 1000
     unitgauge: "l/s"
     scalefactor: 0.2777777778
+    precision: 0
   #  mqtttopic: test/portablewater/summary
 
 # webserver configuration
