@@ -58,7 +58,7 @@ func (app *App) sendMQTT(n string) {
 
 		app.mqtt.C <- mqtt.Message{
 			Qos:      0,
-			Retained: true,
+			Retained: app.config.MQTT.Retained,
 			Topic:    t,
 			Payload:  b,
 		}

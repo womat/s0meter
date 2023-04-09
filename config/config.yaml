@@ -24,6 +24,8 @@ debug:
 mqtt:
   # connection >> defines the connection string to the mqtt broker
   connection: "tcp://raspberrypi4.fritz.box:1883"
+  # retained defines the message retained flag
+  retained: false
 
 # meter configurations
 # key >> name of device
