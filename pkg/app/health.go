@@ -1,20 +1,20 @@
 package app
 
 import (
+	"log/slog"
 	"net/http"
 	"os"
 	"runtime"
 	"time"
-
-	"github.com/womat/debug"
 
 	"github.com/gofiber/fiber/v2"
 )
 
 // HandleHealth returns data about the health of myself.
 // output example:
-//  {"JobCount":2,"NumGoroutines":11,"HeapAllocatedBytes":332256360,"HeapAllocatedMB":316,
-//   "SysMemoryBytes":360290312,"SysMemoryMB":343,"Version":"0.0.0+20200516","ProgLang":"go1.15.2"}
+//
+//	{"JobCount":2,"NumGoroutines":11,"HeapAllocatedBytes":332256360,"HeapAllocatedMB":316,
+//	 "SysMemoryBytes":360290312,"SysMemoryMB":343,"Version":"0.0.0+20200516","ProgLang":"go1.15.2"}
 func (app *App) HandleHealth() fiber.Handler {
 	bToMb := func(b uint64) uint64 {
 		return b / 1024 / 1024
@@ -23,7 +23,7 @@ func (app *App) HandleHealth() fiber.Handler {
 	host, _ := os.Hostname()
 
 	return func(ctx *fiber.Ctx) error {
-		debug.InfoLog.Print("web request health")
+		slog.Info("web request health")
 
 		var m runtime.MemStats
 		runtime.ReadMemStats(&m)

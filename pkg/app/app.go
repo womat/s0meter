@@ -1,14 +1,15 @@
 package app
 
 import (
+	"log/slog"
 	"net/url"
+
+	"github.com/gofiber/fiber/v2"
+
 	"s0counter/pkg/app/config"
 	"s0counter/pkg/meter"
 	"s0counter/pkg/mqtt"
-	"s0counter/pkg/raspberry"
-
-	"github.com/gofiber/fiber/v2"
-	"github.com/womat/debug"
+	"s0counter/pkg/rpi"
 )
 
 // App is the main application struct.
@@ -31,36 +32,26 @@ type App struct {
 	// MetersMap must be a pointer to the Meter type, otherwise RWMutex doesn't work!
 	meters map[string]*meter.Meter
 
-	// gpio is the handler to the rpi gpio memory
-	gpio raspberry.GPIO
-
 	// restart signals application restart
 	restart chan struct{}
 	// shutdown signals application shutdown
 	shutdown chan struct{}
 }
 
-// New checks the Web server URL and initialize the main app structure
+// New checks the Web server URL and initializes the main app structure
 func New(config *config.Config) (*App, error) {
 	u, err := url.Parse(config.Webserver.URL)
 	if err != nil {
-		debug.ErrorLog.Printf("Error parsing url %q: %s", config.Webserver.URL, err.Error())
-		return &App{}, err
-	}
-
-	gpio, err := raspberry.Open()
-	if err != nil {
-		debug.ErrorLog.Printf("can't open gpio: %v", err)
-		return &App{}, err
+		slog.Error("Error parsing url", "url", config.Webserver.URL, "error", err.Error())
+		return nil, err
 	}
 
 	return &App{
 		config:    config,
 		urlParsed: u,
-		gpio:      gpio,
 
 		web:    fiber.New(),
-		meters: meter.New(),
+		meters: make(map[string]*meter.Meter),
 		mqtt:   mqtt.New(),
 
 		restart:  make(chan struct{}),
@@ -74,13 +65,12 @@ func (app *App) Run() error {
 		return err
 	}
 
-	for _, m := range app.meters {
-		go testPinEmu(m.LineHandler)
-	}
-
-	go app.mqtt.Service()
+	// periodically calculate the gauge- and counter-values for each meter and send the results over MQTT
 	go app.calcGauge()
+
+	// periodically backup the measurements
 	go app.backupMeasurements()
+
 	go app.runWebServer()
 
 	return nil
@@ -88,42 +78,40 @@ func (app *App) Run() error {
 
 // init initializes the application.
 func (app *App) init() (err error) {
+
 	for meterName, meterConfig := range app.config.Meter {
-		app.meters[meterName] = &meter.Meter{
-			Config: meterConfig,
-		}
+		app.meters[meterName] = meter.New(meterConfig)
 	}
 
 	if err = app.loadMeasurements(); err != nil {
-		debug.ErrorLog.Printf("can't open data file: %v", err)
+		slog.Error("can't open data file", "error", err)
 		return err
 	}
 
 	for name, meterConfig := range app.config.Meter {
 		if m, ok := app.meters[name]; ok {
-			if m.LineHandler, err = app.gpio.NewPin(meterConfig.Gpio); err != nil {
-				debug.ErrorLog.Printf("can't open pin: %v", err)
+			if m.LineHandler, err = rpi.NewPort(meterConfig.Gpio); err != nil {
+				slog.Error("can't open port", "error", err)
 				return
 			}
 
-			app.meters[name] = m
-			app.meters[name].LineHandler.Input()
-			app.meters[name].LineHandler.PullUp()
-			app.meters[name].LineHandler.SetBounceTime(meterConfig.BounceTime)
+			_ = m.LineHandler.SetInputMode()
+			_ = m.LineHandler.SetInputMode()
+			_ = m.LineHandler.SetDebounceTime(meterConfig.BounceTime)
 			// call handler when pin changes from low to high.
-			if err = app.meters[name].LineHandler.Watch(raspberry.EdgeFalling, app.handler); err != nil {
-				debug.ErrorLog.Printf("can't open watcher: %v", err)
+			if err = m.LineHandler.StartEventWatching(m.EventHandler); err != nil {
+				slog.Error("can't open watcher", "error", err)
 				return err
 			}
 		}
 	}
 
 	if err = app.mqtt.Connect(app.config.MQTT.Connection); err != nil {
-		debug.ErrorLog.Printf("can't open mqtt broker %v", err)
+		slog.Error("can't open mqtt broker", "error", err)
 		return err
 	}
 
-	// initRoutes and initDefaultRoutes should be always called last because it may access things like app.api
+	// initRoutes and initDefaultRoutes should always be called last because it may access things like app.api
 	// which must be initialized before in initAPI()
 	app.initDefaultRoutes()
 
@@ -137,14 +125,17 @@ func (app *App) Restart() <-chan struct{} {
 }
 
 // Shutdown returns the read only shutdown channel.
-// Shutdown is used to be able to react on application shutdown. (see cmd/main.go)
+// Shutdown is used to be able to react to application shutdown (see cmd/main.go)
 func (app *App) Shutdown() <-chan struct{} {
 	return app.shutdown
 }
 
 func (app *App) Close() error {
-	// app.chip.Close() unwatch all pins and release the gpio memory!
-	_ = app.gpio.Close()
+
+	for _, m := range app.meters {
+		// close the LineHandler channel to stop the meter
+		_ = m.LineHandler.Close()
+	}
 
 	if app.mqtt != nil {
 		_ = app.mqtt.Disconnect()

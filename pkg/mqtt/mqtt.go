@@ -1,9 +1,9 @@
 package mqtt
 
 import (
-	mqttlib "github.com/eclipse/paho.mqtt.golang"
+	"log/slog"
 
-	"github.com/womat/debug"
+	mqttlib "github.com/eclipse/paho.mqtt.golang"
 )
 
 // quiesce is the specified number of milliseconds to wait for existing work to be completed.
@@ -14,9 +14,6 @@ const (
 // Handler contains the handler of the mqtt broker
 type Handler struct {
 	handler mqttlib.Client
-	// C is the channel to service the mqtt message
-	// sending a message to channel C will send the message
-	C chan Message
 }
 
 // Message contains the properties of the mqtt message
@@ -29,17 +26,11 @@ type Message struct {
 
 // New generate a new mqtt broker client
 func New() *Handler {
-	return &Handler{
-		C: make(chan Message),
-	}
+	return &Handler{}
 }
 
-// Connect connects to the mqtt broker
-// if no broker is defined, mo mqtt message are send
+// Connect connecting to the mqtt broker
 func (m *Handler) Connect(broker string) error {
-	if broker == "" {
-		return nil
-	}
 
 	opts := mqttlib.NewClientOptions().AddBroker(broker)
 	m.handler = mqttlib.NewClient(opts)
@@ -55,43 +46,37 @@ func (m *Handler) ReConnect() error {
 
 // Disconnect will end the connection to the broker
 func (m *Handler) Disconnect() error {
-	if m.handler == nil {
-		return nil
-	}
 
 	m.handler.Disconnect(quiesce)
 	return nil
 }
 
-// Service listens to a message on the channel C and sends the message
-// if no handler or topic is defined, the message will be ignored
-func (m *Handler) Service() {
-	for d := range m.C {
-		if m.handler == nil || d.Topic == "" {
-			continue
+// Publish sends a message to the mqtt broker. If the connection is lost, it will try to reconnect.
+// If the connection can't be established, it will return an error.
+// The message is sent asynchronously. If the message can't be sent, it will be logged.
+func (m *Handler) Publish(msg Message) error {
+	if !m.handler.IsConnected() {
+		slog.Debug("mqtt broker isn't connected, reconnect it")
+
+		if err := m.ReConnect(); err != nil {
+			slog.Error("can't reconnect to mqtt broker", "error", err)
+			return err
 		}
-
-		go func(msg Message) {
-			if !m.handler.IsConnected() {
-				debug.DebugLog.Printf("mqtt broker isn't connected, reconnect it")
-
-				if err := m.ReConnect(); err != nil {
-					debug.ErrorLog.Printf("can't reconnect to mqtt broker %v", err)
-					return
-				}
-			}
-
-			debug.DebugLog.Printf("publishing %v bytes to topic %v", len(msg.Payload), msg.Topic)
-			t := m.handler.Publish(msg.Topic, msg.Qos, msg.Retained, msg.Payload)
-
-			// the asynchronous nature of this library makes it easy to forget to check for errors.
-			// Consider using a go routine to log these
-			go func() {
-				<-t.Done()
-				if err := t.Error(); err != nil {
-					debug.ErrorLog.Printf("publishing topic %v: %v", msg.Topic, err)
-				}
-			}()
-		}(d)
 	}
+
+	slog.Debug("publishing mqtt message", "topic", msg.Topic, "payload", string(msg.Payload))
+	t := m.handler.Publish(msg.Topic, msg.Qos, msg.Retained, msg.Payload)
+
+	// The asynchronous nature of this library makes it easy to forget to check for errors.
+	// Consider using a go routine to log these
+	go func() {
+		<-t.Done()
+		slog.Debug("mqtt message published", "topic", msg.Topic, "payload", string(msg.Payload))
+
+		if err := t.Error(); err != nil {
+			slog.Error("publishing topic", "topic", msg.Topic, "error", err)
+		}
+	}()
+
+	return nil
 }

@@ -2,17 +2,16 @@ package config
 
 import (
 	"fmt"
-	"io"
+	"log/slog"
 	"os"
 	"time"
 
-	"github.com/womat/debug"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // Config holds the application configuration. Attention!
 // To make it possible to overwrite fields with the -overwrite command
-// line option each of the struct fields must be in the format
+// line option, each of the struct fields must be in the format
 // first letter uppercase -> followed by CamelCase as in the config file.
 // Config defines the struct of global config and the struct of the configuration file
 type Config struct {
@@ -22,7 +21,7 @@ type Config struct {
 	DataFile                  string                 `yaml:"datafile"`
 	BackupInterval            time.Duration          `yaml:"-"`
 	BackupIntervalInt         int                    `yaml:"backupinterval"`
-	Debug                     DebugConfig            `yaml:"debug"`
+	Debug                     slog.Logger            `yaml:"-"`
 	Meter                     map[string]MeterConfig `yaml:"meter"`
 	Webserver                 WebserverConfig        `yaml:"webserver"`
 	MQTT                      MQTTConfig             `yaml:"mqtt"`
@@ -48,14 +47,6 @@ type MQTTConfig struct {
 	Retained   bool   `yaml:"retained"`
 }
 
-// DebugConfig defines the struct of the debug configuration and configuration file
-type DebugConfig struct {
-	File       io.WriteCloser `yaml:"-"`
-	Flag       int            `yaml:"-"`
-	FlagString string         `yaml:"flag"`
-	FileString string         `yaml:"file"`
-}
-
 // MeterConfig defines the struct of the meter configuration and configuration file
 type MeterConfig struct {
 	Gpio            int           `yaml:"gpio"`
@@ -77,10 +68,7 @@ func NewConfig() *Config {
 		DataFile:                  "/opt/womat/data/measurement.yaml",
 		BackupInterval:            0,
 		BackupIntervalInt:         0,
-		Debug: DebugConfig{
-			FileString: "stderr",
-			FlagString: "standard",
-		},
+
 		Meter: map[string]MeterConfig{},
 		Webserver: WebserverConfig{
 			URL: "http://0.0.0.0:4000",
@@ -99,10 +87,7 @@ func (c *Config) LoadConfig() error {
 	}
 
 	if c.Flag.Debug != "" {
-		c.Debug.FlagString = c.Flag.Debug
-	}
-	if err := c.setDebugConfig(); err != nil {
-		return fmt.Errorf("unable to open debug file %q: %w", c.Debug, err)
+		slog.SetLogLoggerLevel(slog.LevelDebug)
 	}
 
 	c.DataCollectionInterval = time.Duration(c.DataCollectionIntervalInt) * time.Second
@@ -129,29 +114,4 @@ func (c *Config) readConfigFile() error {
 	}
 
 	return nil
-}
-
-func (c *Config) setDebugConfig() (err error) {
-	// defines Debug section of global.Config
-	switch c.Debug.FlagString {
-	case "trace", "full":
-		c.Debug.Flag = debug.Full
-	case "debug":
-		c.Debug.Flag = debug.Warning | debug.Info | debug.Error | debug.Fatal | debug.Debug
-	case "standard":
-		c.Debug.Flag = debug.Standard
-	}
-
-	switch c.Debug.FileString {
-	case "stderr":
-		c.Debug.File = os.Stderr
-	case "stdout":
-		c.Debug.File = os.Stdout
-	default:
-		if c.Debug.File, err = os.OpenFile(c.Debug.FileString, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o666); err != nil {
-			return
-		}
-	}
-
-	return
 }

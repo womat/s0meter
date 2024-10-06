@@ -2,21 +2,22 @@ package app
 
 import (
 	"encoding/json"
+	"log/slog"
 	"math"
 	"os"
-	"s0counter/pkg/meter"
-	"s0counter/pkg/mqtt"
 	"time"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 
-	"github.com/womat/debug"
 	"github.com/womat/tools"
+
+	"s0counter/pkg/meter"
+	"s0counter/pkg/mqtt"
 )
 
 type SavedRecord struct {
 	Ticks     uint64    `yaml:"ticks"`     // current s0 ticks
-	Counter   float64   `yaml:"counter"`   // current meter counter (aktueller Zählerstand), eg kWh, l, m³ >> is not needed anymore, compatibility reason
+	Counter   float64   `yaml:"counter"`   // current meter counter (aktueller Zählerstand), e.g., kWh, l, m³ >> isn't necessary anymore, compatibility reason
 	TimeStamp time.Time `yaml:"timestamp"` // time of last s0 pulse
 }
 type SaveMeters map[string]SavedRecord
@@ -24,56 +25,67 @@ type SaveMeters map[string]SavedRecord
 type MQTTRecord struct {
 	TimeStamp   time.Time // timestamp of last gauge calculation
 	Counter     float64   // current counter (aktueller Zählerstand), eg kWh, l, m³
-	UnitCounter string    // unit of current meter counter e.g. kWh, l, m³
+	UnitCounter string    // unit of current meter counter e.g., kWh, l, m³
 	Gauge       float64   // mass flow rate per time unit  (= counter/time(h)), e.g. kW, l/h, m³/h
 	UnitGauge   string    // unit of gauge, eg Wh, l/s, m³/h
 }
 
+// calcGauge periodically calculates the gauge- and counter-values for each meter
+// based on the configured data collection interval and sends the results over MQTT.
 func (app *App) calcGauge() {
 	p := app.config.DataCollectionInterval
 	for range time.Tick(p) {
-		for n := range app.meters {
-			go app.sendMQTT(n)
+		for _, m := range app.meters {
+			go app.publish(m)
 		}
 	}
 }
 
-func (app *App) sendMQTT(n string) {
-	m, ok := app.meters[n]
-	if !ok {
-		return
-	}
+// publish sends the current counter and gauge values of a meter to the MQTT broker.
+// The values are sent as a JSON string.
+// The topic is defined in the configuration file.
+func (app *App) publish(m *meter.Meter) error {
 
 	m.RLock()
+
+	payload := MQTTRecord{
+		TimeStamp:   time.Now(),
+		Counter:     calcCounter(m),
+		UnitCounter: m.Config.UnitCounter,
+		Gauge:       calcGauge(m),
+		UnitGauge:   m.Config.UnitGauge,
+	}
+	topic := m.Config.MqttTopic
 	defer m.RUnlock()
 
-	go func(t string, r MQTTRecord) {
-		debug.TraceLog.Printf("prepare mqtt message %v %v", t, r)
+	slog.Debug("prepare mqtt message", "topic", topic, "record", payload)
 
-		b, err := json.MarshalIndent(r, "", "  ")
-		if err != nil {
-			debug.ErrorLog.Printf("sendMQTT marshal: %v", err)
-			return
-		}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		slog.Error("sendMQTT marshal", "error", err)
+		return err
+	}
 
-		app.mqtt.C <- mqtt.Message{
-			Qos:      0,
-			Retained: app.config.MQTT.Retained,
-			Topic:    t,
-			Payload:  b,
-		}
-	}(m.Config.MqttTopic,
-		MQTTRecord{
-			TimeStamp:   time.Now(),
-			Counter:     calcCounter(m),
-			UnitCounter: m.Config.UnitCounter,
-			Gauge:       calcGauge(m),
-			UnitGauge:   m.Config.UnitGauge,
-		})
+	msg := mqtt.Message{
+		Qos:      0,
+		Retained: app.config.MQTT.Retained,
+		Topic:    topic,
+		Payload:  b,
+	}
+
+	err = app.mqtt.Publish(msg)
+	if err != nil {
+		slog.Error("sendMQTT publish", "error", err)
+	}
+
+	return err
 }
 
+// loadMeasurements loads the current counter and gauge values of each meter from a YAML file.
+// If the file doesn't exist, it will be created with default values.
+
 func (app *App) loadMeasurements() (err error) {
-	// if file doesn't exist, create an empty file
+	// if the file doesn't exist, create an empty file
 	fileName := app.config.DataFile
 	if !tools.FileExists(fileName) {
 		s := SaveMeters{}
@@ -82,7 +94,7 @@ func (app *App) loadMeasurements() (err error) {
 			s[name] = SavedRecord{Counter: 0, TimeStamp: time.Time{}}
 		}
 
-		// marshal the byte slice which contains the yaml file's content into SaveMeters struct
+		// marshal the byte slice which contains the YAML file's content into SaveMeters struct
 		var data []byte
 		data, err = yaml.Marshal(&s)
 		if err != nil {
@@ -94,13 +106,13 @@ func (app *App) loadMeasurements() (err error) {
 		}
 	}
 
-	// read the yaml file as a byte array.
+	// read the YAML file as a byte array.
 	data, err := os.ReadFile(fileName)
 	if err != nil {
 		return
 	}
 
-	// unmarshal the byte slice which contains the yaml file's content into SaveMeters struct
+	// unmarshal the byte slice which contains the YAML file's content into SaveMeters struct
 	s := SaveMeters{}
 	if err = yaml.Unmarshal(data, &s); err != nil {
 		return
@@ -118,14 +130,18 @@ func (app *App) loadMeasurements() (err error) {
 	return
 }
 
+// backupMeasurements periodically saves the current counter and gauge values of each meter to a YAML file.
+// The interval is defined in the configuration file.
 func (app *App) backupMeasurements() {
 	for range time.Tick(app.config.BackupInterval) {
 		_ = app.saveMeasurements()
 	}
 }
 
+// saveMeasurements saves the current counter and gauge values of each meter to a YAML file.
+// The file is created if it doesn't exist. If the file exists, it will be overwritten.
 func (app *App) saveMeasurements() error {
-	debug.DebugLog.Print("saveMeasurements measurements to file")
+	slog.Debug("saveMeasurements", "file", app.config.DataFile)
 
 	s := SaveMeters{}
 
@@ -135,7 +151,7 @@ func (app *App) saveMeasurements() error {
 		m.RUnlock()
 	}
 
-	// marshal the byte slice which contains the yaml file's content into SaveMeters struct
+	// marshal the byte slice which contains the YAML file's content into SaveMeters struct
 	data, err := yaml.Marshal(&s)
 	if err != nil {
 		return err
@@ -148,6 +164,9 @@ func (app *App) saveMeasurements() error {
 	return nil
 }
 
+// calcGauge calculates the current gauge value of a meter
+// by dividing the number of ticks by the counter-constant
+// and multiplying it by the scale factor.
 func calcGauge(m *meter.Meter) (f float64) {
 	dt := m.S0.TimeStamp.Sub(m.S0.LastTimeStamp) // duration between last two ticks
 
@@ -163,6 +182,8 @@ func calcGauge(m *meter.Meter) (f float64) {
 	return toFixed(f, m.Config.Precision)
 }
 
+// calcCounter calculates the current counter-value of a meter
+// by dividing the number of ticks by the counter-constant
 func calcCounter(m *meter.Meter) (f float64) {
 	f = float64(m.S0.Tick) / m.Config.CounterConstant
 	return f
