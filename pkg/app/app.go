@@ -65,8 +65,10 @@ func (app *App) Run() error {
 		return err
 	}
 
-	// periodically calculate the gauge- and counter-values for each meter and send the results over MQTT
-	go app.calcGauge()
+	if app.config.MQTT.Enabled {
+		// periodically calculate the gauge- and counter-values for each meter and send the results over MQTT
+		go app.calcGauge()
+	}
 
 	// periodically backup the measurements
 	go app.backupMeasurements()
@@ -96,7 +98,6 @@ func (app *App) init() (err error) {
 			}
 
 			_ = m.LineHandler.SetInputMode()
-			_ = m.LineHandler.SetInputMode()
 			_ = m.LineHandler.SetDebounceTime(meterConfig.BounceTime)
 			// call handler when pin changes from low to high.
 			if err = m.LineHandler.StartEventWatching(m.EventHandler); err != nil {
@@ -106,9 +107,11 @@ func (app *App) init() (err error) {
 		}
 	}
 
-	if err = app.mqtt.Connect(app.config.MQTT.Connection); err != nil {
-		slog.Error("can't open mqtt broker", "error", err)
-		return err
+	if app.config.MQTT.Enabled {
+		if err = app.mqtt.Connect(app.config.MQTT.Connection); err != nil {
+			slog.Error("can't open mqtt broker", "error", err)
+			return err
+		}
 	}
 
 	// initRoutes and initDefaultRoutes should always be called last because it may access things like app.api
@@ -137,7 +140,7 @@ func (app *App) Close() error {
 		_ = m.LineHandler.Close()
 	}
 
-	if app.mqtt != nil {
+	if app.config.MQTT.Enabled {
 		_ = app.mqtt.Disconnect()
 	}
 

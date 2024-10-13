@@ -5,13 +5,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
-	"s0counter/pkg/app"
-	"s0counter/pkg/app/config"
 	"syscall"
 
-	"github.com/womat/debug"
+	"s0counter/pkg/app"
+	"s0counter/pkg/app/config"
 )
 
 const defaultConfigFile = "/opt/womat/config/" + app.MODULE + ".yaml"
@@ -22,11 +22,11 @@ func main() {
 		os.Exit(exitCode)
 	}()
 
-	debug.SetDebug(os.Stderr, debug.Standard)
 	cfg := config.NewConfig()
+	debug := false
 
 	flag.BoolVar(&cfg.Flag.Version, "version", false, "print version and exit")
-	flag.StringVar(&cfg.Flag.Debug, "debug", "", "enable debug information (standard | trace | debug)")
+	flag.BoolVar(&debug, "Debug", false, "enable debug information")
 	flag.StringVar(&cfg.Flag.ConfigFile, "config", defaultConfigFile, "config file")
 	flag.Parse()
 
@@ -42,27 +42,28 @@ func main() {
 		return
 	}
 
-	debug.SetDebug(cfg.Debug.File, cfg.Debug.Flag)
-	defer func() {
-		debug.InfoLog.Printf("closing debug file %s", cfg.Debug.FileString)
-		_ = cfg.Debug.File.Close()
-	}()
+	if debug {
+		logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+		slog.SetDefault(logger)
+	}
 
-	debug.InfoLog.Printf("starting app %s", app.Version())
+	slog.Info(fmt.Sprintf("starting app %s", app.Version()))
 	a, err := app.New(cfg)
-	defer func() {
-		debug.InfoLog.Printf("closing app %s", app.Version())
-		_ = a.Close()
-	}()
 
 	if err != nil {
-		debug.FatalLog.Print(err)
+		slog.Error("error starting	 app", "error", err.Error())
 		exitCode = 1
 		return
 	}
 
-	if err := a.Run(); err != nil {
-		debug.FatalLog.Print(err)
+	defer func() {
+		slog.Info(fmt.Sprintf("closing app %s", app.Version()))
+		_ = a.Close()
+	}()
+
+	err = a.Run()
+	if err != nil {
+		slog.Error("error running app", "error", err.Error())
 		exitCode = 1
 		return
 	}
@@ -74,7 +75,7 @@ func main() {
 
 	// wait for am os.Interrupt signal (CTRL C)
 	sig := <-quit
-	debug.InfoLog.Printf("Got %s signal. Aborting...", sig)
+	slog.Info("Got %s signal. Aborting...", sig)
 
 	exitCode = 1
 	return

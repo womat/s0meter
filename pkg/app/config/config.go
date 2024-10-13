@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 	"time"
 
@@ -15,34 +14,33 @@ import (
 // first letter uppercase -> followed by CamelCase as in the config file.
 // Config defines the struct of global config and the struct of the configuration file
 type Config struct {
-	Flag                      FlagConfig             `yaml:"-"`
-	DataCollectionInterval    time.Duration          `yaml:"-"`
-	DataCollectionIntervalInt int                    `yaml:"datacollectioninterval"`
-	DataFile                  string                 `yaml:"datafile"`
-	BackupInterval            time.Duration          `yaml:"-"`
-	BackupIntervalInt         int                    `yaml:"backupinterval"`
-	Debug                     slog.Logger            `yaml:"-"`
-	Meter                     map[string]MeterConfig `yaml:"meter"`
-	Webserver                 WebserverConfig        `yaml:"webserver"`
-	MQTT                      MQTTConfig             `yaml:"mqtt"`
+	Flag                      FlagConfig    `yaml:"-"`
+	DataCollectionInterval    time.Duration `yaml:"-"`
+	DataCollectionIntervalInt int           `yaml:"datacollectioninterval"`
+	DataFile                  string        `yaml:"datafile"`
+	BackupInterval            time.Duration `yaml:"-"`
+	BackupIntervalInt         int           `yaml:"backupinterval"`
+	//	Debug                     slog.Logger            `yaml:"-"`
+	Meter     map[string]MeterConfig `yaml:"meter"`
+	Webserver WebserverConfig        `yaml:"webserver"`
+	MQTT      MQTTConfig             `yaml:"mqtt"`
 }
 
 // FlagConfig defines the configured flags (parameters)
 type FlagConfig struct {
 	Version bool
-	//	List       bool
-	Debug      string
+	//	Debug      bool
 	ConfigFile string
 }
 
 // WebserverConfig defines the struct of the webserver and webservice configuration and configuration file
 type WebserverConfig struct {
-	URL         string          `yaml:"url"`
-	Webservices map[string]bool `yaml:"webservices"`
+	URL string `yaml:"url"`
 }
 
 // MQTTConfig defines the struct of the mqtt client configuration and configuration file
 type MQTTConfig struct {
+	Enabled    bool   `yaml:"enabled"`
 	Connection string `yaml:"connection"`
 	Retained   bool   `yaml:"retained"`
 }
@@ -72,10 +70,6 @@ func NewConfig() *Config {
 		Meter: map[string]MeterConfig{},
 		Webserver: WebserverConfig{
 			URL: "http://0.0.0.0:4000",
-			Webservices: map[string]bool{
-				"version":     true,
-				"currentdata": true,
-			},
 		},
 		MQTT: MQTTConfig{Connection: "tcp:127.0.0.1883"},
 	}
@@ -84,10 +78,6 @@ func NewConfig() *Config {
 func (c *Config) LoadConfig() error {
 	if err := c.readConfigFile(); err != nil {
 		return fmt.Errorf("error reading config file %q: %w", c.Flag.ConfigFile, err)
-	}
-
-	if c.Flag.Debug != "" {
-		slog.SetLogLoggerLevel(slog.LevelDebug)
 	}
 
 	c.DataCollectionInterval = time.Duration(c.DataCollectionIntervalInt) * time.Second

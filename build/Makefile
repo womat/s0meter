@@ -9,7 +9,7 @@ SERVICE_PORT?=3000
 DOCKER_REGISTRY?= #if set it should finished by /
 EXPORT_RESULT?=false # for CI please set EXPORT_RESULT to true
 
-TARGET_NODE=wallbox
+TARGET_NODE=breakout
 
 
 GREEN  := $(shell tput -Txterm setaf 2)
@@ -67,7 +67,7 @@ build_arm64: ## build binary mac M1"
 
 
 deploy: build_arm7 ## build binary and copy binary to ${TARGET_NODE}:/tmp
-	scp -q ../bin/arm7/${BINARY_NAME} ${TARGET_NODE}:/tmp
+	scp -q ../bin/arm6/${BINARY_NAME} ${TARGET_NODE}:/tmp
 	@echo
 	@echo 'logon to "${TARGET_NODE}":'
 	@echo '		ssh ${TARGET_NODE}'

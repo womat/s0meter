@@ -65,8 +65,8 @@ func (p *Port) handler(evt gpiod.LineEvent) {
 		"offset", evt.Offset,
 		"lineSeqno", evt.LineSeqno,
 		"seqno", evt.Seqno,
-		"port offset", p.gpioLine.Offset(),
-		"port name", p.gpioLine.Chip())
+		"port", p.gpioLine.Offset(),
+		"chip", p.gpioLine.Chip())
 
 	eventType := FallingEdge
 	if evt.Type == gpiod.LineEventRisingEdge {
