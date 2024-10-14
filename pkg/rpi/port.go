@@ -2,7 +2,6 @@ package rpi
 
 import (
 	"fmt"
-	"log/slog"
 	"time"
 
 	gpiod "github.com/warthog618/go-gpiocdev"
@@ -13,9 +12,9 @@ const Chip = "gpiochip0"
 
 const (
 	// RisingEdge indicates an inactive event to an active event (low to high).
-	RisingEdge = iota
+	RisingEdge = int(gpiod.LineEventRisingEdge)
 	// FallingEdge indicates an active to inactive event (high to low).
-	FallingEdge
+	FallingEdge = int(gpiod.LineEventFallingEdge)
 )
 
 // Port represents a single requested line.
@@ -59,23 +58,20 @@ func (p *Port) handler(evt gpiod.LineEvent) {
 		return
 	}
 
-	slog.Debug("event detected",
-		"timestamp", evt.Timestamp,
-		"type", evt.Type,
-		"offset", evt.Offset,
-		"lineSeqno", evt.LineSeqno,
-		"seqno", evt.Seqno,
-		"port", p.gpioLine.Offset(),
-		"chip", p.gpioLine.Chip())
-
-	eventType := FallingEdge
-	if evt.Type == gpiod.LineEventRisingEdge {
-		eventType = RisingEdge
-	}
+	/*
+		slog.Debug("event detected",
+			"timestamp", evt.Timestamp,
+			"type", evt.Type,
+			"offset", evt.Offset,
+			"lineSeqno", evt.LineSeqno,
+			"seqno", evt.Seqno,
+			"port", p.gpioLine.Offset(),
+			"chip", p.gpioLine.Chip())
+	*/
 
 	go p.eventHandler(Event{
 		Timestamp: time.Now(),
-		Type:      eventType,
+		Type:      int(evt.Type),
 	})
 }
 
@@ -130,8 +126,8 @@ func (p *Port) SetPullDown() error {
 // Info returns the information of the port. This is useful for debugging.
 // The information includes the chip name, the offset, the direction, the pull mode, and the value.
 // The information is returned as a string.
-func (p *Port) Info() {
-	_ = fmt.Sprint(p.gpioLine.Info())
+func (p *Port) Info() string {
+	return fmt.Sprint(p.gpioLine.Info())
 }
 
 // StartEventWatching starts watching the port for events. The handler is called when an event is detected.
