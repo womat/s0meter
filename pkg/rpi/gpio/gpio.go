@@ -1,75 +1,88 @@
-package rpi
+// Package gpio provides an interface for controlling GPIO pins on a Raspberry Pi.
+//
+// This package allows configuring GPIO pins as inputs or outputs, reading and setting values,
+// and handling edge events. It uses the gpiod library to interact with GPIO devices.
+//
+// Features:
+// - Request and release GPIO lines
+// - Set input and output modes
+// - Read and write GPIO values
+// - Enable pull-up and pull-down resistors
+// - Watch for rising and falling edge events
+// - Debounce support for signal stability
+//
+// Example Usage:
+//
+//	p, err := gpio.NewPort(17)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	defer p.Close()
+//
+//	p.SetOutputMode()
+//	p.SetValue(1)
+//	val, _ := p.GetValue()
+//	fmt.Println("GPIO state:", val)
+//
+//	p.StartWatchingEvents(func(evt rpi.Event) {
+//	    fmt.Println("Event detected:", evt)
+//	})
+//
+// Note: This package requires a Linux system with the gpiod library installed.
+package gpio
 
 import (
 	"fmt"
-	"time"
-
 	gpiod "github.com/warthog618/go-gpiocdev"
+	"s0counter/pkg/rpi"
+	"sync"
+	"time"
 )
 
 // Chip represents a single GPIO chip that controls a set of lines.
 const Chip = "gpiochip0"
 
-const (
-	// RisingEdge indicates an inactive event to an active event (low to high).
-	RisingEdge = int(gpiod.LineEventRisingEdge)
-	// FallingEdge indicates an active to inactive event (high to low).
-	FallingEdge = int(gpiod.LineEventFallingEdge)
-)
-
 // Port represents a single requested line.
 type Port struct {
+	sync.RWMutex
 	gpioLine     *gpiod.Line
-	eventHandler func(Event)
-}
-
-// Event represents a state change event on a line.
-type Event struct {
-	// Timestamp is the exact time when the event was detected.
-	Timestamp time.Time
-	// Type represents the type of state change event (RisingEdge or FallingEdge).
-	Type int
+	eventHandler func(event rpi.Event)
 }
 
 // NewPort requests control of a single line on a chip.
 func NewPort(gpio int) (*Port, error) {
 
-	var err error
-	p := &Port{}
-
-	p.gpioLine, err = gpiod.RequestLine(
+	gpioLine, err := gpiod.RequestLine(
 		Chip,
 		gpio,
-		gpiod.WithEventHandler(p.handler),
-		gpiod.WithoutEdges, gpiod.AsInput)
+		gpiod.WithEventHandler(nil),
+		gpiod.WithoutEdges,
+		gpiod.AsInput)
 
-	return p, err
+	if err != nil {
+		return nil, err
+	}
+
+	return &Port{gpioLine: gpioLine}, nil
 }
 
 // handler sends the event to the eventHandler.
 // The eventHandler is called when an event is detected.
 // The eventHandler is called with an Event struct that contains the timestamp and the type of event.
 // The eventHandler is called in a separate goroutine.
-// The eventHandler is set by calling StartEventWatching.
-// The eventHandler is removed by calling StopEventWatching.
+// The eventHandler is set by calling StartWatchingEvents.
+// The eventHandler is removed by calling StopWatchingEvents.
 func (p *Port) handler(evt gpiod.LineEvent) {
-	if p.eventHandler == nil ||
+	p.RLock()
+	handler := p.eventHandler
+	p.RUnlock()
+
+	if handler == nil ||
 		(evt.Type != gpiod.LineEventFallingEdge && evt.Type != gpiod.LineEventRisingEdge) {
 		return
 	}
 
-	/*
-		slog.Debug("event detected",
-			"timestamp", evt.Timestamp,
-			"type", evt.Type,
-			"offset", evt.Offset,
-			"lineSeqno", evt.LineSeqno,
-			"seqno", evt.Seqno,
-			"port", p.gpioLine.Offset(),
-			"chip", p.gpioLine.Chip())
-	*/
-
-	go p.eventHandler(Event{
+	go handler(rpi.Event{
 		Timestamp: time.Now(),
 		Type:      int(evt.Type),
 	})
@@ -130,17 +143,22 @@ func (p *Port) Info() string {
 	return fmt.Sprint(p.gpioLine.Info())
 }
 
-// StartEventWatching starts watching the port for events. The handler is called when an event is detected.
+// Port returns the offset of the port. The offset is the GPIO number.
+func (p *Port) Port() int {
+	return p.gpioLine.Offset()
+}
+
+// StartWatchingEvents starts watching the port for events. The handler is called when an event is detected.
 // The handler is called with an Event struct that contains the timestamp and the type of event.
 // The handler is called in a separate goroutine.
-func (p *Port) StartEventWatching(handler func(Event)) error {
+func (p *Port) StartWatchingEvents(handler func(rpi.Event)) error {
 	p.eventHandler = handler
 	return p.gpioLine.Reconfigure(gpiod.WithBothEdges)
 }
 
-// StopEventWatching stops watching the port for events.
+// StopWatchingEvents stops watching the port for events.
 // The handler is removed and no more events are detected.
-func (p *Port) StopEventWatching() error {
+func (p *Port) StopWatchingEvents() error {
 	p.eventHandler = nil
 	return p.gpioLine.Reconfigure(gpiod.WithoutEdges)
 }

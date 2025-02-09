@@ -1,9 +1,8 @@
 package mqtt
 
 import (
-	"log/slog"
-
 	mqttlib "github.com/eclipse/paho.mqtt.golang"
+	"log/slog"
 )
 
 // quiesce is the specified number of milliseconds to wait for existing work to be completed.
@@ -56,25 +55,26 @@ func (m *Handler) Disconnect() error {
 // The message is sent asynchronously. If the message can't be sent, it will be logged.
 func (m *Handler) Publish(msg Message) error {
 	if !m.handler.IsConnected() {
-		slog.Debug("mqtt broker isn't connected, reconnect it")
+		slog.Debug("MQTT broker isn't connected, reconnect it")
 
 		if err := m.ReConnect(); err != nil {
-			slog.Error("can't reconnect to mqtt broker", "error", err)
+			x := m.handler.OptionsReader()
+			slog.Error("Can't reconnect to MQTT broker", "broker", x.Servers()[0].Host, "error", err)
 			return err
 		}
 	}
 
-	slog.Debug("publishing mqtt message", "topic", msg.Topic, "payload", string(msg.Payload))
+	slog.Debug("Publishing MQTT message", "topic", msg.Topic, "payload", string(msg.Payload))
 	t := m.handler.Publish(msg.Topic, msg.Qos, msg.Retained, msg.Payload)
 
 	// The asynchronous nature of this library makes it easy to forget to check for errors.
 	// Consider using a go routine to log these
 	go func() {
 		<-t.Done()
-		slog.Debug("mqtt message published", "topic", msg.Topic, "payload", string(msg.Payload))
+		slog.Debug("MQTT message published", "topic", msg.Topic, "payload", string(msg.Payload))
 
 		if err := t.Error(); err != nil {
-			slog.Error("publishing topic", "topic", msg.Topic, "error", err)
+			slog.Error("Publishing MQTT message failed", "topic", msg.Topic, "error", err)
 		}
 	}()
 
