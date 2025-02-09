@@ -6,7 +6,7 @@ import (
 	"s0counter/pkg/web"
 )
 
-// addRoutes is called by the main function to set up the routes.
+// InitRoutes is called by the main function to set up the routes.
 // The mux is the main router for the application.
 func (app *App) InitRoutes() {
 
