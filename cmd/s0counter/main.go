@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"flag"
 	"fmt"
 	"gopkg.in/yaml.v3"
@@ -12,6 +13,9 @@ import (
 	"s0counter/pkg/crypt"
 	"s0counter/pkg/xlog"
 )
+
+//go:embed README.md
+var Readme string
 
 func main() {
 	// Parse command line flags.
@@ -50,7 +54,7 @@ func main() {
 	}
 
 	if *help {
-		fmt.Println(app.Readme)
+		fmt.Println(Readme)
 		os.Exit(0)
 	}
 
@@ -71,7 +75,7 @@ func main() {
 				_, _ = fmt.Fprintf(os.Stderr, "Failed to initialize logger: %s\n", err.Error())
 				os.Exit(1)
 			}
-			defer xlog.Close(logger)
+			defer logger.Close()
 
 			// set slog logger as default logger
 			slog.SetDefault(logger.Logger)
@@ -136,17 +140,10 @@ func printAbout() {
 
 // loadConfig loads the configuration from the given file.
 func loadConfig(configFile string, debug, trace bool) (*app.Config, error) {
-	var config *app.Config
 
-	configFile = filepath.ToSlash(configFile)
-	fileInfo, err := os.Stat(configFile)
-
-	if err != nil || fileInfo.IsDir() {
-		return config, fmt.Errorf("invalid or missing file %s", configFile)
-	}
-
-	if config, err = app.NewConfig().LoadConfig(configFile); err != nil {
-		return config, err
+	config, err := app.NewConfig().LoadConfig(configFile)
+	if err != nil {
+		return nil, err
 	}
 
 	// add stdout to log destinations if debug or trace is set

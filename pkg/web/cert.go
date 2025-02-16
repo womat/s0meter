@@ -74,16 +74,16 @@ func SetTLSMinVersion(tlsConfig *tls.Config, minTLS string) {
 
 	switch minTLS {
 	case "1.0": // should not be used
-		slog.Debug("Using TLS 1.0")
+		slog.Info("Using TLS 1.0")
 		minTlsVersion = tls.VersionTLS10
 	case "1.1": // should not be used
-		slog.Debug("Using TLS 1.1")
+		slog.Info("Using TLS 1.1")
 		minTlsVersion = tls.VersionTLS11
 	case "1.2a": // a ... use all ciphers from golang (even insecure one)
-		slog.Debug("Using TLS 1.2")
+		slog.Info("Using TLS 1.2")
 		minTlsVersion = tls.VersionTLS12
 	case "1.2": // from: https://ssl-config.mozilla.org/#server=go&version=1.14.4&config=intermediate&guideline=5.6
-		slog.Debug("Using TLS 1.2 with secure ciphers")
+		slog.Info("Using TLS 1.2 with secure ciphers")
 		minTlsVersion = tls.VersionTLS12
 		ciphers = []uint16{
 			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,

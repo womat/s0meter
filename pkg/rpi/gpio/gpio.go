@@ -52,18 +52,17 @@ type Port struct {
 // NewPort requests control of a single line on a chip.
 func NewPort(gpio int) (*Port, error) {
 
-	gpioLine, err := gpiod.RequestLine(
+	var err error
+
+	p := &Port{RWMutex: sync.RWMutex{}}
+	p.gpioLine, err = gpiod.RequestLine(
 		Chip,
 		gpio,
-		gpiod.WithEventHandler(nil),
+		gpiod.WithEventHandler(p.handler),
 		gpiod.WithoutEdges,
 		gpiod.AsInput)
 
-	if err != nil {
-		return nil, err
-	}
-
-	return &Port{gpioLine: gpioLine}, nil
+	return p, err
 }
 
 // handler sends the event to the eventHandler.
@@ -73,6 +72,7 @@ func NewPort(gpio int) (*Port, error) {
 // The eventHandler is set by calling StartWatchingEvents.
 // The eventHandler is removed by calling StopWatchingEvents.
 func (p *Port) handler(evt gpiod.LineEvent) {
+
 	p.RLock()
 	handler := p.eventHandler
 	p.RUnlock()

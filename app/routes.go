@@ -6,8 +6,14 @@ import (
 	"s0counter/pkg/web"
 )
 
-// InitRoutes is called by the main function to set up the routes.
-// The mux is the main router for the application.
+// InitRoutes initializes and configures all HTTP routes for the application.
+// It sets up authentication, Swagger documentation, and middleware (CORS, IP filtering).
+// - Public routes without authentication
+// - Protected routes with authentication
+// - Swagger documentation available at /swagger/
+// - Adds global middleware for CORS and IP filtering.
+//
+// This function must be called during application startup before the web server is launched.
 func (app *App) InitRoutes() {
 
 	webCfg := web.Config{
@@ -19,7 +25,11 @@ func (app *App) InitRoutes() {
 
 	mux := http.NewServeMux()
 	mux.Handle("OPTIONS /", web.HandlePreflight())
-	mux.Handle("GET /swagger/", httpSwagger.Handler(httpSwagger.PersistAuthorization(true)))
+
+	if app.config.IsDevEnv() {
+		// Expose Swagger documentation only in development.
+		mux.Handle("GET /swagger/", httpSwagger.Handler(httpSwagger.PersistAuthorization(true)))
+	}
 
 	mux.Handle("GET /api/version", app.HandleVersion())
 	mux.Handle("GET /api/health", app.HandleHealth())

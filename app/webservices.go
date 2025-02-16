@@ -27,8 +27,16 @@ var cert []byte
 //go:embed key.pem
 var key []byte
 
-// runWebServer starts the application web server and listens for web requests.
-func (app *App) runWebServer() error {
+// StartWebServer initializes and starts the web server in a separate Goroutine.
+// It configures TLS based on the environment:
+// - In development mode, embedded self-signed certificates are used.
+// - In production, certificates are loaded from the configured files, with a fallback to embedded certificates if necessary.
+//
+// The function does not block execution. Errors occurring during setup are returned immediately.
+// Runtime errors (e.g., failure in Serve()) are logged but do not propagate.
+//
+// Returns an error if the server cannot be initialized.
+func (app *App) StartWebServer() error {
 	var tlsConfig *tls.Config
 	var err error
 
@@ -57,13 +65,12 @@ func (app *App) runWebServer() error {
 	}
 
 	go func() {
-		var err error
 		slog.Info("Starting webserver", "host", app.config.Webserver.ListenHost, "port", app.config.Webserver.ListenPort)
-		if err = app.web.Serve(listener.Listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := app.web.Serve(listener.Listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Failed serving", "error", err)
 		}
 
-		if err = listener.Close(); err != nil {
+		if err := listener.Close(); err != nil {
 			slog.Error("Failed to close listener", "error", err)
 		}
 	}()

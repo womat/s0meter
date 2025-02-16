@@ -1,62 +1,132 @@
-# datacollectioninterval defines the interval in seconds, in which the gauges are calculated
-# default 60 seconds
-datacollectioninterval: 5
+# logLevel is the log level, if set only message with at least this level is logged
+# e.g.: debug -> means error, warning, info and debug messages are logged
+# Allowed values: debug | info | warning | error | trace
+# Default is info.
+logLevel: info
 
-# datafile defines the file in which the counters are saved
-# default /opt/womat/data/measurement.yaml
-datafile: C:\temp\measurement.yaml
+# logDestination defines the log destinations.
+#  supported values: stdout | stderr | /path/to/logfile
+logDestination: stdout
 
-# backupinterval defines the interval, in which counters are saved to datafile
+# aiKey is the global api key for the application.
+# apiKey must be encrypted with "app --crypt <plaintext>"
+# Default is empty that means api key authentication is disabled.
+# 12345678
+apiKey: DOqIHra9dK1XJ/6Nx4/2vafH+cg36nXT8w1apl/wXhtIWdGI
+
+# jwtSecret is a secret key used to sign jwt tokens.
+# jwtSecret must be encrypted with "app --crypt <plaintext>"
+# jwtSecret: encrypted
+
+# jwtID is a unique identifier for the jwt token used to prevent login with the same jwt token to another app.
+# jwtID: unique
+
+# webserver configuration
+webserver:
+  # listenHost is the host address the https server listens for connections.
+  # Default is empty, which means all available network interfaces.
+  listenHost: 0.0.0.0
+
+  # listenPort is the port the https server listens for connections.
+  # Default is 443
+  listenPort: 4000
+
+  # minTLS is the minimum TLS version the server accepts.
+  # Default is "1.2"
+  minTLS: 1.2
+
+  # keyFile is the ssl certificate private key file
+  # Default is key.pem
+  # keyFile:
+
+  # CertFile is the ssl certificate public key file
+  # Default is cert.pem
+  # Pfx files are supported as well, in which case KeyFile must be empty and CertFile must point to the pfx file, CertPassword must contain the password to decode the pfx file.
+  # certFile:
+
+  # CertPassword is an optional certificate password that
+  # CertPassword must be encrypted with "app --crypt <plaintext>"
+  # Default is empty which means no password is used.
+  # certPassword: encrypted
+
+  # BlockedIPs is a list of IP addresses or networks that are forbidden from accessing the application.
+  # Default is empty, which means no IP addresses or networks are blocked.
+  # Multiple IP addresses or networks can be defined separated by a comma
+  # e.g.: 192.168.0.1,192.168.0.0/16,10.0.0.0/8,192.168.254.15
+  #  blockedIPs:
+  #    - 192.168.0.1
+  #    - 192.168.0.0/16
+  #    - 10.0.0.0/8
+  #    - 192.168.254.15
+
+  # AllowedIPs is a list of IP addresses that are allowed to access the application.
+  # Default is empty, which means all IP addresses are allowed.
+  # The value "ALL" allows access from all IP Addresses / IP Networks
+  # multiple IP addresses or networks can be defined separated by a comma
+  # e.g.: 127.0.0.1,::1,192.168.0.0/16,10.0.0.0/8
+  # Note: '::1' is the IPv6 loopback address.
+  #  allowedIPs:
+  #    - ALL
+  #    - 127.0.0.1
+  #    - ::1
+  #    - 192.168.0.0/16
+  #    - 10.0.0.0/8
+
+
+# dataCollectionInterval defines the interval in seconds, in which the gauges are calculated
 # default 60 seconds
-backupinterval: 313
+dataCollectionInterval: 60
+
+# dataFile defines the file in which the counters are saved
+# default /opt/s0counter/data/measurement.yaml
+dataFile: /opt/s0counter/data/measurement.yaml
+
+# backupInterval defines the interval, in which counters are saved to datafile
+# default 60 seconds
+backupInterval: 60
 
 mqtt:
-  enabled: false
   # connection >> defines the connection string to the mqtt broker
-  connection: "tcp://raspberrypi4.fritz.box:1883"
+  # connection: "tcp://raspberrypi4.fritz.box:1883"
   # retained defines the message retained flag
   retained: false
 
 # meter configurations
 # key >> name of device
 #    gpio >> S0 input gpio pin
-#    bouncetime >> time to wait for a stable signal on gpio pin (ms) to get a "clean" level (suppress key bouncing)
-#    unitcounter >> unit of counter eg "kWh, m³, ..."
-#    counterconstant >> (Zählerkonstante) >> ticks/unitcounter: e.g. ticks/kWh
-#    unitgauge >> unit of gauge (unit/t) eg "kW, l/h, ..."
-#    scalefactor >> scale factor of gauge, based on hour: eg 1000: m³/h >> l/h,  0.27777778 m3/h >> l/s
+#    bounceTime >> time to wait for a stable signal on gpio pin (ms) to get a "clean" level (suppress key bouncing)
+#    unitCounter >> unit of counter eg "kWh, m³, ..."
+#    counterConstant >> (Zählerkonstante) >> ticks/unitcounter: e.g. ticks/kWh
+#    unitGauge >> unit of gauge (unit/t) eg "kW, l/h, ..."
+#    scaleFactor >> scale factor of gauge, based on hour: eg 1000: m³/h >> l/h,  0.27777778 m3/h >> l/s
 #    precision >> rounding gauge to a specified number of decimals
-#    mqtttopic >> mqtt topic, if it isn't defined, values aren't send to the mqtt broker
+#    mqttTopic >> mqtt topic, if it isn't defined, values aren't send to the mqtt broker
 meter:
   wallbox:
     gpio: 17
-    bouncetime: 1
-    unitcounter: "kWh"
-    counterconstant: 1000
-    unitgauge: "kW"
-    scalefactor: 1
+    bounceTime: 1
+    unitCounter: "kWh"
+    counterConstant: 1000
+    unitGauge: "kW"
+    scaleFactor: 1
     precision: 0
-  #  mqtttopic: testt/wallbox/summary
+  #  mqttTopic: test/wallbox/summary
   rawwater:
     gpio: 27
-    bouncetime: 1
-    unitcounter: "l"
-    counterconstant: 1
-    unitgauge: "l/h"
-    scalefactor: 1
+    bounceTime: 1
+    unitCounter: "l"
+    counterConstant: 1
+    unitGauge: "l/h"
+    scaleFactor: 1
     precision: 0
-  #  mqtttopic: testt/rawwater/summary
+  #  mqttTopic: test/rawwater/summary
   portablewater:
     gpio: 22
-    bouncetime: 1
-    unitcounter: "m³"
-    counterconstant: 1000
-    unitgauge: "l/s"
-    scalefactor: 0.2777777778
+    bounceTime: 1
+    unitCounter: "m³"
+    counterConstant: 1000
+    unitGauge: "l/s"
+    scaleFactor: 0.2777777778
     precision: 0
-  #  mqtttopic: test/portablewater/summary
+  #  mqttTopic: test/portablewater/summary
 
-# webserver configuration
-webserver:
-  # url defines the bound of host (default: 0.0.0.0:4000)
-  url: http://0.0.0.0:4020

@@ -80,16 +80,18 @@ type Handler struct {
 	meters map[string]MeterHandler
 }
 
-// MeterConfig defines the struct of the meter configuration and configuration file
+// MeterConfig holds the configuration details for a specific meter.
+// It defines the GPIO pin for pulse reading, debounce time for reliability,
+// counter constant for scaling, and the units for both counter and gauge measurements.
 type MeterConfig struct {
-	Gpio            int     `yaml:"gpio"`
-	BounceTime      int     `yaml:"bouncetTime"`
-	CounterConstant float64 `yaml:"counterConstant"`
-	UnitCounter     string  `yaml:"unitCounter"`
-	ScaleFactor     float64 `yaml:"scaleFactor"`
-	Precision       int     `yaml:"precision"`
-	UnitGauge       string  `yaml:"unitGauge"`
-	MqttTopic       string  `yaml:"mqttTopic"`
+	Gpio            int     `yaml:"gpio"`            // GPIO pin number for pulse reading
+	BounceTime      int     `yaml:"bounceTime"`      // Debounce time in milliseconds to stabilize pulse signals
+	CounterConstant float64 `yaml:"counterConstant"` // Constant to scale the counter readings (e.g., for calibration)
+	UnitCounter     string  `yaml:"unitCounter"`     // Unit for the counter value (e.g., kWh, liters)
+	ScaleFactor     float64 `yaml:"scaleFactor"`     // Factor to scale the gauge value (e.g., for calibration or unit conversion)
+	Precision       int     `yaml:"precision"`       // Precision for the counter and gauge values
+	UnitGauge       string  `yaml:"unitGauge"`       // Unit for the gauge value (e.g., kW, liters per hour)
+	MqttTopic       string  `yaml:"mqttTopic"`       // MQTT topic for publishing meter data
 }
 
 // MeterHandler is a struct that holds the meter configuration and the meter handler.
@@ -265,19 +267,22 @@ func (h *Handler) Connect(broker string) error {
 //	    log.Fatal("Error closing meters:", err)
 //	}
 func (h *Handler) Close() error {
-	h.Lock()
-	defer h.Unlock()
+	h.RLock()
+	defer h.RUnlock()
 
 	var err error
 	for _, m := range h.meters {
+		slog.Debug("Closing meter", "name", m.Config.Gpio)
 		// close the LineHandler channel to stop the meter
 		err = errors.Join(err, m.Meter.Close())
 	}
 
 	if h.mqttEnabled {
+		slog.Debug("Disconnecting from MQTT broker")
 		err = errors.Join(err, h.mqtt.Disconnect())
 	}
 
+	slog.Debug("Saving meter data")
 	err = errors.Join(err, h.saveMeterData())
 	return err
 }

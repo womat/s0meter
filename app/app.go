@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	_ "embed"
 	"fmt"
 	"log/slog"
 	"net"
@@ -25,12 +24,9 @@ import (
 // but we keep the correct syntax.
 // TODO: increase version number to 1.0.1+2020xxyy
 const (
-	VERSION = "3.3.5+2021013"
+	VERSION = "4.5.2+20250215"
 	MODULE  = "s0counter"
 )
-
-//go:embed README.md
-var Readme string
 
 // App is the main application struct.
 // App is where the application is wired up.
@@ -76,6 +72,10 @@ func New(config *Config, baseDir string) *App {
 }
 
 // Run starts the application.
+//   - Initialize the application.
+//   - send the metrics to the MQTT broker periodically.
+//   - back up the meter data periodically.
+//   - start the web server.
 func (app *App) Run() error {
 	slog.Info("Initializing application")
 
@@ -93,14 +93,14 @@ func (app *App) Run() error {
 	slog.Info("Starting periodic meter data backup", "file", app.config.DataFile)
 	go app.meters.BackupMeterData()
 
-	app.runSignalHandler()
+	// handle the OS signals
+	app.HandleOSSignals()
 
 	webServerAddress := net.JoinHostPort(app.config.Webserver.ListenHost, app.config.Webserver.ListenPort)
 	slog.Info("Starting web server", "url", webServerAddress)
-	err := app.runWebServer()
+	err := app.StartWebServer()
 	if err != nil {
 		slog.Error("Web server failed to start", "url", webServerAddress, "error", err)
-
 		return err
 	}
 
@@ -108,10 +108,13 @@ func (app *App) Run() error {
 	return nil
 }
 
-// Init initializes the application.
+// Init is called by Run() and should be used to initialize the application.
+//   - add meters.
+//   - load meter data from the backup file.
+//   - connect to MQTT broker.
 func (app *App) Init() (err error) {
 
-	// add the meters
+	// add the meters and receive events form the GPIO pins
 	for name, config := range app.config.Meter {
 		slog.Debug("Adding meter", "name", name)
 		if err = app.meters.AddMeter(name, config); err != nil {
@@ -144,19 +147,19 @@ func (app *App) Init() (err error) {
 }
 
 // Restart returns the read-only restart channel.
-// Restart is used to be able to react on application restart. (see cmd/main.go)
+// Restart is used to be able to react on application restart.
 func (app *App) Restart() <-chan struct{} {
 	return app.restart
 }
 
 // Shutdown returns the read-only shutdown channel.
-// Shutdown is used to be able to react to application shutdown (see cmd/main.go)
+// Shutdown is used to be able to react to application shutdown.
 func (app *App) Shutdown() <-chan struct{} {
 	return app.shutdown
 }
 
-// runSignalHandler runs the os signal handler to react on os signals (SIGHUP, SIGTERM, SIGINT).
-func (app *App) runSignalHandler() {
+// HandleOSSignals runs the os signal handler to react on os signals (SIGHUP, SIGTERM, SIGINT).
+func (app *App) HandleOSSignals() {
 
 	go func() {
 		sig := make(chan os.Signal, 1)
@@ -171,6 +174,8 @@ func (app *App) runSignalHandler() {
 		case syscall.SIGHUP:
 			slog.Info("SIGHUP received, initiating restart")
 			app.shutdownProcedure("restart")
+			// reset the signal registration before the program restarts.
+			// with program restarts, the HandleOSSignals function is called again and re-registers the signals.
 			signal.Reset()
 
 		case syscall.SIGTERM:
@@ -181,11 +186,13 @@ func (app *App) runSignalHandler() {
 			slog.Info("SIGINT received, exiting")
 			app.shutdownProcedure("terminate")
 		}
-
 	}()
 }
 
-// Handles both SIGTERM and SIGINT (graceful shutdown)
+// shutdownProcedure Handles SIGTERM, SIGINT and SIGHUP (restart) for a graceful shutdown.
+//   - terminate: Cleanup app resources and terminates the application.
+//   - shutdown: graceful shutdown the web server, Cleanup app resources and exit the application.
+//   - restart: graceful shutdown the web server and Cleanup app resources and restart the application.
 func (app *App) shutdownProcedure(mode string) {
 	slog.Info("Initiating shutdown", "mode", mode)
 
@@ -198,7 +205,7 @@ func (app *App) shutdownProcedure(mode string) {
 		}
 	}
 
-	if err := app.cleanup(); err != nil {
+	if err := app.Cleanup(); err != nil {
 		slog.Error("Cleanup failed", "error", err)
 	}
 
@@ -214,11 +221,10 @@ func (app *App) shutdownProcedure(mode string) {
 	close(app.restart)
 }
 
-// cleanup free's application resources.
+// Cleanup free's application resources.
 // It's called when application is shutdown or restarted.
 // Should be used to free up resources.
-func (app *App) cleanup() error {
-
-	//err := app.meters.Close()
-	return nil
+func (app *App) Cleanup() error {
+	err := app.meters.Close()
+	return err
 }

@@ -58,7 +58,7 @@ func Init(dest string, logLevel string) (*LoggerWrapper, error) {
 	return &LoggerWrapper{Logger: logger, File: logFile}, nil
 }
 
-func Close(l *LoggerWrapper) error {
+func (l *LoggerWrapper) Close() error {
 	if l.File != nil {
 		return l.File.Close()
 	}

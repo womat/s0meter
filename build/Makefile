@@ -64,7 +64,7 @@ build_arm8: ## build binary for raspberry models 4/Zero2 64bit"
 
 
 
-deploy: build_arm7 ## build binary and copy binary to ${TARGET_NODE}:/tmp
+deploy: build_arm6 ## build binary and copy binary to ${TARGET_NODE}:/tmp
 	scp -q ../bin/arm6/${BINARY_NAME} ${TARGET_NODE}:/tmp
 	@echo
 	@echo 'logon to "${TARGET_NODE}":'

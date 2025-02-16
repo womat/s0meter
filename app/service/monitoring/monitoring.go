@@ -7,41 +7,56 @@ import (
 	"time"
 )
 
+// Model represents a monitoring metric for a service, including its state and associated data.
 type Model struct {
+	// Service is the name of the service being monitored.
 	Service string `json:"Service"`
-	Host    string `json:"Host"`
-	// bei einem leeren State wird der State von WATCHIT aufgrund von Thresholds ermittelt
-	State       string `json:"State"`
-	Value       any    `json:"Value,omitempty"`
+
+	// Host is the host on which the service is running.
+	Host string `json:"Host"`
+
+	// State represents the current state of the service (e.g., "OK", "Error").
+	// If the state is empty, it will be determined based on WATCHIT thresholds.
+	State string `json:"State"`
+
+	// Value holds the actual metric data. The type is `any` to accommodate various types of values.
+	// If empty, no statistic will be written in Odin.
+	Value any `json:"Value,omitempty"`
+
+	// Description provides a human-readable description of the service's status.
 	Description string `json:"Description"`
-	// supported metric types: gauge and counter
-	// bei einer leeren Metric wird keine im Odin keine Statistic geschrieben
+
+	// Metric indicates the type of metric being reported (e.g., "gauge" or "counter").
+	// If empty, no statistic will be written in Odin.
 	Metric string `json:"Metric,omitempty"`
 }
 
-// supported metric types
+// Constants representing supported metric types.
 const (
-	MetricGauge   = "gauge"
-	MetricCounter = "counter"
+	MetricGauge   = "gauge"   // A metric that represents a value that can go up or down.
+	MetricCounter = "counter" // A metric that only increases over time.
 )
 
-var startTime = time.Now()
+var startTime = time.Now() // Tracks the application's start time.
 
-// Monitoring returns monitoring data.
+// Monitoring collects and returns monitoring data for various system metrics.
 func Monitoring(host, version string) ([]Model, error) {
 
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
+
+	// Remove the port number from the host if present (e.g., "localhost:8080" -> "localhost").
 	h := strings.Split(host, ":")
 	host = h[0]
 
+	// Create a slice of monitoring data for various system metrics.
 	services := []Model{
 		{
 			Service:     "Uptime",
 			Host:        host,
 			State:       "OK",
 			Value:       time.Since(startTime).Truncate(time.Hour).Hours(),
-			Description: fmt.Sprintf("Uptime (h): %v", time.Since(startTime).Truncate(time.Hour).Hours()),
+			Description: fmt.Sprintf("Uptime: %vh", time.Since(startTime).Truncate(time.Hour).Hours()),
 			Metric:      MetricCounter},
 		{
 			Service:     "Version",
@@ -77,14 +92,14 @@ func Monitoring(host, version string) ([]Model, error) {
 			Host:        host,
 			State:       "OK",
 			Value:       m.Sys,
-			Description: fmt.Sprintf("Sys Memory: %v kB", m.Sys/1024),
+			Description: fmt.Sprintf("Sys Memory: %vkB", m.Sys/1024),
 			Metric:      MetricCounter},
 		{
 			Service:     "Total Memory Alloc",
 			Host:        host,
 			State:       "OK",
 			Value:       m.TotalAlloc,
-			Description: fmt.Sprintf("Total Memory Alloc: %v kB", m.TotalAlloc/1024),
+			Description: fmt.Sprintf("Total Memory Alloc: %vkB", m.TotalAlloc/1024),
 			Metric:      MetricCounter},
 		{
 			Service:     "Count of Heap Objects allocated",
@@ -105,35 +120,35 @@ func Monitoring(host, version string) ([]Model, error) {
 			Host:        host,
 			State:       "OK",
 			Value:       m.HeapAlloc,
-			Description: fmt.Sprintf("Heap Alloc: %v kB", m.HeapAlloc/1024),
+			Description: fmt.Sprintf("Heap Alloc: %vkB", m.HeapAlloc/1024),
 			Metric:      MetricCounter},
 		{
 			Service:     "Heap Sys",
 			Host:        host,
 			State:       "OK",
 			Value:       m.HeapSys,
-			Description: fmt.Sprintf("Heap Sys: %v kB", m.HeapSys/1024),
+			Description: fmt.Sprintf("Heap Sys: %vkB", m.HeapSys/1024),
 			Metric:      MetricCounter},
 		{
 			Service:     "Heap Idle",
 			Host:        host,
 			State:       "OK",
 			Value:       m.HeapIdle,
-			Description: fmt.Sprintf("Heap Idle: %v kB", m.HeapIdle/1024),
+			Description: fmt.Sprintf("Heap Idle: %vkB", m.HeapIdle/1024),
 			Metric:      MetricCounter},
 		{
 			Service:     "Heap Inuse",
 			Host:        host,
 			State:       "OK",
 			Value:       m.HeapInuse,
-			Description: fmt.Sprintf("Heap Inuse: %v kB", m.HeapInuse/1024),
+			Description: fmt.Sprintf("Heap Inuse: %vkB", m.HeapInuse/1024),
 			Metric:      MetricCounter},
 		{
 			Service:     "Heap Released",
 			Host:        host,
 			State:       "OK",
 			Value:       m.HeapReleased,
-			Description: fmt.Sprintf("Heap Released: %v kB", m.HeapReleased/1024),
+			Description: fmt.Sprintf("Heap Released: %vkB", m.HeapReleased/1024),
 			Metric:      MetricCounter},
 		{
 			Service:     "Heap Objects",

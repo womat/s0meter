@@ -30,7 +30,7 @@ package s0reader
 import (
 	"log/slog"
 	"s0counter/pkg/rpi"
-	"s0counter/pkg/rpi/gpioemu"
+	"s0counter/pkg/rpi/gpio"
 	"sync"
 	"time"
 )
@@ -115,8 +115,8 @@ func (h *Handler) SetCounter(s Counter) {
 //	}
 func (h *Handler) InitializePort(port int, debounce time.Duration) (err error) {
 
-	//	if h.gpioPort, err = gpio.NewPort(port); err != nil {
-	if h.gpioPort, err = gpioemu.NewPort(port, time.Second); err != nil {
+	if h.gpioPort, err = gpio.NewPort(port); err != nil {
+		//if h.gpioPort, err = gpioemu.NewPort(port, time.Second); err != nil {
 		return err
 	}
 	if err = h.gpioPort.SetInputMode(); err != nil {
@@ -157,13 +157,16 @@ func (h *Handler) Close() error {
 //
 //	meter.handlePulseEvent(rpi.Event{Timestamp: time.Now(), Type: rpi.LineEventRisingEdge})
 func (h *Handler) handlePulseEvent(e rpi.Event) {
-	slog.Debug("s0 pulse detected", "port", h.gpioPort.Port(), "type", e.Type, "timestamp", e.Timestamp)
+	port := h.gpioPort.Port()
+	slog.Debug("s0 pulse detected", "gpio", port, "type", e.Type, "timestamp", e.Timestamp)
 
 	if e.Type == rpi.LineEventRisingEdge {
 		h.mux.Lock()
 		h.counter.LastTimeStamp = h.counter.TimeStamp
 		h.counter.TimeStamp = e.Timestamp
 		h.counter.Tick++
+		tmp := h.counter // copy for logging
 		h.mux.Unlock()
+		slog.Debug("Rising Edge detected", "gpio", port, "tick", tmp.Tick, "lastTimestamp", tmp.LastTimeStamp, "currentTimestamp", tmp.TimeStamp)
 	}
 }

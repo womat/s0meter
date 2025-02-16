@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
@@ -129,6 +130,8 @@ type MQTTConfig struct {
 	Retained   bool   `yaml:"retained"`
 }
 
+// NewConfig initializes and returns a new Config struct with default values.
+// It sets up the configuration with the default environment, log level, data collection intervals, and MQTT settings.
 func NewConfig() *Config {
 	return &Config{
 		Env:            DefaultEnv,
@@ -163,7 +166,15 @@ func NewConfig() *Config {
 	}
 }
 
+// LoadConfig loads a configuration file into the Config struct.
+// It reads the file, expands environment variables, and unmarshals the YAML content into the struct.
 func (c *Config) LoadConfig(fileName string) (*Config, error) {
+
+	fileName = filepath.ToSlash(fileName)
+
+	if fileInfo, err := os.Stat(fileName); err != nil || fileInfo.IsDir() {
+		return nil, fmt.Errorf("invalid or missing file %s", fileName)
+	}
 
 	content, err := os.ReadFile(fileName)
 	if err != nil {

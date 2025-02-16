@@ -6,14 +6,13 @@ import (
 	"s0counter/pkg/web"
 )
 
-// HandleVersion returns the version of the application.
-// It is used for health checks and debugging.
+// HandleVersion returns the version and name of the application.
 //
-//	@Summary		Get version
-//	@Description	Get	app version and name.
-//	@Tags			info
-//	@Success		200	{object}	app.HandleVersion.Response
-//	@Router			/version [get]
+// @Summary		Get application version and name
+// @Description	This endpoint returns the name and version of the application to assist with debugging and monitoring.
+// @Tags		info
+// @Success		200	{object}	app.HandleVersion.Response	"Application version and name successfully retrieved"
+// @Router		/api/version [get]
 func (app *App) HandleVersion() http.Handler {
 	type Response struct {
 		Name    string `json:"name"`
@@ -22,7 +21,7 @@ func (app *App) HandleVersion() http.Handler {
 
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			slog.Debug("Incoming web request for version",
+			slog.Debug("Incoming web request for version info",
 				"method", r.Method,
 				"path", r.URL.Path,
 				"client_ip", r.RemoteAddr)
