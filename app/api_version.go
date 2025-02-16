@@ -8,11 +8,11 @@ import (
 
 // HandleVersion returns the version and name of the application.
 //
-// @Summary		Get application version and name
-// @Description	This endpoint returns the name and version of the application to assist with debugging and monitoring.
-// @Tags		info
-// @Success		200	{object}	app.HandleVersion.Response	"Application version and name successfully retrieved"
-// @Router		/api/version [get]
+//	@Summary		Get application version and name
+//	@Description	This endpoint returns the name and version of the application to help with debugging and monitoring.
+//	@Tags			info
+//	@Success		200	{object}	app.HandleVersion.Response	"Application version and name successfully retrieved"
+//	@Router			/api/version [get]
 func (app *App) HandleVersion() http.Handler {
 	type Response struct {
 		Name    string `json:"name"`

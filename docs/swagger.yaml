@@ -1,0 +1,172 @@
+definitions:
+  app.HandleVersion.Response:
+    properties:
+      name:
+        type: string
+      version:
+        type: string
+    type: object
+  health.Model:
+    properties:
+      HeapAllocatedBytes:
+        description: HeapAllocatedBytes represents the amount of memory allocated
+          by the heap in bytes.
+        type: integer
+      HeapAllocatedMB:
+        description: HeapAllocatedMB represents the amount of memory allocated by
+          the heap in megabytes.
+        type: number
+      HostName:
+        description: HostName is the name of the host machine running the application.
+        type: string
+      NumGoroutines:
+        description: NumGoroutines is the number of currently running goroutines in
+          the application.
+        type: integer
+      OperatingSystem:
+        description: OperatingSystem is the name of the operating system on which
+          the application is running.
+        type: string
+      ProgLang:
+        description: ProgLang represents the version of the Go programming language
+          used.
+        type: string
+      SysMemoryBytes:
+        description: SysMemoryBytes represents the total system memory in bytes.
+        type: integer
+      SysMemoryMB:
+        description: SysMemoryMB represents the total system memory in megabytes.
+        type: number
+      Time:
+        description: Time is the timestamp when the health data was collected, in
+          RFC3339 format.
+        type: string
+      Version:
+        description: Version indicates the application version.
+        type: string
+    type: object
+  monitoring.Model:
+    properties:
+      Description:
+        description: Description provides a human-readable description of the service's
+          status.
+        type: string
+      Host:
+        description: Host is the host on which the service is running.
+        type: string
+      Metric:
+        description: |-
+          Metric indicates the type of metric being reported (e.g., "gauge" or "counter").
+          If empty, no statistic will be written in Odin.
+        type: string
+      Service:
+        description: Service is the name of the service being monitored.
+        type: string
+      State:
+        description: |-
+          State represents the current state of the service (e.g., "OK", "Error").
+          If the state is empty, it will be determined based on WATCHIT thresholds.
+        type: string
+      Value:
+        description: |-
+          Value holds the actual metric data. The type is `any` to accommodate various types of values.
+          If empty, no statistic will be written in Odin.
+    type: object
+  s0meters.Data:
+    properties:
+      Counter:
+        description: current counter (aktueller Zählerstand), eg kWh, l, m³
+        type: number
+      Gauge:
+        description: mass flow rate per time unit  (= counter/time(h)), e.g. kW, l/h,
+          m³/h
+        type: number
+      TimeStamp:
+        description: timestamp of last gauge calculation
+        type: string
+      UnitCounter:
+        description: unit of current meter counter e.g., kWh, l, m³
+        type: string
+      UnitGauge:
+        description: unit of gauge, eg Wh, l/s, m³/h
+        type: string
+    type: object
+  web.ApiError:
+    properties:
+      error:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /api/data:
+    get:
+      description: Retrieves the monitoring data for the WATCHIT application, including
+        meter readings.
+      responses:
+        "200":
+          description: Monitoring data successfully retrieved
+          schema:
+            $ref: '#/definitions/s0meters.Data'
+        "403":
+          description: 'Forbidden: Insufficient permissions'
+          schema:
+            $ref: '#/definitions/web.ApiError'
+      security:
+      - "APIKeyAuth\t\"API key must be provided in the header\"": []
+      summary: Get monitoring data
+      tags:
+      - info
+  /api/health:
+    get:
+      description: Retrieves the health data for the application, including memory
+        usage, goroutine count, and version.
+      responses:
+        "200":
+          description: Health data successfully retrieved
+          schema:
+            $ref: '#/definitions/health.Model'
+        "403":
+          description: 'Forbidden: Insufficient permissions'
+          schema:
+            $ref: '#/definitions/web.ApiError'
+      summary: Get health data
+      tags:
+      - info
+  /api/monitoring:
+    get:
+      description: This endpoint returns monitoring data for the WATCHIT system, including
+        health, performance metrics, and system status.
+      responses:
+        "200":
+          description: Monitoring data successfully retrieved
+          schema:
+            items:
+              $ref: '#/definitions/monitoring.Model'
+            type: array
+        "403":
+          description: 'Forbidden: Insufficient permissions'
+          schema:
+            $ref: '#/definitions/web.ApiError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/web.ApiError'
+      security:
+      - "APIKeyAuth \t\t\"API key must be provided in the header\"": []
+      summary: Get monitoring data for WATCHIT
+      tags:
+      - info
+  /api/version:
+    get:
+      description: This endpoint returns the name and version of the application to
+        help with debugging and monitoring.
+      responses:
+        "200":
+          description: Application version and name successfully retrieved
+          schema:
+            $ref: '#/definitions/app.HandleVersion.Response'
+      summary: Get application version and name
+      tags:
+      - info
+swagger: "2.0"

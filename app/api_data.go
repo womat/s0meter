@@ -8,13 +8,13 @@ import (
 
 // HandleData returns monitoring data for the application.
 //
-// @Summary		Get monitoring data
-// @Description	Retrieves the monitoring data for the WATCHIT application, including meter readings.
-// @Tags		info
-// @Success		200	{object}	meters.Data	"Monitoring data successfully retrieved"
-// @Failure		403	{object}	web.ApiError	"Forbidden: Insufficient permissions"
-// @Router		/api/data [get]
-// @Security	APIKeyAuth	"API key must be provided in the header"
+//	@Summary		Get monitoring data
+//	@Description	Retrieves the monitoring data for the WATCHIT application, including meter readings.
+//	@Tags			info
+//	@Success		200	{object}	s0meters.Data	"Monitoring data successfully retrieved"
+//	@Failure		403	{object}	web.ApiError	"Forbidden: Insufficient permissions"
+//	@Router			/api/data [get]
+//	@Security		APIKeyAuth	"API key must be provided in the header"
 func (app *App) HandleData() http.Handler {
 
 	return http.HandlerFunc(

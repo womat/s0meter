@@ -9,14 +9,14 @@ import (
 
 // HandleMonitoring returns monitoring data for WATCHIT system.
 //
-// @Summary		Get monitoring data for WATCHIT
-// @Description	This endpoint returns monitoring data for the WATCHIT system, including health, performance metrics, and system status.
-// @Tags		info
-// @Success		200	{object}	[]monitoring.Model	"Monitoring data successfully retrieved"
-// @Failure		403	{object}	web.ApiError		"Forbidden: Insufficient permissions"
-// @Failure		500	{object}	web.ApiError		"Internal server error"
-// @Router		/api/monitoring [get]
-// @Security	APIKeyAuth 		"API key must be provided in the header"
+//	@Summary		Get monitoring data for WATCHIT
+//	@Description	This endpoint returns monitoring data for the WATCHIT system, including health, performance metrics, and system status.
+//	@Tags			info
+//	@Success		200	{object}	[]monitoring.Model	"Monitoring data successfully retrieved"
+//	@Failure		403	{object}	web.ApiError		"Forbidden: Insufficient permissions"
+//	@Failure		500	{object}	web.ApiError		"Internal server error"
+//	@Router			/api/monitoring [get]
+//	@Security		APIKeyAuth 		"API key must be provided in the header"
 func (app *App) HandleMonitoring() http.Handler {
 
 	return http.HandlerFunc(

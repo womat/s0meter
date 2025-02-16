@@ -84,7 +84,7 @@ curl -k -H "X-Api-Key: 12345678" https://localhost:4000/api/data
 
 ## 📖 Documentation
 
-For detailed setup and configuration, visit our **[official documentation](#)**.
+For detailed setup and configuration, visit our **[official documentation]**.
 
 ---
 

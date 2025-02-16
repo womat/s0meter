@@ -11,4 +11,4 @@
 #   https://localhost/swagger
 #
 swag fmt
-swag init -g cmd/app/main.go
+swag init -g cmd/s0counter/main.go
