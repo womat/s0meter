@@ -27,13 +27,12 @@ func Init(dest string, logLevel string) (*LoggerWrapper, error) {
 	logLevel = strings.ToLower(logLevel)
 
 	switch dest {
-	// stdout
 	case "stdout", "":
 		writer = os.Stdout
-	// stderr
 	case "stderr":
 		writer = os.Stderr
-	// logfile
+	case "null":
+		writer = io.Discard
 	default:
 		if logFile, err = os.OpenFile(dest, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err != nil {
 			return nil, err

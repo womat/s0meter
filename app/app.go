@@ -76,11 +76,11 @@ func New(config *Config, baseDir string) *App {
 //   - send the metrics to the MQTT broker periodically.
 //   - back up the meter data periodically.
 //   - start the web server.
-func (app *App) Run() error {
+func (app *App) Run() (*App, error) {
 	slog.Info("Initializing application")
 
 	if err := app.Init(); err != nil {
-		return err
+		return app, err
 	}
 
 	if app.config.MQTT.Enabled {
@@ -101,11 +101,11 @@ func (app *App) Run() error {
 	err := app.StartWebServer()
 	if err != nil {
 		slog.Error("Web server failed to start", "url", webServerAddress, "error", err)
-		return err
+		return app, err
 	}
 
 	slog.Info(fmt.Sprintf("%s started successfully", MODULE), "version", VERSION, "pid", os.Getpid())
-	return nil
+	return app, nil
 }
 
 // Init is called by Run() and should be used to initialize the application.

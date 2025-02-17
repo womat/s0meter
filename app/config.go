@@ -61,7 +61,7 @@ type Config struct {
 
 	// ApiKey is the global api key for the application.
 	// ApiKey must be encrypted with "app --crypt <plaintext>"
-	// Default is empty that means api key authentication is disabled.
+	// Default is empty; that means api key authentication is disabled.
 	ApiKey crypt.EncryptedString `yaml:"apiKey"`
 
 	// JwtSecret is a secret key used to sign jwt tokens.
@@ -71,6 +71,7 @@ type Config struct {
 	// JwtID is a unique identifier for the jwt token used to prevent login with the same jwt token to another app.
 	JwtID string `yaml:"jwtID"`
 
+	// Webserver is the configuration of the webserver and webservice
 	Webserver WebserverConfig `yaml:"webserver"`
 	MQTT      MQTTConfig      `yaml:"mqtt"`
 

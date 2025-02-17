@@ -36,31 +36,31 @@ clean: ## Remove build related file
 
 
 build_arm5: ## build binary for all raspberry models 32bit"
-	GOOS=linux GOARCH=arm GOARM=5 go build -o ../bin/arm5/${BINARY_NAME} ../cmd/s0counter/main.go
+	GOOS=linux GOARCH=arm GOARM=5 go build -o ../bin/arm5/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
 
 build_arm6: ## build binary for all raspberry models 32bit"
-	GOOS=linux GOARCH=arm GOARM=6 go build -o ../bin/arm6/${BINARY_NAME} ../cmd/s0counter/main.go
+	GOOS=linux GOARCH=arm GOARM=6 go build -o ../bin/arm6/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
 
 build_arm7: ## build binary for raspberry models 2/3/4/Zero2 32bit"
-	GOOS=linux GOARCH=arm GOARM=7 go build -o ../bin/arm7/${BINARY_NAME} ../cmd/s0counter/main.go
+	GOOS=linux GOARCH=arm GOARM=7 go build -o ../bin/arm7/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
 
 build_arm8: ## build binary for raspberry models 4/Zero2 64bit"
-	GOOS=linux GOARCH=arm64 go build -o ../bin/arm8/${BINARY_NAME} ../cmd/s0counter/main.go
+	GOOS=linux GOARCH=arm64 go build -o ../bin/arm8/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
 
 #build_windows386: ## build binary for windows"
-#	GOOS=windows GOARCH=386 go build -o ../bin/386/${BINARY_NAME}.exe ../cmd/s0counter/main.go
+#	GOOS=windows GOARCH=386 go build -o ../bin/386/${BINARY_NAME}.exe ../cmd/${BINARY_NAME}/main.go
 
 #build_windows64: ## build binary for windows 64bit"
-#	GOOS=windows GOARCH=amd64 go build -o ../bin/amd64/${BINARY_NAME}.exe ../cmd/s0counter/main.go
+#	GOOS=windows GOARCH=amd64 go build -o ../bin/amd64/${BINARY_NAME}.exe ../cmd/${BINARY_NAME}/main.go
 
 #build_linux386: ## build binary for linux"
-#	GOOS=linux GOARCH=386 go build -o ../bin/386/${BINARY_NAME} ../cmd/s0counter/main.go
+#	GOOS=linux GOARCH=386 go build -o ../bin/386/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
 
 #build_linux64: ## build binary for linux 64bit"
-#	GOOS=linux GOARCH=amd64 go build -o ../bin/amd64/${BINARY_NAME} ../cmd/s0counter/main.go
+#	GOOS=linux GOARCH=amd64 go build -o ../bin/amd64/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
 
 #build_arm64: ## build binary mac M1"
-#	GOOS=darwin GOARCH=arm64 go build -o ../bin/darwin/${BINARY_NAME} ../cmd/s0counter/main.go
+#	GOOS=darwin GOARCH=arm64 go build -o ../bin/darwin/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
 
 
 
@@ -71,7 +71,7 @@ deploy: build_arm6 ## build binary and copy binary to ${TARGET_NODE}:/tmp
 	@echo '		ssh ${TARGET_NODE}'
 	@echo
 	@echo 'install "${BINARY_NAME}" on ${TARGET_NODE}'
-	@echo '		sudo systemctl stop ${BINARY_NAME};sudo cp /tmp/${BINARY_NAME} /opt/womat/bin/${BINARY_NAME};sudo /opt/womat/bin/${BINARY_NAME} --version;sudo systemctl start ${BINARY_NAME}'
+	@echo '		sudo systemctl stop ${BINARY_NAME};sudo cp /tmp/${BINARY_NAME} /opt/${BINARY_NAME}/bin/${BINARY_NAME};sudo /opt/${BINARY_NAME}/bin/${BINARY_NAME} --version;sudo systemctl start ${BINARY_NAME}'
 	@echo
 
 

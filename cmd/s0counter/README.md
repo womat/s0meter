@@ -12,19 +12,21 @@ If no configuration file is found, **default values** will be applied to ensure 
 ## 📌 Usage
 
 ```sh
-s0counter [-debug] [-trace] [-version] [-about] [-help] [-crypt <text>]
+s0counter [-logLevel trace|debug|info|warning|error] [-LogDestination stdout|stderr|null|/path/to/logfile] [-version] [-about] [-help] [-crypt <text>]
+
 ```
 
 ### 🛠 Available Flags
 
-| **Flag**        | **Description**                                    |
-|-----------------|----------------------------------------------------|
-| `-version`      | Prints the application version and exits           |
-| `-about`        | Displays details about `s0counter` and exits       |
-| `-debug`        | Enables verbose debug logging to stdout            |
-| `-trace`        | Enables source code location logging for debugging |
-| `-help`         | Prints this help message                           |
-| `-crypt <text>` | Encrypts the given string and exits                |
+| **Flag**                   | **Description**                                                |
+|----------------------------|----------------------------------------------------------------|
+| `-version`                 | Prints the application version and exit                        |
+| `-about`                   | Prints details about `s0counter` and exit                      |
+| `-help`                    | Prints this help message and exit                              |
+| `-logLevel <level>`        | Set the log level: trace, debug, info, warning ,error          |
+| `-logDestination <dest>`   | Set the log destination: stdout, stderr,null, /path/to/logfile |
+| `-config </path/file.cfg>` | Specify the path to the config file                            |
+| `-crypt <text>`            | Encrypt the given string and exit                              |
 
 ---
 
@@ -62,9 +64,11 @@ s0counter -crypt "mysecret"
 ```
 
 ### Get data from a smart meter:
+
 ```sh
 curl -k -H "X-Api-Key: 12345678" https://localhost:4000/api/data
 ```
+
 ---
 
 ## 📦 Features
@@ -102,7 +106,7 @@ Want to contribute? Feel free to submit **pull requests** or report issues in th
 
 ## **🌐 IP Address / IP Network Filter**
 
-S0Counter allows **IP-based access control** via the configuration file.
+s0Counter allows **IP-based access control** via the configuration file.
 
 - **`blockedIPs`**: Defines **blocked** IP addresses/networks.
 - **`allowedIPs`**: Defines **allowlisted** IP addresses/networks.  
@@ -110,47 +114,4 @@ S0Counter allows **IP-based access control** via the configuration file.
 
 🔹 **Priority Rule:** `blockedIPs` **takes precedence** over `allowedIPs`.
 
-### **🔧 Configuration Example (`.env` file)**
-
-```ini
-# APP_BLOCKED_IPS is a list of IP addresses or networks that are forbidden to access the application.
-# Default: empty (no blocked IPs).
-# Multiple IPs or networks can be defined, separated by commas.
-# Example:
-APP_BLOCKED_IPS=192.168.0.1,192.168.0.0/16,10.0.0.0/8,192.168.254.15
-
-# APP_ALLOWED_IPS is a list of IP addresses or networks that are allowed to access the application.
-# Default: empty (all IPs are allowed).
-# The value "ALL" allows access from all IP addresses/networks.
-# Multiple IPs or networks can be defined, separated by commas.
-# Example:
-APP_ALLOWED_IPS=127.0.0.1,::1,192.168.0.0/16,10.0.0.0/8
-# Note: "::1" is the IPv6 loopback address.
-
-
-## IP Address / IP Network filter
-
-in the config file, IP Address and IP Network filter can be defined.
-
-* blockedIPs: defines blocked IP Addresses/Networks.
-* allowedIPs: defines allowlisted IP Addresses/Networks. An empty list or the value 'ALL' allows access from all IP
-  Addresses/Networks.
-
-__Information__: the section blockedIPs has priority over allowedIPs
-
-    // APP_BLOCKED_IPS is a list of IP addresses or networks that are forbidden to access the application.
-    // Default is empty which means no IP addresses are blocked.
-    // multiple IP addresses or networks can be defined separated by a comma
-    // e.g.: APP_BLOCKED_IPS=192.168.0.1,192.168.0.0/16,10.0.0.0/8,192.168.254.15   
-    APP_BLOCKED_IPS=
-
-    // AllowedIPs is a list of IP addresses or networks that are allowed to access the application.
-    // Default is empty which means all IP addresses are allowed.
-    // The value "ALL" allows access from all IP Addresses / IP Networks
-    // multiple IP addresses or networks can be defined separated by a comma
-    // e.g.: APP_ALLOWED_IPS=127.0.0.1,::1,192.168.0.0/16,10.0.0.0/8
-    // Note: ::1 is the IPv6 loopback address. 
-    APP_ALLOWED_IPS:ALL
-```
----
 
