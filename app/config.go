@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"s0counter/app/service/s0meters"
-
-	// "s0counter/app/service/meters"
 	"s0counter/pkg/crypt"
 )
 

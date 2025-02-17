@@ -26,11 +26,11 @@ func Encode[T any](w http.ResponseWriter, status int, v T) {
 	_, _ = w.Write(resp)
 }
 
-// decode reads the request Body as JSON.
+// Decode reads the request Body as JSON.
 //   - r is the request.
 //   - T is the type to decode the JSON into.
 //   - If decoding fails, it returns an error.
-func decode[T any](r *http.Request) (T, error) {
+func Decode[T any](r *http.Request) (T, error) {
 	var v T
 	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
 		return v, fmt.Errorf("decode json failed: %w", err)

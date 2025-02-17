@@ -14,6 +14,7 @@ import (
 var ErrCertFileExists = errors.New("certificate file already exists")
 
 // SetTLS creates a tls.Config object from the given certificate and key files.
+// the cert password is only used for pfx certificate files.
 func SetTLS(certFilePath, keyFilePath, certPassword string) (*tls.Config, error) {
 	var tlsConfig *tls.Config
 
