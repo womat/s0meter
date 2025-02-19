@@ -12,7 +12,7 @@ If no configuration file is found, **default values** will be applied to ensure 
 ## 📌 Usage
 
 ```sh
-s0counter [-logLevel trace|debug|info|warning|error] [-LogDestination stdout|stderr|null|/path/to/logfile] [-version] [-about] [-help] [-crypt <text>]
+s0counter [-logLevel debug|info|warning|error] [-LogDestination stdout|stderr|null|/path/to/logfile] [-version] [-about] [-help]
 
 ```
 
@@ -23,10 +23,9 @@ s0counter [-logLevel trace|debug|info|warning|error] [-LogDestination stdout|std
 | `-version`                 | Prints the application version and exit                        |
 | `-about`                   | Prints details about `s0counter` and exit                      |
 | `-help`                    | Prints this help message and exit                              |
-| `-logLevel <level>`        | Set the log level: trace, debug, info, warning ,error          |
+| `-logLevel <level>`        | Set the log level: debug, info, warning ,error                 |
 | `-logDestination <dest>`   | Set the log destination: stdout, stderr,null, /path/to/logfile |
 | `-config </path/file.cfg>` | Specify the path to the config file                            |
-| `-crypt <text>`            | Encrypt the given string and exit                              |
 
 ---
 
@@ -44,29 +43,22 @@ s0counter -version
 s0counter -about
 ```
 
-### Enable Debug Mode (Verbose Logging):
+### Enable Debug Logging (Source Code Location in Logs):
 
 ```sh
-s0counter -debug
+s0counter -logLevel debug -logDestination stdout
 ```
 
-### Enable Trace Logging (Source Code Location in Logs):
+### Get monitoring data from a smart meter:
 
 ```sh
-s0counter -trace
-```
-
-### Encrypt a String (`mysecret` in this example):
-
-```sh
-s0counter -crypt "mysecret"
-🔐 **Output:** Encrypted string (useful for securing credentials).
+curl -k -H "X-Api-Key: 12345678" https://localhost:443/api/monitoring
 ```
 
 ### Get data from a smart meter:
 
 ```sh
-curl -k -H "X-Api-Key: 12345678" https://localhost:4000/api/data
+curl -k -H "X-Api-Key: 12345678" https://localhost:443/api/data
 ```
 
 ---
@@ -75,8 +67,6 @@ curl -k -H "X-Api-Key: 12345678" https://localhost:4000/api/data
 
 ✅ **Smart Meter Data Collection** – Supports multiple smart meters  
 ✅ **Secure MQTT Integration** – Send data securely to MQTT brokers  
-✅ **Data Encryption** – Secure sensitive data using `-crypt`  
-✅ **Debugging & Tracing** – Use `-debug` and `-trace` to diagnose issues  
 ✅ **Lightweight & Fast** – Optimized for embedded and IoT environments  
 ✅ **Supports Electricity, Water, and Gas Meters**    
 ✅ **Compatible with DIN 43864 Standard for S0 Pulse Meters**  
@@ -114,7 +104,7 @@ s0Counter allows **IP-based access control** via the configuration file.
 
 🔹 **Priority Rule:** `blockedIPs` **takes precedence** over `allowedIPs`.
 
-##  generate a self-signed certificate for development**
+## generate a self-signed certificate for development**
 
     openssl req -x509 -nodes -newkey rsa:2048 -keyout selfsigned.key -out selfsigned.crt -days 35600 -subj "/C=AT/ST=Vienna/L=Vienna/O=ITDesign/OU=DEV/CN=localhost/emailAddress=support@itdesign.at"
       -subj description

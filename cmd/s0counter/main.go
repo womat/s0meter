@@ -25,7 +25,7 @@ func main() {
 	help := flags.Bool("help", false, "Print a help message and exit")
 	version := flags.Bool("version", false, "Print the app version and exit")
 
-	logLevel := flags.String("logLevel", "", "Set the log level (overrides the config file). Supported values: trace | debug | info | warning | error")
+	logLevel := flags.String("logLevel", "", "Set the log level (overrides the config file). Supported values: debug | info | warning | error")
 	logDestination := flags.String("logDestination", "", "Set the log destination (overrides the config file). Supported values: stdout | stderr | null | /path/to/logfile")
 	configFile := flags.String("config", filepath.Join("/opt", app.MODULE, "etc/config.yaml"), "Specify the path to the config file")
 
@@ -134,7 +134,7 @@ func loadConfig(configFile, logLevel, logDestination string) (*app.Config, error
 
 	switch logLevel {
 	case "": // if no log level is provided, use the one from the config
-	case "debug", "trace", "info", "warning", "error":
+	case "debug", "info", "warning", "error":
 		config.LogLevel = logLevel
 	default:
 		return nil, fmt.Errorf("invalid log level: %s", logLevel)

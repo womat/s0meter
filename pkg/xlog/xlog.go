@@ -15,7 +15,6 @@ type LoggerWrapper struct {
 
 // Init initializes the slog logger with the given log destinations and log level.
 // dest: stdout, stderr, /path/to/logfile
-// logLevel: (default: audit)
 // addSource: add go source file name and line number to log output
 func Init(dest string, logLevel string) (*LoggerWrapper, error) {
 

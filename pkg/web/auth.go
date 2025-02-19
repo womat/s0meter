@@ -4,9 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
-
 	"s0counter/pkg/jwt_util"
+	"strings"
 )
 
 var (

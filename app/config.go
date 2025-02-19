@@ -20,13 +20,11 @@ type Config struct {
 	//  Allowed values: prod | dev
 	//  It's used for:
 	//  - jwt token expiration (1 day in dev, 5 minutes in prod)
-	// Default is "prod".
 	Env string
 
 	// LogLevel is the log level, if set only message with at least this level is logged
 	//  e.g.: debug -> means error, warning, info and debug messages are logged
-	// Allowed values: debug | info | warning | error | trace
-	// Default is info.
+	// Allowed values: debug | info | warning | error
 	LogLevel string `yaml:"logLevel"`
 
 	// LogDestination defines the log destinations.
@@ -46,15 +44,12 @@ type Config struct {
 // WebserverConfig defines the struct of the webserver and webservice configuration and configuration file
 type WebserverConfig struct {
 	// ListenHost is the host address the https server listens for connections.
-	// Default is empty, which means all available network interfaces.
 	ListenHost string `yaml:"listenHost"`
 
 	// ListenPort is the port the https server listens for connections.
-	// Default is 443
 	ListenPort string `yaml:"listenPort"`
 
 	// ApiKey is the global api key for the application.
-	// Default is empty that means api key authentication is disabled.
 	ApiKey string `yaml:"apiKey"`
 
 	// JwtSecret is a secret key used to sign jwt tokens.
@@ -64,11 +59,9 @@ type WebserverConfig struct {
 	JwtID string `yaml:"jwtID"`
 
 	// KeyFile is the ssl certificate private key file
-	// Default is key.pem
 	KeyFile string `yaml:"keyFile"`
 
 	// CertFile is the ssl certificate public key file
-	// Default is cert.pem
 	// Pfx files are supported as well, in which case KeyFile must be empty and CertFile must point to the pfx file, CertPassword must contain the password to decode the pfx file.
 	CertFile string `yaml:"certFile"`
 
@@ -94,8 +87,7 @@ type MQTTConfig struct {
 	Retained   bool   `yaml:"retained"`
 }
 
-// NewConfig initializes and returns a new Config struct with default values.
-// It sets up the configuration with the default environment, log level, data collection intervals, and MQTT settings.
+// NewConfig initializes and returns a new Config.
 func NewConfig() *Config {
 	return &Config{
 		Meter: make(map[string]s0meters.MeterConfig),

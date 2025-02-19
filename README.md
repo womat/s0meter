@@ -14,9 +14,4 @@ curl -k -H "X-Api-Key: 12345678" https://localhost:443/api/data
 ```sh
 openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
 ```
-## Encrypt a String (`mysecret` in this example):
 
-```sh
-s0counter -crypt "mysecret"
-🔐 **Output:** Encrypted string (useful for securing credentials).
-```
