@@ -36,6 +36,7 @@
 package gpioemu
 
 import (
+	"fmt"
 	"s0counter/pkg/rpi"
 	"sync"
 	"time"
@@ -167,4 +168,10 @@ func (p *Port) StopWatchingEvents() error {
 // The debounced time is used to prevent multiple events when the button is pressed or released.
 func (p *Port) SetDebounceTime(t time.Duration) error {
 	return nil
+}
+
+// Info returns the information of the port. This is useful for debugging.
+// The information is returned as a string.
+func (p *Port) Info() string {
+	return fmt.Sprint(p)
 }

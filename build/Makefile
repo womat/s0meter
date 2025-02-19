@@ -25,42 +25,57 @@ RESET  := $(shell tput -Txterm sgr0)
 all: help
 
 clean: ## Remove build related file
-	rm -fr ../bin/arm5
 	rm -fr ../bin/arm6
 	rm -fr ../bin/arm7
 	rm -fr ../bin/arm8
+	rm -fr ../bin/arm64
+	rm -fr ../bin/amd64
 	rm -fr ../bin/darwin
 	rm -fr ../bin/386
-	rm -fr ../bin/amd64
 
 
 
-build_arm5: ## build binary for all raspberry models 32bit"
-	GOOS=linux GOARCH=arm GOARM=5 go build -o ../bin/arm5/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
+# ==================================================================================================================
+# Raspberry Pi Kompatibilitätstabelle für GOARCH und GOARM
+# ==================================================================================================================
+# Modell                    CPU    GOARCH=arm GOARM=6   GOARCH=arm GOARM=7   GOARCH=arm GOARM=8   GOARCH=arm64
+#
+# Raspberry Pi 1 (A/B/+)    ARMv6  Läuft gut           Nicht kompatibel     Nicht kompatibel     Nicht kompatibel
+# Raspberry Pi Zero (1.Gen) ARMv6  Läuft gut           Nicht kompatibel     Nicht kompatibel     Nicht kompatibel
+# Raspberry Pi 2            ARMv7  Langsam             Läuft gut            Nicht kompatibel     Nicht kompatibel
+# Raspberry Pi 3            ARMv8  Langsam             Läuft gut            Läuft gut            Läuft mit 64-Bit OS
+# Raspberry Pi 4            ARMv8  Langsam             Läuft gut            Läuft gut            Läuft mit 64-Bit OS
+# Raspberry Pi 5            ARMv8  Nicht kompatibel    Langsam              Läuft gut            Läuft mit 64-Bit OS
+# Raspberry Pi Zero 2 W     ARMv8  Langsam             Läuft gut            Läuft gut            Läuft mit 64-Bit OS
+# ==================================================================================================================
 
-build_arm6: ## build binary for all raspberry models 32bit"
+
+build_arm6: ## build binary for all raspberry models 32bit ausser Pi5"
 	GOOS=linux GOARCH=arm GOARM=6 go build -o ../bin/arm6/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
 
-build_arm7: ## build binary for raspberry models 2/3/4/Zero2 32bit"
+build_arm7: ## build binary for raspberry models 2/3/4/5/Zero2 32bit"
 	GOOS=linux GOARCH=arm GOARM=7 go build -o ../bin/arm7/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
 
-build_arm8: ## build binary for raspberry models 4/Zero2 64bit"
+build_arm8: ## build binary for raspberry 3/4/5/Zero2 32bit"
 	GOOS=linux GOARCH=arm64 go build -o ../bin/arm8/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
 
-#build_windows386: ## build binary for windows"
-#	GOOS=windows GOARCH=386 go build -o ../bin/386/${BINARY_NAME}.exe ../cmd/${BINARY_NAME}/main.go
+build_arm64: ## build binary for raspberry models 3/4/5/Zero2 64bit"
+	GOOS=linux GOARCH=arm64 go build -o ../bin/arm64/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
 
-#build_windows64: ## build binary for windows 64bit"
-#	GOOS=windows GOARCH=amd64 go build -o ../bin/amd64/${BINARY_NAME}.exe ../cmd/${BINARY_NAME}/main.go
+build_windows386: ## build binary for windows"
+	GOOS=windows GOARCH=386 go build -o ../bin/386/${BINARY_NAME}.exe ../cmd/${BINARY_NAME}/main.go
 
-#build_linux386: ## build binary for linux"
-#	GOOS=linux GOARCH=386 go build -o ../bin/386/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
+build_windows64: ## build binary for windows 64bit"
+	GOOS=windows GOARCH=amd64 go build -o ../bin/amd64/${BINARY_NAME}.exe ../cmd/${BINARY_NAME}/main.go
 
-#build_linux64: ## build binary for linux 64bit"
-#	GOOS=linux GOARCH=amd64 go build -o ../bin/amd64/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
+build_linux386: ## build binary for linux"
+	GOOS=linux GOARCH=386 go build -o ../bin/386/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
 
-#build_arm64: ## build binary mac M1"
-#	GOOS=darwin GOARCH=arm64 go build -o ../bin/darwin/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
+build_linux64: ## build binary for linux 64bit"
+	GOOS=linux GOARCH=amd64 go build -o ../bin/amd64/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
+
+build_mac_arm64: ## build binary mac M1"
+	GOOS=darwin GOARCH=arm64 go build -o ../bin/darwin/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
 
 
 

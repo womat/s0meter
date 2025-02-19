@@ -6,35 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"s0counter/app/service/s0meters"
-	"s0counter/pkg/crypt"
 )
 
 const (
 	ProdEnv = "prod"
 	DevEnv  = "dev"
-
-	DefaultEnv            = ProdEnv
-	DefaultListenHost     = ""
-	DefaultListenPort     = "443"
-	DefaultMinTLS         = "1.2"
-	DefaultLogLevel       = "info"
-	DefaultLogDestination = "stdout"
-	DefaultKeyFile        = "key.pem"
-	DefaultCertFile       = "cert.pem"
-	DefaultJwtSecret      = "RbPXAPTYeyCKbdk1+vrvCkolOQvYuWv94UQyCpt7JbGRZrcP0E+RRF4WP5JhfU72u9ZThF/XmZijiW0nKfy7xdoG7FWjkegM"
-	DefaultJwtID          = "3aedb8f0-9cb6-4e45-bf1a-f129fb087de3"
-
-	DefaultDataCollectionInterval = 60
-	DefaultBackupInterval         = 60
-	DefaultDataFile               = "meters.yaml"
-
-	DefaultMQTTConnection = "tcp:127.0.0.1883"
-	DefaultMQTTRetained   = false
-)
-
-var (
-	AppDir            = filepath.Join("/opt", MODULE)
-	DefaultConfigFile = filepath.Join(AppDir, "etc/config.yaml")
 )
 
 // Config holds the application configuration
@@ -57,21 +33,9 @@ type Config struct {
 	//  supported values: stdout | stderr | /path/to/logfile
 	LogDestination string `yaml:"logDestination"`
 
-	// ApiKey is the global api key for the application.
-	// ApiKey must be encrypted with "app --crypt <plaintext>"
-	// Default is empty; that means api key authentication is disabled.
-	ApiKey crypt.EncryptedString `yaml:"apiKey"`
-
-	// JwtSecret is a secret key used to sign jwt tokens.
-	// JwtSecret must be encrypted with "app --crypt <plaintext>"
-	JwtSecret crypt.EncryptedString `yaml:"jwtSecret"`
-
-	// JwtID is a unique identifier for the jwt token used to prevent login with the same jwt token to another app.
-	JwtID string `yaml:"jwtID"`
-
-	// Webserver is the configuration of the webserver and webservice
-	Webserver WebserverConfig `yaml:"webserver"`
-	MQTT      MQTTConfig      `yaml:"mqtt"`
+	// HttpsServer is the configuration of the webserver and webservice
+	HttpsServer WebserverConfig `yaml:"webserver"`
+	MQTT        MQTTConfig      `yaml:"mqtt"`
 
 	DataCollectionInterval int                             `yaml:"dataCollectionInterval"`
 	DataFile               string                          `yaml:"dataFile"`
@@ -89,9 +53,15 @@ type WebserverConfig struct {
 	// Default is 443
 	ListenPort string `yaml:"listenPort"`
 
-	// MinTLS is the minimum TLS version the server accepts.
-	// Default is "1.2"
-	MinTLS string `yaml:"minTLS"`
+	// ApiKey is the global api key for the application.
+	// Default is empty that means api key authentication is disabled.
+	ApiKey string `yaml:"apiKey"`
+
+	// JwtSecret is a secret key used to sign jwt tokens.
+	JwtSecret string `yaml:"jwtSecret"`
+
+	// JwtID is a unique identifier for the jwt token used to prevent login with the same jwt token to another app.
+	JwtID string `yaml:"jwtID"`
 
 	// KeyFile is the ssl certificate private key file
 	// Default is key.pem
@@ -101,11 +71,6 @@ type WebserverConfig struct {
 	// Default is cert.pem
 	// Pfx files are supported as well, in which case KeyFile must be empty and CertFile must point to the pfx file, CertPassword must contain the password to decode the pfx file.
 	CertFile string `yaml:"certFile"`
-
-	// CertPassword is an optional certificate password that
-	// CertPassword must be encrypted with "app --crypt <plaintext>"
-	// Default is empty which means no password is used.
-	CertPassword crypt.EncryptedString `yaml:"certPassword"`
 
 	// BlockedIPs is a list of IP addresses or networks that are forbidden from accessing the application.
 	// Default is empty, which means no IP addresses or networks are blocked.
@@ -133,34 +98,10 @@ type MQTTConfig struct {
 // It sets up the configuration with the default environment, log level, data collection intervals, and MQTT settings.
 func NewConfig() *Config {
 	return &Config{
-		Env:            DefaultEnv,
-		LogLevel:       DefaultLogLevel,
-		LogDestination: DefaultLogDestination,
-
-		JwtSecret: *crypt.NewEncryptedString(DefaultJwtSecret),
-		JwtID:     DefaultJwtID,
-
-		DataCollectionInterval: DefaultDataCollectionInterval,
-		DataFile:               filepath.Join(AppDir, "data", DefaultDataFile),
-		BackupInterval:         DefaultBackupInterval,
-
 		Meter: make(map[string]s0meters.MeterConfig),
-
-		Webserver: WebserverConfig{
-			ListenHost:   DefaultListenHost,
-			ListenPort:   DefaultListenPort,
-			MinTLS:       DefaultMinTLS,
-			CertFile:     filepath.Join(AppDir, "etc", DefaultCertFile),
-			KeyFile:      filepath.Join(AppDir, "etc", DefaultKeyFile),
-			CertPassword: *crypt.NewEncryptedString(""),
-			BlockedIPs:   []string{},
-			AllowedIPs:   []string{},
-		},
-
-		MQTT: MQTTConfig{
-			Enabled:    false,
-			Connection: DefaultMQTTConnection,
-			Retained:   DefaultMQTTRetained,
+		HttpsServer: WebserverConfig{
+			BlockedIPs: []string{},
+			AllowedIPs: []string{},
 		},
 	}
 }

@@ -17,9 +17,9 @@ import (
 func (app *App) InitRoutes() {
 
 	webCfg := web.Config{
-		ApiKey:    app.config.ApiKey,
-		JwtSecret: app.config.JwtSecret,
-		JwtID:     app.config.JwtID,
+		ApiKey:    app.config.HttpsServer.ApiKey,
+		JwtSecret: app.config.HttpsServer.JwtSecret,
+		JwtID:     app.config.HttpsServer.JwtID,
 		AppName:   MODULE,
 	}
 
@@ -38,5 +38,5 @@ func (app *App) InitRoutes() {
 
 	// Global middleware is added here.
 	app.web.Handler = web.WithCORS(mux)
-	app.web.Handler = web.WithIPFilter(app.web.Handler, app.config.Webserver.AllowedIPs, app.config.Webserver.BlockedIPs)
+	app.web.Handler = web.WithIPFilter(app.web.Handler, app.config.HttpsServer.AllowedIPs, app.config.HttpsServer.BlockedIPs)
 }

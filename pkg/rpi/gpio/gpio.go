@@ -84,7 +84,7 @@ func (p *Port) handler(evt gpiod.LineEvent) {
 
 	go handler(rpi.Event{
 		Timestamp: time.Now(),
-		Type:      int(evt.Type),
+		Type:      mapEdge(evt.Type),
 	})
 }
 
@@ -169,4 +169,12 @@ func (p *Port) StopWatchingEvents() error {
 // The debounced time is used to prevent multiple events when the button is pressed or released.
 func (p *Port) SetDebounceTime(t time.Duration) error {
 	return p.gpioLine.Reconfigure(gpiod.WithDebounce(t))
+}
+
+// mapEdge maps the gpiod.LineEventType to the rpi.LineEventType.
+func mapEdge(event gpiod.LineEventType) int {
+	if event == gpiod.LineEventRisingEdge {
+		return rpi.LineEventRisingEdge
+	}
+	return rpi.LineEventRisingEdge
 }

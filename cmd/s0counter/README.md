@@ -114,4 +114,15 @@ s0Counter allows **IP-based access control** via the configuration file.
 
 🔹 **Priority Rule:** `blockedIPs` **takes precedence** over `allowedIPs`.
 
+##  generate a self-signed certificate for development**
+
+    openssl req -x509 -nodes -newkey rsa:2048 -keyout selfsigned.key -out selfsigned.crt -days 35600 -subj "/C=AT/ST=Vienna/L=Vienna/O=ITDesign/OU=DEV/CN=localhost/emailAddress=support@itdesign.at"
+      -subj description
+       /C=AT								Country
+       /ST=Vienna							State (optional).
+       /L=Vienna							Location – City (optional).
+       /O=company							company (optional).
+       /OU=IT								Organizational Unit – (optional).
+       /CN=my-domain.com					Common Name – IMPORTANT! your domain name or localhost.
+       /emailAddress=admin@my-domain.com	E-Mail-Address (optional).
 

@@ -8,19 +8,6 @@ logLevel: info
 #  supported values: stdout | stderr | /path/to/logfile
 logDestination: stdout
 
-# aiKey is the global api key for the application.
-# apiKey must be encrypted with "app --crypt <plaintext>"
-# Default is empty that means api key authentication is disabled.
-# 12345678
-apiKey: DOqIHra9dK1XJ/6Nx4/2vafH+cg36nXT8w1apl/wXhtIWdGI
-
-# jwtSecret is a secret key used to sign jwt tokens.
-# jwtSecret must be encrypted with "app --crypt <plaintext>"
-# jwtSecret: encrypted
-
-# jwtID is a unique identifier for the jwt token used to prevent login with the same jwt token to another app.
-# jwtID: unique
-
 # webserver configuration
 webserver:
   # listenHost is the host address the https server listens for connections.
@@ -29,31 +16,27 @@ webserver:
 
   # listenPort is the port the https server listens for connections.
   # Default is 443
-  listenPort: 4000
+  listenPort: 443
 
-  # minTLS is the minimum TLS version the server accepts.
-  # Default is "1.2"
-  minTLS: 1.2
+  # aiKey is the global api key for the application.
+  # Default is empty that means api key authentication is disabled.
+  # 12345678
+  apiKey: 12345678
 
   # keyFile is the ssl certificate private key file
-  # Default is key.pem
-  # keyFile:
+  # Default is /opt/manchaster/etc/key.pem
+  keyFile: /opt/manchaster/etc/key.pem
 
   # CertFile is the ssl certificate public key file
   # Default is cert.pem
   # Pfx files are supported as well, in which case KeyFile must be empty and CertFile must point to the pfx file, CertPassword must contain the password to decode the pfx file.
-  # certFile:
-
-  # CertPassword is an optional certificate password that
-  # CertPassword must be encrypted with "app --crypt <plaintext>"
-  # Default is empty which means no password is used.
-  # certPassword: encrypted
+  certFile: /opt/manchaster/etc/cert.pem
 
   # BlockedIPs is a list of IP addresses or networks that are forbidden from accessing the application.
   # Default is empty, which means no IP addresses or networks are blocked.
   # Multiple IP addresses or networks can be defined separated by a comma
   # e.g.: 192.168.0.1,192.168.0.0/16,10.0.0.0/8,192.168.254.15
-  #  blockedIPs:
+  blockedIPs: []
   #    - 192.168.0.1
   #    - 192.168.0.0/16
   #    - 10.0.0.0/8
@@ -65,13 +48,12 @@ webserver:
   # multiple IP addresses or networks can be defined separated by a comma
   # e.g.: 127.0.0.1,::1,192.168.0.0/16,10.0.0.0/8
   # Note: '::1' is the IPv6 loopback address.
-  #  allowedIPs:
+  allowedIPs: []
   #    - ALL
   #    - 127.0.0.1
   #    - ::1
   #    - 192.168.0.0/16
   #    - 10.0.0.0/8
-
 
 # dataCollectionInterval defines the interval in seconds, in which the gauges are calculated
 # default 60 seconds

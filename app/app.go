@@ -96,7 +96,7 @@ func (app *App) Run() (*App, error) {
 	// handle the OS signals
 	app.HandleOSSignals()
 
-	webServerAddress := net.JoinHostPort(app.config.Webserver.ListenHost, app.config.Webserver.ListenPort)
+	webServerAddress := net.JoinHostPort(app.config.HttpsServer.ListenHost, app.config.HttpsServer.ListenPort)
 	slog.Info("Starting web server", "url", webServerAddress)
 	err := app.StartWebServer()
 	if err != nil {

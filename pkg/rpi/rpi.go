@@ -48,12 +48,11 @@ import (
 )
 
 const (
-	_ int = iota
+	// LineEventFallingEdge indicates an active to inactive event (high to low).
+	LineEventFallingEdge int = iota
+
 	// LineEventRisingEdge indicates an inactive event to an active event (low to high).
 	LineEventRisingEdge
-
-	// LineEventFallingEdge indicates an active to inactive event (high to low).
-	LineEventFallingEdge
 )
 
 // Event represents a state change event on a line.
@@ -68,6 +67,7 @@ type GPIO interface {
 	Close() error
 	GetValue() (int, error)
 	Port() int
+	Info() string
 	SetDebounceTime(time.Duration) error
 	SetInputMode() error
 	SetOutputMode() error

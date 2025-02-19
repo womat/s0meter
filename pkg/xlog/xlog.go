@@ -43,16 +43,16 @@ func Init(dest string, logLevel string) (*LoggerWrapper, error) {
 	level := slog.LevelInfo
 
 	switch logLevel {
-	case "trace", "debug":
+	case "debug":
 		level = slog.LevelDebug
-	case "err", "error":
+	case "error":
 		level = slog.LevelError
-	case "warn", "warning":
+	case "warning":
 		level = slog.LevelWarn
 	}
 
 	logger := slog.New(slog.NewTextHandler(writer, &slog.HandlerOptions{
-		AddSource: logLevel == "trace",
+		AddSource: logLevel == "debug",
 		Level:     level}))
 	return &LoggerWrapper{Logger: logger, File: logFile}, nil
 }
