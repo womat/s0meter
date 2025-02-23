@@ -2,8 +2,8 @@ package app
 
 import (
 	httpSwagger "github.com/swaggo/http-swagger"
+	"github.com/womat/golib/web"
 	"net/http"
-	"s0counter/pkg/web"
 )
 
 // InitRoutes initializes and configures all HTTP routes for the application.

@@ -1,10 +1,10 @@
 package app
 
 import (
+	"github.com/womat/golib/web"
 	"log/slog"
 	"net/http"
 	"s0counter/app/service/monitoring"
-	"s0counter/pkg/web"
 )
 
 // HandleMonitoring returns monitoring data for WATCHIT system.

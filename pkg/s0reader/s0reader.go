@@ -28,9 +28,9 @@
 package s0reader
 
 import (
+	"github.com/womat/golib/rpi"
+	"github.com/womat/golib/rpi/gpio"
 	"log/slog"
-	"s0counter/pkg/rpi"
-	"s0counter/pkg/rpi/gpio"
 	"sync"
 	"time"
 )
@@ -125,7 +125,7 @@ func (h *Handler) InitializePort(port int, debounce time.Duration) (err error) {
 	if err = h.gpioPort.SetDebounceTime(debounce); err != nil {
 		return err
 	}
-	if err = h.gpioPort.StartWatchingEvents(h.handlePulseEvent); err != nil {
+	if err = h.gpioPort.WatchingEvents(h.handlePulseEvent); err != nil {
 		return err
 	}
 
@@ -144,7 +144,7 @@ func (h *Handler) Close() error {
 	if h.gpioPort == nil {
 		return nil
 	}
-	_ = h.gpioPort.StopWatchingEvents()
+	_ = h.gpioPort.StopWatching()
 	return h.gpioPort.Close()
 }
 
@@ -158,12 +158,12 @@ func (h *Handler) Close() error {
 //	meter.handlePulseEvent(rpi.Event{Timestamp: time.Now(), Type: rpi.LineEventRisingEdge})
 func (h *Handler) handlePulseEvent(e rpi.Event) {
 	port := h.gpioPort.Port()
-	slog.Debug("s0 pulse detected", "gpio", port, "type", e.Type, "timestamp", e.Timestamp)
+	slog.Debug("s0 pulse detected", "gpio", port, "edge", e.Edge, "eventTime", e.Time)
 
-	if e.Type == rpi.LineEventRisingEdge {
+	if e.Edge == rpi.RisingEdge {
 		h.mux.Lock()
 		h.counter.LastTimeStamp = h.counter.TimeStamp
-		h.counter.TimeStamp = e.Timestamp
+		h.counter.TimeStamp = e.Time
 		h.counter.Tick++
 		tmp := h.counter // copy for logging
 		h.mux.Unlock()

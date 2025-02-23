@@ -1,9 +1,9 @@
 package app
 
 import (
+	"github.com/womat/golib/web"
 	"log/slog"
 	"net/http"
-	"s0counter/pkg/web"
 )
 
 // HandleData returns monitoring data for the application.

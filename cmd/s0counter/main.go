@@ -4,13 +4,13 @@ import (
 	_ "embed"
 	"flag"
 	"fmt"
+	"github.com/womat/golib/xlog"
 	"gopkg.in/yaml.v3"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
 	"s0counter/app"
-	"s0counter/pkg/xlog"
 )
 
 //go:embed README.md

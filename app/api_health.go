@@ -1,10 +1,10 @@
 package app
 
 import (
+	"github.com/womat/golib/web"
 	"log/slog"
 	"net/http"
 	"s0counter/app/service/health"
-	"s0counter/pkg/web"
 )
 
 // HandleHealth returns data about the health of the application.

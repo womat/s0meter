@@ -24,7 +24,7 @@ import (
 // but we keep the correct syntax.
 // TODO: increase version number to 1.0.1+2020xxyy
 const (
-	VERSION = "4.5.2+20250215"
+	VERSION = "4.5.2+20250223"
 	MODULE  = "s0counter"
 )
 
@@ -168,7 +168,7 @@ func (app *App) HandleOSSignals() {
 		slog.Info("Starting signal handler")
 
 		receivedSignal := <-sig
-		slog.Warn("Received OS signal", "signal", receivedSignal)
+		slog.Info("Received OS signal", "signal", receivedSignal)
 
 		switch receivedSignal {
 		case syscall.SIGHUP:

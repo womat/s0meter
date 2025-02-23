@@ -54,8 +54,8 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"s0counter/internal/s0reader"
 	"s0counter/pkg/mqtt"
+	"s0counter/pkg/s0reader"
 	"sync"
 	"time"
 )
