@@ -1,0 +1,157 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "contact": {}
+    },
+    "paths": {
+        "/api/data": {
+            "get": {
+                "security": [
+                    {
+                        "APIKeyAuth \"API key must be provided in the header\"": []
+                    }
+                ],
+                "description": "Retrieves meter readings for the application.",
+                "tags": [
+                    "monitoring"
+                ],
+                "summary": "Get monitoring data",
+                "responses": {
+                    "200": {
+                        "description": "Monitoring data successfully retrieved",
+                        "schema": {
+                            "$ref": "#/definitions/s0meters.MeterData"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/health": {
+            "get": {
+                "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, and OS.",
+                "tags": [
+                    "info"
+                ],
+                "summary": "Get health data",
+                "responses": {
+                    "200": {
+                        "description": "Health data successfully retrieved",
+                        "schema": {
+                            "$ref": "#/definitions/health.Model"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/ready": {
+            "get": {
+                "description": "Checks if the application and its dependencies are ready to serve traffic.",
+                "tags": [
+                    "info"
+                ],
+                "summary": "Readiness check",
+                "responses": {
+                    "200": {
+                        "description": "Application is ready",
+                        "schema": {
+                            "$ref": "#/definitions/health.Model"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/version": {
+            "get": {
+                "description": "Returns the name and version of the application for debugging and monitoring.",
+                "tags": [
+                    "info"
+                ],
+                "summary": "Get application version and name",
+                "responses": {
+                    "200": {
+                        "description": "Application version and name successfully retrieved",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string"
+                                },
+                                "version": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "health.Model": {
+            "type": "object",
+            "properties": {
+                "appVersion": {
+                    "description": "Current version of the application",
+                    "type": "string"
+                },
+                "goVersion": {
+                    "description": "Go runtime version",
+                    "type": "string"
+                },
+                "heapAllocBytes": {
+                    "description": "Allocated heap memory in bytes",
+                    "type": "integer"
+                },
+                "hostname": {
+                    "description": "Machine name where the app runs",
+                    "type": "string"
+                },
+                "numGoroutines": {
+                    "description": "Current number of active goroutines",
+                    "type": "integer"
+                },
+                "os": {
+                    "description": "Operating system name",
+                    "type": "string"
+                },
+                "sysMemoryBytes": {
+                    "description": "Total memory obtained from the OS",
+                    "type": "integer"
+                },
+                "timestamp": {
+                    "description": "UTC timestamp when health info was collected (RFC3339)",
+                    "type": "string"
+                },
+                "uptimeSeconds": {
+                    "description": "Application uptime in seconds",
+                    "type": "number"
+                }
+            }
+        },
+        "s0meters.MeterData": {
+            "type": "object",
+            "properties": {
+                "counter": {
+                    "description": "Total meter value",
+                    "type": "number"
+                },
+                "gauge": {
+                    "description": "Flow rate",
+                    "type": "number"
+                },
+                "timeStamp": {
+                    "description": "Timestamp of reading",
+                    "type": "string"
+                },
+                "unitCounter": {
+                    "description": "Counter unit",
+                    "type": "string"
+                },
+                "unitGauge": {
+                    "description": "Gauge unit",
+                    "type": "string"
+                }
+            }
+        }
+    }
+}
