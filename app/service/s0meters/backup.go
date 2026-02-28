@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"s0counter/pkg/pulsecounter"
+	"s0meter/pkg/pulsecounter"
 	"time"
 
 	"gopkg.in/yaml.v3"

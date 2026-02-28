@@ -18,8 +18,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"s0counter/app/service/s0meters"
-	"s0counter/pkg/mqtt"
+	"s0meter/app/service/s0meters"
+	"s0meter/pkg/mqtt"
 	"syscall"
 	"time"
 )

@@ -19,11 +19,11 @@ webserver:
   apiKey: 12345678
 
   # keyFile is the ssl certificate private key file
-  keyFile: /opt/s0counter/etc/key.pem
+  keyFile: /opt/s0meter/etc/key.pem
 
   # CertFile is the ssl certificate public key file
   # Pfx files are supported as well, in which case KeyFile must be empty and CertFile must point to the pfx file, CertPassword must contain the password to decode the pfx file.
-  certFile: /opt/s0counter/etc/cert.pem
+  certFile: /opt/s0meter/etc/cert.pem
 
   # BlockedIPs is a list of IP addresses or networks that are forbidden from accessing the application.
   # Default is empty, which means no IP addresses or networks are blocked.

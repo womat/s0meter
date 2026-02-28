@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"s0counter/app/service/s0meters"
+	"s0meter/app/service/s0meters"
 
 	"gopkg.in/yaml.v3"
 )

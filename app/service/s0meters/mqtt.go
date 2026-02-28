@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"s0counter/pkg/mqtt"
+	"s0meter/pkg/mqtt"
 	"time"
 )
 

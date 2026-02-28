@@ -5,7 +5,7 @@ package app
 import (
 	"net/http"
 
-	_ "s0counter/docs"
+	_ "s0meter/docs"
 
 	httpSwagger "github.com/swaggo/http-swagger"
 )

@@ -36,7 +36,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"s0counter/pkg/pulsecounter"
+	"s0meter/pkg/pulsecounter"
 	"sync"
 	"time"
 )

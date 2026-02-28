@@ -1,4 +1,4 @@
-module s0counter
+module s0meter
 
 go 1.26
 

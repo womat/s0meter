@@ -3,7 +3,7 @@
 GOCMD=go
 GOTEST=$(GOCMD) test
 GOVET=$(GOCMD) vet
-BINARY_NAME=s0counter
+BINARY_NAME=s0meter
 VERSION?=0.0.0
 SERVICE_PORT?=3000
 DOCKER_REGISTRY?= #if set it should finished by /

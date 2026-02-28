@@ -13,7 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"s0counter/app"
+	"s0meter/app"
 	"time"
 
 	"github.com/womat/golib/xlog"

@@ -11,7 +11,7 @@ package app
 import (
 	"log/slog"
 	"net/http"
-	"s0counter/app/service/health"
+	"s0meter/app/service/health"
 
 	"github.com/womat/golib/web"
 )
