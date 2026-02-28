@@ -31,7 +31,7 @@ func (app *App) HandleHealth() http.Handler {
 				"path", r.URL.Path,
 				"client_ip", r.RemoteAddr)
 
-			resp := health.GetCurrentHealth(VERSION)
+			resp := health.GetCurrentHealth(MODULE, VERSION)
 			web.Encode(w, http.StatusOK, resp)
 		},
 	)
@@ -54,7 +54,7 @@ func (app *App) HandleLive() http.Handler {
 			"path", r.URL.Path,
 			"client_ip", r.RemoteAddr)
 
-		resp := health.GetCurrentHealth(VERSION)
+		resp := health.GetCurrentHealth(MODULE, VERSION)
 		web.Encode(w, http.StatusOK, resp)
 	})
 }
@@ -81,7 +81,7 @@ func (app *App) HandleReady() http.Handler {
 			return
 		}
 
-		resp := health.GetCurrentHealth(VERSION)
+		resp := health.GetCurrentHealth(MODULE, VERSION)
 		web.Encode(w, http.StatusOK, resp)
 	})
 }

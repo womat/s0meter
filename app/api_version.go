@@ -12,13 +12,13 @@ import (
 //	@Summary		Get application version and name
 //	@Description	Returns the name and version of the application for debugging and monitoring.
 //	@Tags			info
-//	@Success		200	{object}	object{name=string,version=string}	"Application version and name successfully retrieved"
+//	@Success		200	{object}	object{app=string,appVersion=string}	"Application version and name successfully retrieved"
 //	@Router			/api/version [get]
 func (app *App) HandleVersion() http.Handler {
 	// Response defines the JSON structure returned by /api/version
 	type HandleVersionResponse struct {
-		Name    string `json:"name"`    // Application name (MODULE)
-		Version string `json:"version"` // Application version (VERSION)
+		App        string `json:"app"`        // Application name (MODULE)
+		AppVersion string `json:"appVersion"` // Application version (VERSION)
 	}
 
 	return http.HandlerFunc(
@@ -27,6 +27,6 @@ func (app *App) HandleVersion() http.Handler {
 				"method", r.Method,
 				"path", r.URL.Path,
 				"client_ip", r.RemoteAddr)
-			web.Encode(w, http.StatusOK, HandleVersionResponse{Version: VERSION, Name: MODULE})
+			web.Encode(w, http.StatusOK, HandleVersionResponse{App: MODULE, AppVersion: VERSION})
 		})
 }

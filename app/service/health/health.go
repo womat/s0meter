@@ -13,6 +13,7 @@ import (
 
 // Model holds the main system and runtime health information.
 type Model struct {
+	App            string  `json:"app"`            // Application name (MODULE)
 	AppVersion     string  `json:"appVersion"`     // Current version of the application
 	GoVersion      string  `json:"goVersion"`      // Go runtime version
 	Hostname       string  `json:"hostname"`       // Machine name where the app runs
@@ -27,7 +28,7 @@ type Model struct {
 var startTime = time.Now() // Tracks application start time
 
 // GetCurrentHealth returns the current system and application health data.
-func GetCurrentHealth(version string) Model {
+func GetCurrentHealth(module, version string) Model {
 	host, err := os.Hostname()
 	if err != nil {
 		host = "unknown"
@@ -37,6 +38,7 @@ func GetCurrentHealth(version string) Model {
 	runtime.ReadMemStats(&mem)
 
 	return Model{
+		App:            module,
 		AppVersion:     version,
 		GoVersion:      runtime.Version(),
 		Hostname:       host,

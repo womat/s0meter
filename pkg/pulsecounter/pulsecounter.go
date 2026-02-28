@@ -58,7 +58,7 @@ func New(ctx context.Context, port int, debounce time.Duration) (*Handler, error
 		return nil, fmt.Errorf("create GPIO port %d: %w", port, err)
 	}
 
-	h := &Handler{pin: port}
+	h := &Handler{pin: port, gpioPin: p}
 
 	if err = p.WatchFunc(ctx, gpio.RisingEdge, h.handlePulseEvent); err != nil {
 		p.Close()

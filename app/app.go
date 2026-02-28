@@ -35,7 +35,7 @@ import (
 // but we keep the correct syntax.
 // TODO: increase version number
 const (
-	VERSION = "4.5.2+20250223"
+	VERSION = "4.6.2+20260228"
 	MODULE  = "s0meter"
 
 	ModeStop    = 0
@@ -68,9 +68,7 @@ func New(config *Config, baseDir string) *App {
 		},
 
 		meters: s0meters.New(s0meters.Config{
-			DataFile:               config.DataFile,
-			BackupInterval:         config.BackupInterval,
-			DataCollectionInterval: config.DataCollectionInterval,
+			DataFile: config.DataFile,
 		}),
 
 		restart:    make(chan struct{}),
@@ -89,7 +87,7 @@ func (app *App) Run() (*App, error) {
 		return app, err
 	}
 
-	if app.config.MQTT.Enabled {
+	if app.config.MQTT.Connection != "" {
 		slog.Info("Connecting to MQTT broker", "broker", app.config.MQTT.Connection)
 		hostname, _ := os.Hostname()
 		clientID := MODULE + hostname
@@ -102,12 +100,14 @@ func (app *App) Run() (*App, error) {
 
 		app.mqtt = mqttHandler
 		// periodically calculate the gauge- and counter-values for each meter and send the results over MQTT
-		slog.Info("Starting MQTT publishing", "broker", app.config.MQTT.Connection)
-		app.meters.StartPeriodicPublish(app.ctx, app.mqtt)
+		interval := time.Duration(app.config.MQTT.PublishInterval) * time.Second
+		slog.Info("Starting periodic MQTT publishing", "interval", interval, "broker", app.config.MQTT.Connection)
+		app.meters.StartPeriodicPublish(app.ctx, interval, app.mqtt)
 	}
 
-	slog.Info("Starting periodic meter data backup", "file", app.config.DataFile)
-	app.meters.StartPeriodicBackup(app.ctx)
+	interval := time.Duration(app.config.BackupInterval) * time.Second
+	slog.Info("Starting periodic meter data backup", "interval", interval, "file", app.config.DataFile)
+	app.meters.StartPeriodicBackup(app.ctx, interval)
 
 	// handle the OS signals
 	app.HandleOSSignals()
@@ -135,7 +135,7 @@ func (app *App) Init() (err error) {
 
 	// register the meters and the GPIO pins
 	for name, config := range app.config.Meter {
-		slog.Debug("Register meter", "name", name)
+		slog.Info("Register meter", "name", name, "gpio", config.Gpio)
 		if err = app.meters.RegisterMeter(app.ctx, name, config); err != nil {
 			slog.Error("Failed to register meter", "name", name, "error", err)
 			return err

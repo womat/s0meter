@@ -58,9 +58,6 @@ func (app *App) StartWebServer() error {
 		Certificates: []tls.Certificate{cert},
 		MinVersion:   tls.VersionTLS12}
 
-	url := fmt.Sprintf("https://%s", app.web.Addr)
-	slog.Info("Starting webserver", "url", url)
-
 	// Create listener
 	listener, err := net.Listen("tcp", app.web.Addr)
 	if err != nil {

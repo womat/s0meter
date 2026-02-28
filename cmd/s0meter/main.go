@@ -79,8 +79,10 @@ func run(configFile string, debug bool) int {
 		}
 	}()
 
-	for {
+	fmt.Printf("Starting %s %s\n", app.MODULE, app.VERSION)
+	fmt.Printf("Loading configuration from: %s\n", configFile)
 
+	for {
 		// Reload configuration on every restart
 		config, err := loadConfig(configFile, debug)
 		if err != nil {
@@ -101,7 +103,6 @@ func run(configFile string, debug bool) int {
 
 		slog.SetDefault(logger.Logger)
 		slog.Info("Logging initialized/reloaded", "logLevel", config.LogLevel)
-		slog.Debug("Starting with configuration", "config", config)
 
 		// Create and run the application
 		a, err := app.New(config, filepath.Join("/opt", app.MODULE)).Run()
@@ -143,7 +144,7 @@ func About() string {
 	return string(b)
 }
 
-// loadConfig loads the configuration from a YAML file and applies overrides.
+// loadConfig loads the configuration from a YAML file, applies overrides and validates the configuration values.
 //
 // If debug mode is enabled, log level is forced to "debug" and logs are written to stdout.
 func loadConfig(configFile string, debug bool) (*app.Config, error) {
@@ -156,6 +157,10 @@ func loadConfig(configFile string, debug bool) (*app.Config, error) {
 	if debug {
 		config.LogLevel = "debug"
 		config.LogDestination = "stdout"
+	}
+
+	if err = config.Validate(); err != nil {
+		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
 
 	return config, nil

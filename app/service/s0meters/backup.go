@@ -16,13 +16,11 @@ import (
 //
 // This function saves the current counter values to the configured DataFile
 // every BackupInterval seconds. Errors are logged but do not stop execution.
-func (h *Handler) StartPeriodicBackup(ctx context.Context) {
-	interval := time.Duration(h.config.BackupInterval) * time.Second
+func (h *Handler) StartPeriodicBackup(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 
 	go func() {
 		defer ticker.Stop()
-		slog.Info("Started periodic meter backup", "interval", interval)
 
 		for {
 			select {
@@ -30,10 +28,9 @@ func (h *Handler) StartPeriodicBackup(ctx context.Context) {
 				slog.Info("Stopping periodic meter backup")
 				return
 			case <-ticker.C:
+				slog.Debug("Starting meter data backup", "file", h.config.DataFile)
 				if err := h.saveMeterData(); err != nil {
 					slog.Error("Failed to backup meter data", "error", err)
-				} else {
-					slog.Debug("Meter data backed up", "file", h.config.DataFile)
 				}
 			}
 		}
@@ -58,13 +55,11 @@ func (h *Handler) LoadMeterData() error {
 		return h.saveMeterData()
 	}
 	if err != nil {
-		slog.Error("Failed to read meter data file", "file", h.config.DataFile, "error", err)
 		return err
 	}
 
 	var saved map[string]pulsecounter.Counter
 	if err = yaml.Unmarshal(data, &saved); err != nil {
-		slog.Error("Failed to unmarshal meter data YAML", "file", h.config.DataFile, "error", err)
 		return err
 	}
 
@@ -78,7 +73,6 @@ func (h *Handler) LoadMeterData() error {
 		}
 	}
 
-	slog.Debug("Meter data loaded", "file", h.config.DataFile)
 	return nil
 }
 
@@ -107,7 +101,10 @@ func (h *Handler) saveMeterData() error {
 
 	dir := filepath.Dir(h.config.DataFile)
 	if _, err = os.Stat(dir); os.IsNotExist(err) {
-		return fmt.Errorf("directory does not exist: %s", dir)
+		slog.Info("Creating meter data dir", "dir", dir)
+		if err = os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("failed to create directory: %w", err)
+		}
 	}
 
 	if err = os.WriteFile(h.config.DataFile, yamlData, 0o600); err != nil {
@@ -115,6 +112,5 @@ func (h *Handler) saveMeterData() error {
 		return err
 	}
 
-	slog.Debug("Meter data saved", "file", h.config.DataFile)
 	return nil
 }

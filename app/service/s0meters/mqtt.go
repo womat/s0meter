@@ -13,13 +13,11 @@ import (
 //
 // This function publishes all meter readings every DataCollectionInterval seconds.
 // The loop stops when the provided context is cancelled.
-func (h *Handler) StartPeriodicPublish(ctx context.Context, mqttHandler *mqtt.Handler) {
-	interval := time.Duration(h.config.DataCollectionInterval) * time.Second
+func (h *Handler) StartPeriodicPublish(ctx context.Context, interval time.Duration, mqttHandler *mqtt.Handler) {
 	ticker := time.NewTicker(interval)
 
 	go func() {
 		defer ticker.Stop()
-		slog.Info("Started periodic MQTT publishing", "interval", interval)
 
 		for {
 			select {

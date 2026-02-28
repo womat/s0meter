@@ -1,51 +1,101 @@
-# 🚀 S0meter - Smart Meter Data Collector
+# 🚀 s0meter — S0 Pulse Energy Monitor
 
-S0meter is designed for **accurate energy monitoring** from one or more **independent electricity, water, and gas
-meters**. It supports all **S0 pulse energy meters** compliant with **DIN 43864**, ensuring reliable data acquisition.
+s0meter collects and exposes data from one or more **S0 pulse energy meters** compliant with **DIN 43864**,
+supporting electricity, water, and gas meters. It runs efficiently on **Raspberry Pi** hardware (tested on Raspberry Pi Zero and above).
 
-The application runs efficiently on **Raspberry Pi hardware**, with successful testing on **Raspberry Pi Zero**.
+---
 
-## Get data from a smart meter:
+## Features
+
+- Reads S0 pulse signals via GPIO
+- Calculates energy counters and flow rates (gauge)
+- Exposes data via HTTPS REST API (with API key or JWT authentication)
+- Publishes data to an MQTT broker
+- IP allowlist / blocklist support
+- Persists counter data to disk
+
+---
+
+## API
+
+### Get meter data
 ```sh
-curl -k -H "X-Api-Key: 12345678" https://localhost:443/api/data
+curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/data
 ```
 
-## Create a new certificate:
+### Get application version
 ```sh
-openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
+curl -k https://localhost:8443/version
 ```
 
-## Backup configuration
+### Health check
 ```sh
-sudo tar czvf /tmp/opt-s0meter.tar.gz /opt/s0meter
+curl -k https://localhost:8443/health
 ```
 
-## Restore configuration
+---
+
+## TLS Certificate
+
+Generate a self-signed certificate for development:
 ```sh
-sudo tar xzvf /tmp/opt-s0meter.tar.gz -C /
-sudo chown -R s0meter:s0meter /opt/s0meter
+openssl req -x509 -nodes -newkey rsa:2048 \
+  -keyout /opt/s0meter/etc/key.pem \
+  -out /opt/s0meter/etc/cert.pem \
+  -days 825 \
+  -subj "/C=AT/ST=Vienna/L=Vienna/O=MyCompany/OU=DEV/CN=localhost"
 ```
+
+**Subject fields:**
+
+| Field | Example | Description |
+|-------|---------|-------------|
+| `/C` | `AT` | Country code (2 letters) |
+| `/ST` | `Vienna` | State or province (optional) |
+| `/L` | `Vienna` | City (optional) |
+| `/O` | `MyCompany` | Organization (optional) |
+| `/OU` | `DEV` | Organizational unit (optional) |
+| `/CN` | `localhost` | **Common Name — your domain or `localhost`** |
+| `/emailAddress` | `admin@example.com` | E-mail address (optional) |
+
+> **Note:** Browsers enforce a maximum certificate validity of 825 days. Use `-days 365` for production-like setups.
+
+---
 
 ## Installation
+
+### 1. Create system user and directories
 ```sh
 sudo groupadd -f s0meter
 sudo useradd -r -s /usr/sbin/nologin -g s0meter s0meter
 sudo usermod -aG gpio s0meter
 
-sudo mkdir -p /opt/s0meter
+sudo mkdir -p /opt/s0meter/{bin,etc,data}
 sudo chown -R s0meter:s0meter /opt/s0meter
+```
 
+### 2. Copy binary and configuration
+```sh
+sudo cp s0meter /opt/s0meter/bin/
+sudo cp config.yaml /opt/s0meter/etc/
+sudo cp cert.pem key.pem /opt/s0meter/etc/
+sudo chown -R s0meter:s0meter /opt/s0meter
+```
+
+### 3. Create systemd service
+```sh
 SERVICE_PATH="/etc/systemd/system/s0meter.service"
 sudo tee "$SERVICE_PATH" > /dev/null <<'EOF'
 [Unit]
-Description=Read data from wallbox
+Description=s0meter - S0 Pulse Energy Monitor
 After=network.target
 
 [Service]
 User=s0meter
 Group=s0meter
 Type=simple
-ExecStart=/opt/womat/bin/s0meter
+ExecStart=/opt/s0meter/bin/s0meter --config /opt/s0meter/etc/config.yaml
+Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
@@ -55,19 +105,63 @@ sudo systemctl daemon-reload
 sudo systemctl enable s0meter.service
 sudo systemctl start s0meter
 sudo systemctl status s0meter
+```
 
-journalctl -u s0meter -n 50
+### 4. View logs
+```sh
+journalctl -u s0meter -n 50 -f
+```
 
-# ggfls bei ufw das port freischalten
-# 1. Prüfen, ob der Dienst läuft und auf welchem Port er hört
+---
+
+## Firewall (optional)
+
+If ufw is active, allow the configured port:
+```sh
+# Check which port s0meter is listening on
 sudo netstat -tulpn | grep s0meter
 
-# 2. Angenommen, der Dienst hört auf Port 4000, dann diesen Port in der Firewall freigeben
-sudo ufw allow 4000/tcp
-
-# 3. Überprüfen, ob die Regel hinzugefügt wurde
+# Allow the port (replace 8443 with your configured port)
+sudo ufw allow 8443/tcp
 sudo ufw status
-
-# zugriff auf die API testen
-curl http://wallbox:4000/currentdata|json_pp
 ```
+
+---
+
+## Backup & Restore
+
+### Backup
+```sh
+sudo tar czvf /tmp/s0meter-backup.tar.gz /opt/s0meter
+```
+
+### Restore
+```sh
+sudo tar xzvf /tmp/s0meter-backup.tar.gz -C /
+sudo chown -R s0meter:s0meter /opt/s0meter
+sudo systemctl restart s0meter
+```
+
+---
+
+## Command Line Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--config` | `/opt/s0meter/etc/config.yaml` | Path to the config file |
+| `--debug` | `false` | Enable debug logging to stdout (overrides config) |
+| `--version` | `false` | Print the app version and exit |
+| `--about` | `false` | Print app details and exit |
+| `--help` | `false` | Print a help message and exit |
+
+---
+
+## Configuration
+
+The configuration file is located at `/opt/s0meter/etc/config.yaml`. See the included `config.yaml` for all available options and documentation.
+
+---
+
+## License
+
+MIT

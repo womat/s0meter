@@ -9,8 +9,10 @@ SERVICE_PORT?=3000
 DOCKER_REGISTRY?= #if set it should finished by /
 EXPORT_RESULT?=false # for CI please set EXPORT_RESULT to true
 
-TARGET_NODE=breakout
-
+# Raspberry Pi Login / IP
+PI_USER := pv
+PI_HOST := pi400ssd
+PI_PATH := /home/pv/
 
 GREEN  := $(shell tput -Txterm setaf 2)
 YELLOW := $(shell tput -Txterm setaf 3)
@@ -57,7 +59,7 @@ clean: ## Remove build related file
 
 build_arm64_dev: ## build binary for raspberry models 3/4/5/Zero2 64bit with Swagger UI
 	GOOS=linux GOARCH=arm64 \
-	go build -tags swagger -ldflags "$(LDFLAGS)" -o ../bin/arm64/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
+	go build -tags swagger -ldflags "$(LDFLAGS)" -o ./bin/arm64/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
 
 build_arm6: ## build binary for all raspberry models 32bit except Pi5
 	GOOS=linux GOARCH=arm GOARM=6 \
@@ -69,7 +71,7 @@ build_arm7: ## build binary for raspberry models 2/3/4/5/Zero2 32bit
 
 build_arm64: ## build binary for raspberry models 3/4/5/Zero2 64bit
 	GOOS=linux GOARCH=arm64 \
-	go build -ldflags "$(LDFLAGS)" -o ../bin/arm64/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
+	go build -ldflags "$(LDFLAGS)" -o ./bin/arm64/${BINARY_NAME} ./cmd/${BINARY_NAME}/main.go
 
 build_windows386: ## build binary for windows
 	GOOS=windows GOARCH=386 \
@@ -92,15 +94,17 @@ build_mac_arm64: ## build binary mac M1
 	go build -ldflags "$(LDFLAGS)" -o ../bin/darwin/${BINARY_NAME} ../cmd/${BINARY_NAME}/main.go
 
 
-deploy: build_arm6 ## build binary and copy binary to ${TARGET_NODE}:/tmp
-	scp -q ../bin/arm6/${BINARY_NAME} ${TARGET_NODE}:/tmp
-	@echo
-	@echo 'logon to "${TARGET_NODE}":'
-	@echo '		ssh ${TARGET_NODE}'
-	@echo
-	@echo 'install "${BINARY_NAME}" on ${TARGET_NODE}'
-	@echo '		sudo systemctl stop ${BINARY_NAME};sudo cp /tmp/${BINARY_NAME} /opt/${BINARY_NAME}/bin/${BINARY_NAME};sudo /opt/${BINARY_NAME}/bin/${BINARY_NAME} --version;sudo systemctl start ${BINARY_NAME}'
-	@echo
+deploy: build_arm64 ## build binary and copy binary to ${TARGET_NODE}:/tmp
+	#scp -q ../bin/arm64/${BINARY_NAME} ${TARGET_NODE}:/tmp
+	#@echo
+	#@echo 'logon to "${TARGET_NODE}":'
+	#@echo '		ssh ${TARGET_NODE}'
+	#@echo
+	#@echo 'install "${BINARY_NAME}" on ${TARGET_NODE}'
+	#@echo '		sudo systemctl stop ${BINARY_NAME};sudo cp /tmp/${BINARY_NAME} /opt/${BINARY_NAME}/bin/${BINARY_NAME};sudo /opt/${BINARY_NAME}/bin/${BINARY_NAME} --version;sudo systemctl start ${BINARY_NAME}'
+	#@echo
+	@echo "Copying binary to  $(PI_USER)@$(PI_HOST):$(PI_PATH)"
+	scp ./bin/arm64/${BINARY_NAME} $(PI_USER)@$(PI_HOST):$(PI_PATH)
 
 
 ## Help:

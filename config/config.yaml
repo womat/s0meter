@@ -1,104 +1,111 @@
-# logLevel is the log level, if set only message with at least this level is logged
-# e.g.: debug -> means error, warning, info and debug messages are logged
-# Allowed values: debug | info | warning | error
+# =============================================================================
+# s0meter configuration
+# =============================================================================
+
+# logLevel defines the minimum log level.
+# Messages with at least this level are logged.
+# Allowed values: debug | info | warn | error
 logLevel: info
 
-# logDestination defines the log destinations.
-#  supported values: stdout | stderr | /path/to/logfile
+# logDestination defines where logs are written to.
+# Supported values: stdout | stderr | /path/to/logfile
 logDestination: stdout
 
-# webserver configuration
+# =============================================================================
+# Webserver configuration (HTTPS)
+# =============================================================================
 webserver:
-  # listenHost is the host address the https server listens for connections.
+  # Host address the HTTPS server listens on (0.0.0.0 = all interfaces)
   listenHost: 0.0.0.0
 
-  # listenPort is the port the https server listens for connections.
+  # Port the HTTPS server listens on
   listenPort: 443
 
-  # aiKey is the global api key for the application.
-  apiKey: 12345678
+  # Global API key for protected endpoints
+  apiKey: changeme!
 
-  # keyFile is the ssl certificate private key file
+  # TLS private key file
   keyFile: /opt/s0meter/etc/key.pem
 
-  # CertFile is the ssl certificate public key file
-  # Pfx files are supported as well, in which case KeyFile must be empty and CertFile must point to the pfx file, CertPassword must contain the password to decode the pfx file.
+  # TLS certificate file
   certFile: /opt/s0meter/etc/cert.pem
 
-  # BlockedIPs is a list of IP addresses or networks that are forbidden from accessing the application.
-  # Default is empty, which means no IP addresses or networks are blocked.
-  # Multiple IP addresses or networks can be defined separated by a comma
-  # e.g.: 192.168.0.1,192.168.0.0/16,10.0.0.0/8,192.168.254.15
+  # Blocked IP addresses or networks (empty = none blocked)
+  # Examples: 192.168.0.1, 192.168.0.0/16, 10.0.0.0/8
   blockedIPs: []
-  #    - 192.168.0.1
-  #    - 192.168.0.0/16
-  #    - 10.0.0.0/8
-  #    - 192.168.254.15
+  #  - 192.168.0.1
+  #  - 192.168.0.0/16
 
-  # AllowedIPs is a list of IP addresses that are allowed to access the application.
-  # Default is empty, which means all IP addresses are allowed.
-  # The value "ALL" allows access from all IP Addresses / IP Networks
-  # multiple IP addresses or networks can be defined separated by a comma
-  # e.g.: 127.0.0.1,::1,192.168.0.0/16,10.0.0.0/8
-  # Note: '::1' is the IPv6 loopback address.
+  # Allowed IP addresses or networks (empty = all allowed)
+  # Note: ::1 is the IPv6 loopback address
+  # Examples: 127.0.0.1, ::1, 192.168.0.0/16
   allowedIPs: []
-  #    - ALL
-  #    - 127.0.0.1
-  #    - ::1
-  #    - 192.168.0.0/16
-  #    - 10.0.0.0/8
+  #  - 127.0.0.1
+  #  - ::1
+  #  - 192.168.0.0/16
 
-# dataCollectionInterval defines the interval in seconds, in which the gauges are calculated
-dataCollectionInterval: 60
+# =============================================================================
+# Data collection
+# =============================================================================
 
-# dataFile defines the file in which the counters are saved
-dataFile: /opt/s0meter/data/measurement.yaml
+# File where counters are persisted
+dataFile: /opt/s0meter/data/s0meter.yaml
 
-# backupInterval defines the interval, in which counters are saved to datafile
+# Interval in seconds for saving counters to dataFile
 backupInterval: 60
 
+# =============================================================================
+# MQTT configuration (disabled when connection is empty)
+# =============================================================================
 mqtt:
-  # connection >> defines the connection string to the mqtt broker
-  # connection: "tcp://raspberrypi4.fritz.box:1883"
-  # retained defines the message retained flag
+  # Broker connection string (empty = MQTT disabled)
+  connection: "tcp://raspberrypi4.fritz.box:1883"
+
+  # Retain messages on the broker
   retained: false
 
-# meter configurations
-# key >> name of device
-#    gpio >> S0 input gpio pin
-#    bounceTime >> time to wait for a stable signal on gpio pin (ms) to get a "clean" level (suppress key bouncing)
-#    unitCounter >> unit of counter eg "kWh, m³, ..."
-#    counterConstant >> (Zählerkonstante) >> ticks/unitcounter: e.g. ticks/kWh
-#    unitGauge >> unit of gauge (unit/t) eg "kW, l/h, ..."
-#    scaleFactor >> scale factor of gauge, based on hour: eg 1000: m³/h >> l/h,  0.27777778 m3/h >> l/s
-#    precision >> rounding gauge to a specified number of decimals
-#    mqttTopic >> mqtt topic, if it isn't defined, values aren't send to the mqtt broker
+  # Publish interval in seconds
+  publishInterval: 10
+
+# =============================================================================
+# S0 Meter configurations
+# =============================================================================
+# gpio          - GPIO pin for S0 pulse input
+# bounceTime    - Debounce time in ms (suppress signal noise)
+# unitCounter   - Unit of the total counter (e.g. kWh, m³, l)
+# ticksPerUnit  - Pulses per unit, see meter datasheet (Zählerkonstante)
+# unitGauge     - Unit of the flow rate (e.g. kW, l/h, l/s)
+# scaleFactor   - Scale factor for gauge (e.g. 0.2777778 for m³/h → l/s)
+# precision     - Decimal places for rounding the gauge value
+# mqttTopic     - MQTT topic to publish to (empty = not published)
+# =============================================================================
 meter:
   wallbox:
     gpio: 17
     bounceTime: 1
     unitCounter: "kWh"
-    counterConstant: 1000
+    ticksPerUnit: 1000
     unitGauge: "kW"
     scaleFactor: 1
-    precision: 0
-  #  mqttTopic: test/wallbox/summary
-  rawwater:
+    precision: 2
+    mqttTopic: test/wallbox/summary
+
+  greywater:
     gpio: 27
     bounceTime: 1
     unitCounter: "l"
-    counterConstant: 1
+    ticksPerUnit: 1
     unitGauge: "l/h"
     scaleFactor: 1
     precision: 0
-  #  mqttTopic: test/rawwater/summary
-  portablewater:
+    mqttTopic: test/rawwater/summary
+
+  drinkingwater:
     gpio: 22
     bounceTime: 1
     unitCounter: "m³"
-    counterConstant: 1000
+    ticksPerUnit: 1000
     unitGauge: "l/s"
-    scaleFactor: 0.2777777778
-    precision: 0
-  #  mqttTopic: test/portablewater/summary
-
+    scaleFactor: 0.2777778
+    precision: 3
+    mqttTopic: test/portablewater/summary

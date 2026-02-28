@@ -18,7 +18,7 @@
 //	handler.AddMeter("power", meters.MeterConfig{
 //	    Gpio:            17,
 //	    BounceTime:      100,
-//	    CounterConstant: 1000,
+//	    TicksPerUnit:    1000,
 //	    UnitCounter:     "kWh",
 //	    ScaleFactor:     1.0,
 //	    Precision:       2,
@@ -43,9 +43,7 @@ import (
 
 // Config defines global settings for the meter manager.
 type Config struct {
-	DataFile               string // Path to YAML file for meter backup
-	BackupInterval         int    // Interval for saving data (seconds)
-	DataCollectionInterval int    // Interval for publishing gauge values (seconds)
+	DataFile string // Path to YAML file for meter backup
 }
 
 // Handler manages all registered meters, MQTT, and data persistence.
@@ -109,12 +107,8 @@ func (h *Handler) Close() error {
 
 // RegisterMeter adds a new S0 meter and initializes its pulse handler.
 func (h *Handler) RegisterMeter(ctx context.Context, name string, cfg MeterConfig) error {
-
-	slog.Info("Initializing meter", "name", name, "gpio", cfg.Gpio)
-
 	meter, err := pulsecounter.New(ctx, cfg.Gpio, time.Duration(cfg.BounceTime)*time.Millisecond)
 	if err != nil {
-		slog.Error("Failed to initialize meter", "name", name, "error", err)
 		return err
 	}
 
@@ -169,6 +163,26 @@ func (h *Handler) GetMeter(name string) (MeterData, error) {
 // This can be used for Kubernetes-style Readiness checks (/ready endpoint).
 func (h *Handler) IsReady() bool {
 	return true
+}
+
+// Validate checks the MeterConfig for invalid or missing values.
+func (c *MeterConfig) Validate() error {
+	if c.TicksPerUnit <= 0 {
+		return fmt.Errorf("ticksPerUnit must be greater than 0, got %v", c.TicksPerUnit)
+	}
+	if c.Gpio <= 0 {
+		return fmt.Errorf("gpio pin must be greater than 0, got %v", c.Gpio)
+	}
+	if c.BounceTime < 0 {
+		return fmt.Errorf("bounceTime must be >= 0, got %v", c.BounceTime)
+	}
+	if c.ScaleFactor == 0 {
+		return fmt.Errorf("scaleFactor must not be 0")
+	}
+	if c.Precision < 0 {
+		return fmt.Errorf("precision must be >= 0, got %d", c.Precision)
+	}
+	return nil
 }
 
 // calcGauge computes the flow rate based on the last two pulses.
