@@ -19,25 +19,19 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "APIKeyAuth\t\"API key must be provided in the header\"": []
+                        "APIKeyAuth \"API key must be provided in the header\"": []
                     }
                 ],
-                "description": "Retrieves the monitoring data for the WATCHIT application, including meter readings.",
+                "description": "Retrieves meter readings for the application.",
                 "tags": [
-                    "info"
+                    "monitoring"
                 ],
                 "summary": "Get monitoring data",
                 "responses": {
                     "200": {
                         "description": "Monitoring data successfully retrieved",
                         "schema": {
-                            "$ref": "#/definitions/s0meters.Data"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden: Insufficient permissions",
-                        "schema": {
-                            "$ref": "#/definitions/web.ApiError"
+                            "$ref": "#/definitions/s0meters.MeterData"
                         }
                     }
                 }
@@ -45,7 +39,7 @@ const docTemplate = `{
         },
         "/api/health": {
             "get": {
-                "description": "Retrieves the health data for the application, including memory usage, goroutine count, and version.",
+                "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, and OS.",
                 "tags": [
                     "info"
                 ],
@@ -56,48 +50,22 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/health.Model"
                         }
-                    },
-                    "403": {
-                        "description": "Forbidden: Insufficient permissions",
-                        "schema": {
-                            "$ref": "#/definitions/web.ApiError"
-                        }
                     }
                 }
             }
         },
-        "/api/monitoring": {
+        "/api/ready": {
             "get": {
-                "security": [
-                    {
-                        "APIKeyAuth \t\t\"API key must be provided in the header\"": []
-                    }
-                ],
-                "description": "This endpoint returns monitoring data for the WATCHIT system, including health, performance metrics, and system status.",
+                "description": "Checks if the application and its dependencies are ready to serve traffic.",
                 "tags": [
                     "info"
                 ],
-                "summary": "Get monitoring data for WATCHIT",
+                "summary": "Readiness check",
                 "responses": {
                     "200": {
-                        "description": "Monitoring data successfully retrieved",
+                        "description": "Application is ready",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/monitoring.Model"
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden: Insufficient permissions",
-                        "schema": {
-                            "$ref": "#/definitions/web.ApiError"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/web.ApiError"
+                            "$ref": "#/definitions/health.Model"
                         }
                     }
                 }
@@ -105,7 +73,7 @@ const docTemplate = `{
         },
         "/api/version": {
             "get": {
-                "description": "This endpoint returns the name and version of the application to help with debugging and monitoring.",
+                "description": "Returns the name and version of the application for debugging and monitoring.",
                 "tags": [
                     "info"
                 ],
@@ -114,7 +82,15 @@ const docTemplate = `{
                     "200": {
                         "description": "Application version and name successfully retrieved",
                         "schema": {
-                            "$ref": "#/definitions/app.HandleVersion.Response"
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string"
+                                },
+                                "version": {
+                                    "type": "string"
+                                }
+                            }
                         }
                     }
                 }
@@ -122,119 +98,68 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "app.HandleVersion.Response": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "version": {
-                    "type": "string"
-                }
-            }
-        },
         "health.Model": {
             "type": "object",
             "properties": {
-                "HeapAllocatedBytes": {
-                    "description": "HeapAllocatedBytes represents the amount of memory allocated by the heap in bytes.",
+                "appVersion": {
+                    "description": "Current version of the application",
+                    "type": "string"
+                },
+                "goVersion": {
+                    "description": "Go runtime version",
+                    "type": "string"
+                },
+                "heapAllocBytes": {
+                    "description": "Allocated heap memory in bytes",
                     "type": "integer"
                 },
-                "HeapAllocatedMB": {
-                    "description": "HeapAllocatedMB represents the amount of memory allocated by the heap in megabytes.",
+                "hostname": {
+                    "description": "Machine name where the app runs",
+                    "type": "string"
+                },
+                "numGoroutines": {
+                    "description": "Current number of active goroutines",
+                    "type": "integer"
+                },
+                "os": {
+                    "description": "Operating system name",
+                    "type": "string"
+                },
+                "sysMemoryBytes": {
+                    "description": "Total memory obtained from the OS",
+                    "type": "integer"
+                },
+                "timestamp": {
+                    "description": "UTC timestamp when health info was collected (RFC3339)",
+                    "type": "string"
+                },
+                "uptimeSeconds": {
+                    "description": "Application uptime in seconds",
                     "type": "number"
-                },
-                "HostName": {
-                    "description": "HostName is the name of the host machine running the application.",
-                    "type": "string"
-                },
-                "NumGoroutines": {
-                    "description": "NumGoroutines is the number of currently running goroutines in the application.",
-                    "type": "integer"
-                },
-                "OperatingSystem": {
-                    "description": "OperatingSystem is the name of the operating system on which the application is running.",
-                    "type": "string"
-                },
-                "ProgLang": {
-                    "description": "ProgLang represents the version of the Go programming language used.",
-                    "type": "string"
-                },
-                "SysMemoryBytes": {
-                    "description": "SysMemoryBytes represents the total system memory in bytes.",
-                    "type": "integer"
-                },
-                "SysMemoryMB": {
-                    "description": "SysMemoryMB represents the total system memory in megabytes.",
-                    "type": "number"
-                },
-                "Time": {
-                    "description": "Time is the timestamp when the health data was collected, in RFC3339 format.",
-                    "type": "string"
-                },
-                "Version": {
-                    "description": "Version indicates the application version.",
-                    "type": "string"
                 }
             }
         },
-        "monitoring.Model": {
+        "s0meters.MeterData": {
             "type": "object",
             "properties": {
-                "Description": {
-                    "description": "Description provides a human-readable description of the service's status.",
-                    "type": "string"
-                },
-                "Host": {
-                    "description": "Host is the host on which the service is running.",
-                    "type": "string"
-                },
-                "Metric": {
-                    "description": "Metric indicates the type of metric being reported (e.g., \"gauge\" or \"counter\").\nIf empty, no statistic will be written in Odin.",
-                    "type": "string"
-                },
-                "Service": {
-                    "description": "Service is the name of the service being monitored.",
-                    "type": "string"
-                },
-                "State": {
-                    "description": "State represents the current state of the service (e.g., \"OK\", \"Error\").\nIf the state is empty, it will be determined based on WATCHIT thresholds.",
-                    "type": "string"
-                },
-                "Value": {
-                    "description": "Value holds the actual metric data. The type is ` + "`" + `any` + "`" + ` to accommodate various types of values.\nIf empty, no statistic will be written in Odin."
-                }
-            }
-        },
-        "s0meters.Data": {
-            "type": "object",
-            "properties": {
-                "Counter": {
-                    "description": "current counter (aktueller Zählerstand), eg kWh, l, m³",
+                "counter": {
+                    "description": "Total meter value",
                     "type": "number"
                 },
-                "Gauge": {
-                    "description": "mass flow rate per time unit  (= counter/time(h)), e.g. kW, l/h, m³/h",
+                "gauge": {
+                    "description": "Flow rate",
                     "type": "number"
                 },
-                "TimeStamp": {
-                    "description": "timestamp of last gauge calculation",
+                "timeStamp": {
+                    "description": "Timestamp of reading",
                     "type": "string"
                 },
-                "UnitCounter": {
-                    "description": "unit of current meter counter e.g., kWh, l, m³",
+                "unitCounter": {
+                    "description": "Counter unit",
                     "type": "string"
                 },
-                "UnitGauge": {
-                    "description": "unit of gauge, eg Wh, l/s, m³/h",
-                    "type": "string"
-                }
-            }
-        },
-        "web.ApiError": {
-            "type": "object",
-            "properties": {
-                "error": {
+                "unitGauge": {
+                    "description": "Gauge unit",
                     "type": "string"
                 }
             }

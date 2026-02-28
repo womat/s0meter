@@ -1,3 +1,8 @@
+// Package health provides basic system and application health information.
+//
+// It collects metrics such as memory usage, goroutine count, uptime, host info,
+// Go runtime version, and application version. The module is intended to be
+// lightweight and easily serializable to JSON for monitoring or diagnostic purposes.
 package health
 
 import (
@@ -6,64 +11,40 @@ import (
 	"time"
 )
 
-// Model holds the system and application health data.
+// Model holds the main system and runtime health information.
 type Model struct {
-	// NumGoroutines is the number of currently running goroutines in the application.
-	NumGoroutines int `json:"NumGoroutines"`
-
-	// HeapAllocatedBytes represents the amount of memory allocated by the heap in bytes.
-	HeapAllocatedBytes uint64 `json:"HeapAllocatedBytes"`
-
-	// HeapAllocatedMB represents the amount of memory allocated by the heap in megabytes.
-	HeapAllocatedMB float64 `json:"HeapAllocatedMB"`
-
-	// SysMemoryBytes represents the total system memory in bytes.
-	SysMemoryBytes uint64 `json:"SysMemoryBytes"`
-
-	// SysMemoryMB represents the total system memory in megabytes.
-	SysMemoryMB float64 `json:"SysMemoryMB"`
-
-	// Version indicates the application version.
-	Version string `json:"Version"`
-
-	// ProgLang represents the version of the Go programming language used.
-	ProgLang string `json:"ProgLang"`
-
-	// HostName is the name of the host machine running the application.
-	HostName string `json:"HostName"`
-
-	// Time is the timestamp when the health data was collected, in RFC3339 format.
-	Time string `json:"Time"`
-
-	// OperatingSystem is the name of the operating system on which the application is running.
-	OperatingSystem string `json:"OperatingSystem"`
+	AppVersion     string  `json:"appVersion"`     // Current version of the application
+	GoVersion      string  `json:"goVersion"`      // Go runtime version
+	Hostname       string  `json:"hostname"`       // Machine name where the app runs
+	OS             string  `json:"os"`             // Operating system name
+	UptimeSeconds  float64 `json:"uptimeSeconds"`  // Application uptime in seconds
+	NumGoroutines  int     `json:"numGoroutines"`  // Current number of active goroutines
+	HeapAllocBytes uint64  `json:"heapAllocBytes"` // Allocated heap memory in bytes
+	SysMemoryBytes uint64  `json:"sysMemoryBytes"` // Total memory obtained from the OS
+	Timestamp      string  `json:"timestamp"`      // UTC timestamp when health info was collected (RFC3339)
 }
 
-// Health returns the current health data of the application and system.
-func Health(version string) Model {
-	bToMb := func(b uint64) float64 {
-		return float64(b) / (1024 * 1024)
-	}
+var startTime = time.Now() // Tracks application start time
+
+// GetCurrentHealth returns the current system and application health data.
+func GetCurrentHealth(version string) Model {
 	host, err := os.Hostname()
 	if err != nil {
 		host = "unknown"
 	}
 
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
 
-	model := Model{
-		NumGoroutines:      runtime.NumGoroutine(),
-		HeapAllocatedBytes: m.Alloc,
-		HeapAllocatedMB:    bToMb(m.Alloc),
-		SysMemoryBytes:     m.Sys,
-		SysMemoryMB:        bToMb(m.Sys),
-		ProgLang:           runtime.Version(),
-		Version:            version,
-		HostName:           host,
-		Time:               time.Now().Format(time.RFC3339),
-		OperatingSystem:    runtime.GOOS,
+	return Model{
+		AppVersion:     version,
+		GoVersion:      runtime.Version(),
+		Hostname:       host,
+		OS:             runtime.GOOS,
+		UptimeSeconds:  time.Since(startTime).Seconds(),
+		NumGoroutines:  runtime.NumGoroutine(),
+		HeapAllocBytes: mem.Alloc,
+		SysMemoryBytes: mem.Sys,
+		Timestamp:      time.Now().UTC().Format(time.RFC3339),
 	}
-
-	return model
 }

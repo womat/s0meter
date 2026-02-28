@@ -1,6 +1,6 @@
-# 🚀 S0Counter - Smart Meter Data Collector
+# 🚀 S0meter - Smart Meter Data Collector
 
-S0Counter is designed for **accurate energy monitoring** from one or more **independent electricity, water, and gas
+S0meter is designed for **accurate energy monitoring** from one or more **independent electricity, water, and gas
 meters**. It supports all **S0 pulse energy meters** compliant with **DIN 43864**, ensuring reliable data acquisition.
 
 The application runs efficiently on **Raspberry Pi hardware**, with successful testing on **Raspberry Pi Zero**.
@@ -12,7 +12,7 @@ If no configuration file is found, **default values** will be applied to ensure 
 ## 📌 Usage
 
 ```sh
-s0counter [-logLevel debug|info|warning|error] [-LogDestination stdout|stderr|null|/path/to/logfile] [-version] [-about] [-help]
+s0meter [-logLevel debug|info|warning|error] [-LogDestination stdout|stderr|null|/path/to/logfile] [-version] [-about] [-help]
 
 ```
 
@@ -21,7 +21,7 @@ s0counter [-logLevel debug|info|warning|error] [-LogDestination stdout|stderr|nu
 | **Flag**                   | **Description**                                                |
 |----------------------------|----------------------------------------------------------------|
 | `-version`                 | Prints the application version and exit                        |
-| `-about`                   | Prints details about `s0counter` and exit                      |
+| `-about`                   | Prints details about `s0meter` and exit                        |
 | `-help`                    | Prints this help message and exit                              |
 | `-logLevel <level>`        | Set the log level: debug, info, warning ,error                 |
 | `-logDestination <dest>`   | Set the log destination: stdout, stderr,null, /path/to/logfile |
@@ -34,19 +34,19 @@ s0counter [-logLevel debug|info|warning|error] [-LogDestination stdout|stderr|nu
 ### Print Version:
 
 ```sh
-s0counter -version
+s0meter -version
 ```
 
 ### Show About Information:
 
 ```sh
-s0counter -about
+s0meter -about
 ```
 
 ### Enable Debug Logging (Source Code Location in Logs):
 
 ```sh
-s0counter -logLevel debug -logDestination stdout
+s0meter -logLevel debug -logDestination stdout
 ```
 
 ### Get monitoring data from a smart meter:
@@ -90,13 +90,13 @@ Want to contribute? Feel free to submit **pull requests** or report issues in th
 
 ## 📜 License
 
-`s0counter` is licensed under the **MIT License**.
+`s0meter` is licensed under the **MIT License**.
 
 ---
 
 ## **🌐 IP Address / IP Network Filter**
 
-s0Counter allows **IP-based access control** via the configuration file.
+s0meter allows **IP-based access control** via the configuration file.
 
 - **`blockedIPs`**: Defines **blocked** IP addresses/networks.
 - **`allowedIPs`**: Defines **allowlisted** IP addresses/networks.  

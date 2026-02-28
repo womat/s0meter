@@ -1,20 +1,35 @@
+// Package main provides the entry point for the s0meter application.
+//
+// This program initializes logging, loads configuration, handles command-line flags,
+// and starts the main application loop. It supports hot reloads of the config
+// and provides about/version/help output.
 package main
 
 import (
 	_ "embed"
 	"flag"
 	"fmt"
-	"github.com/womat/golib/xlog"
-	"gopkg.in/yaml.v3"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
 	"s0counter/app"
+	"time"
+
+	"github.com/womat/golib/xlog"
+	"gopkg.in/yaml.v3"
 )
 
+// Readme embeds the README.md file for the --help flag
+//
 //go:embed README.md
 var Readme string
+
+// buildDate and buildCommit are injected at build time via -ldflags
+var (
+	buildDate   = "dev"
+	buildCommit = "none"
+)
 
 func main() {
 	// Parse command line flags.
@@ -24,13 +39,16 @@ func main() {
 	about := flags.Bool("about", false, "Print app details and exit")
 	help := flags.Bool("help", false, "Print a help message and exit")
 	version := flags.Bool("version", false, "Print the app version and exit")
+	debug := flags.Bool("debug", false, "Enable debug logging to stdout (overrides log settings from the config file)")
+	configFile := flags.String("config", filepath.Join("/opt", app.MODULE, "etc", "config.yaml"), "Specify the path to the config file")
 
-	logLevel := flags.String("logLevel", "", "Set the log level (overrides the config file). Supported values: debug | info | warning | error")
-	logDestination := flags.String("logDestination", "", "Set the log destination (overrides the config file). Supported values: stdout | stderr | null | /path/to/logfile")
-	configFile := flags.String("config", filepath.Join("/opt", app.MODULE, "etc/config.yaml"), "Specify the path to the config file")
+	if envCfg := os.Getenv("CONFIG_FILE"); envCfg != "" {
+		*configFile = envCfg
+	}
 
 	if err := flags.Parse(os.Args[1:]); err != nil {
-		fmt.Printf("error: %s\n", err.Error())
+		fmt.Println("Error parsing flags:", err)
+		flags.Usage()
 		os.Exit(1)
 	}
 
@@ -46,89 +64,98 @@ func main() {
 		os.Exit(0)
 	}
 
-	var logger *xlog.LoggerWrapper
+	// Run main application loop
+	os.Exit(run(*configFile, *debug))
+}
 
-	config, err := loadConfig(*configFile, *logLevel, *logDestination)
-	if err != nil {
-		fmt.Printf("Failed to load config file %s: %s\n", *configFile, err.Error())
-		os.Exit(1)
-	}
+// run initializes configuration, logging, and the application loop.
+// It supports hot-reloading of the configuration and handles graceful shutdown.
+func run(configFile string, debug bool) int {
+
+	var logger *xlog.LoggerWrapper
+	defer func() {
+		if logger != nil {
+			logger.Close()
+		}
+	}()
 
 	for {
-		// run the app in a function to be able to restart it and reload the config
-		// possible open log files are always closed before the function exits
-		func() {
-			if logger, err = xlog.Init(config.LogDestination, config.LogLevel); err != nil {
-				fmt.Printf("Failed to initialize logger: %s\n", err.Error())
-				os.Exit(1)
-			}
-			defer logger.Close()
 
-			// set slog logger as default logger
-			slog.SetDefault(logger.Logger)
-			slog.Info("Logging initialized", "logLevel", config.LogLevel)
-			slog.Debug("Starting with configuration", "config", config)
+		// Reload configuration on every restart
+		config, err := loadConfig(configFile, debug)
+		if err != nil {
+			fmt.Printf("Failed to load config file %s: %s\n", configFile, err.Error())
+			return 1
+		}
 
-			a, err := app.New(config, filepath.Join("/opt", app.MODULE)).Run()
-			if err != nil {
-				slog.Error("Critical error occurred, shutting down", "error", err)
-				os.Exit(1)
-			}
+		// Close previous logger if exists
+		if logger != nil {
+			logger.Close()
+		}
 
-			select {
-			case <-a.Restart():
-				slog.Info("Reloading configuration", "configFile", *configFile)
-				if config, err = loadConfig(*configFile, *logLevel, *logDestination); err != nil {
-					slog.Error("Failed to reload config file, shutting down",
-						"configFile", *configFile,
-						"error", err)
-					os.Exit(1)
-				}
+		// Initialize logger
+		if logger, err = xlog.Init(config.LogDestination, config.LogLevel); err != nil {
+			fmt.Printf("Failed to initialize logger: %s\n", err.Error())
+			return 1
+		}
 
-			case <-a.Shutdown():
-				os.Exit(0)
-			}
-		}()
+		slog.SetDefault(logger.Logger)
+		slog.Info("Logging initialized/reloaded", "logLevel", config.LogLevel)
+		slog.Debug("Starting with configuration", "config", config)
+
+		// Create and run the application
+		a, err := app.New(config, filepath.Join("/opt", app.MODULE)).Run()
+		if err != nil {
+			slog.Error("Critical error occurred, shutting down", "error", err)
+			return 1
+		}
+
+		// Wait for restart or shutdown signals
+		select {
+		case <-a.Restart():
+			slog.Info("Reloading configuration", "configFile", configFile)
+			time.Sleep(time.Second) // prevent tight restart loops
+		case <-a.Shutdown():
+			slog.Info("Shutdown requested")
+			return 0
+		}
 	}
 }
 
 func About() string {
-	p := map[string]string{
+	info := map[string]string{
 		"Author":   "Wolfgang Mathe",
-		"Binary":   "/opt/s0counter/bin/s0counter",
-		"Comment":  "config .env file see /opt/s0counter/.env  and config file /opt/s0counter/etc/config.yaml",
-		"Date":     "2024-10-04",
-		"Desc":     "s0counter reads impulses from an S0 interface compliant with DIN 43864 standards",
-		"Help":     "/opt/s0counter/bin/s0counter -help",
-		"Libinfo":  "plain go with go modules from ITdesign golib",
-		"Main":     "/opt/src/s0counter/cmd/app/main.go",
+		"Binary":   filepath.Join("/opt", app.MODULE, "bin", app.MODULE),
+		"Date":     buildDate,
+		"Commit":   buildCommit,
+		"Desc":     app.MODULE + " reads impulses from an S0 interface compliant with DIN 43864 standards",
+		"Help":     filepath.Join("/opt", app.MODULE, "bin", app.MODULE) + " --help",
+		"Main":     filepath.Join("/opt/src", app.MODULE, "cmd", app.MODULE, "main.go"),
 		"ProgLang": runtime.Version(),
-		"Repo":     " https://github.com/womat/s0counter.git",
+		"Repo":     "https://github.com/womat/" + app.MODULE + ".git",
 		"Version":  app.VERSION,
 	}
-	b, _ := yaml.Marshal(p)
+
+	b, err := yaml.Marshal(info)
+	if err != nil {
+		return fmt.Sprintf("Failed to marshal About info: %v", err)
+	}
 	return string(b)
 }
 
-// loadConfig loads the configuration from the given file.
-func loadConfig(configFile, logLevel, logDestination string) (*app.Config, error) {
+// loadConfig loads the configuration from a YAML file and applies overrides.
+//
+// If debug mode is enabled, log level is forced to "debug" and logs are written to stdout.
+func loadConfig(configFile string, debug bool) (*app.Config, error) {
 
 	config, err := app.NewConfig().LoadConfig(configFile)
 	if err != nil {
 		return nil, err
 	}
 
-	switch logLevel {
-	case "": // if no log level is provided, use the one from the config
-	case "debug", "info", "warning", "error":
-		config.LogLevel = logLevel
-	default:
-		return nil, fmt.Errorf("invalid log level: %s", logLevel)
-	}
-
-	// Set log destination if provided
-	if logDestination != "" {
-		config.LogDestination = logDestination
+	if debug {
+		config.LogLevel = "debug"
+		config.LogDestination = "stdout"
 	}
 
 	return config, nil

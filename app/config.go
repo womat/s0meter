@@ -2,10 +2,11 @@ package app
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
 	"s0counter/app/service/s0meters"
+
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -13,112 +14,89 @@ const (
 	DevEnv  = "dev"
 )
 
-// Config holds the application configuration
+// Config holds the main application configuration.
 type Config struct {
-	// Env is the app environment.
-	// Env is read from APP_ENV environment variable.
-	//  Allowed values: prod | dev
-	//  It's used for:
-	//  - jwt token expiration (1 day in dev, 5 minutes in prod)
-	Env string
-
-	// LogLevel is the log level, if set only message with at least this level is logged
-	//  e.g.: debug -> means error, warning, info and debug messages are logged
-	// Allowed values: debug | info | warning | error
-	LogLevel string `yaml:"logLevel"`
-
-	// LogDestination defines the log destinations.
-	//  supported values: stdout | stderr | /path/to/logfile
-	LogDestination string `yaml:"logDestination"`
-
-	// HttpsServer is the configuration of the webserver and webservice
-	HttpsServer WebserverConfig `yaml:"webserver"`
-	MQTT        MQTTConfig      `yaml:"mqtt"`
-
-	DataCollectionInterval int                             `yaml:"dataCollectionInterval"`
-	DataFile               string                          `yaml:"dataFile"`
-	BackupInterval         int                             `yaml:"backupInterval"`
-	Meter                  map[string]s0meters.MeterConfig `yaml:"meter"`
+	Env                    string                          `yaml:"env"`                    // Application environment: dev | prod
+	LogLevel               string                          `yaml:"logLevel"`               // Log level: debug | info | warning | error
+	LogDestination         string                          `yaml:"logDestination"`         // Log output: stdout | stderr | /path/to/logfile
+	HttpsServer            WebserverConfig                 `yaml:"webserver"`              // Webserver configuration
+	MQTT                   MQTTConfig                      `yaml:"mqtt"`                   // MQTT client configuration
+	DataCollectionInterval int                             `yaml:"dataCollectionInterval"` // Meter data collection interval in seconds
+	DataFile               string                          `yaml:"dataFile"`               // Path to meter data YAML file
+	BackupInterval         int                             `yaml:"backupInterval"`         // Backup interval in seconds
+	Meter                  map[string]s0meters.MeterConfig `yaml:"meter"`                  // Map of S0 meter configurations
 }
 
-// WebserverConfig defines the struct of the webserver and webservice configuration and configuration file
+// WebserverConfig holds HTTPS server settings.
 type WebserverConfig struct {
-	// ListenHost is the host address the https server listens for connections.
-	ListenHost string `yaml:"listenHost"`
-
-	// ListenPort is the port the https server listens for connections.
-	ListenPort string `yaml:"listenPort"`
-
-	// ApiKey is the global api key for the application.
-	ApiKey string `yaml:"apiKey"`
-
-	// JwtSecret is a secret key used to sign jwt tokens.
-	JwtSecret string `yaml:"jwtSecret"`
-
-	// JwtID is a unique identifier for the jwt token used to prevent login with the same jwt token to another app.
-	JwtID string `yaml:"jwtID"`
-
-	// KeyFile is the ssl certificate private key file
-	KeyFile string `yaml:"keyFile"`
-
-	// CertFile is the ssl certificate public key file
-	// Pfx files are supported as well, in which case KeyFile must be empty and CertFile must point to the pfx file, CertPassword must contain the password to decode the pfx file.
-	CertFile string `yaml:"certFile"`
-
-	// BlockedIPs is a list of IP addresses or networks that are forbidden from accessing the application.
-	// Default is empty, which means no IP addresses or networks are blocked.
-	// Multiple IP addresses or networks can be defined separated by a comma
-	// e.g.: 192.168.0.1,192.168.0.0/16,10.0.0.0/8,192.168.254.15
-	BlockedIPs []string `yaml:"blockedIPs"`
-
-	// AllowedIPs is a list of IP addresses that are allowed to access the application.
-	// Default is empty, which means all IP addresses are allowed.
-	// The value "ALL" allows access from all IP Addresses / IP Networks
-	// multiple IP addresses or networks can be defined separated by a comma
-	// e.g.: 127.0.0.1,::1,192.168.0.0/16,10.0.0.0/8
-	// Note: '::1' is the IPv6 loopback address.
-	AllowedIPs []string `yaml:"allowedIPs"`
+	ListenHost string   `yaml:"listenHost"` // Host address for web server
+	ListenPort string   `yaml:"listenPort"` // Port for web server
+	ApiKey     string   `yaml:"apiKey"`     // API key for requests
+	JwtSecret  string   `yaml:"jwtSecret"`  // Secret for JWT tokens
+	JwtID      string   `yaml:"jwtID"`      // Unique JWT ID
+	KeyFile    string   `yaml:"keyFile"`    // SSL private key file
+	CertFile   string   `yaml:"certFile"`   // SSL certificate file
+	BlockedIPs []string `yaml:"blockedIPs"` // Forbidden IP addresses or networks
+	AllowedIPs []string `yaml:"allowedIPs"` // Allowed IP addresses or networks
 }
 
-// MQTTConfig defines the struct of the mqtt client configuration and configuration file
+// MQTTConfig holds MQTT client settings.
 type MQTTConfig struct {
-	Enabled    bool   `yaml:"-"`
-	Connection string `yaml:"connection"`
-	Retained   bool   `yaml:"retained"`
+	Enabled    bool   `yaml:"enabled"`    // Enable or disable MQTT
+	Connection string `yaml:"connection"` // Broker connection string
+	Retained   bool   `yaml:"retained"`   // Whether messages are retained
 }
 
-// NewConfig initializes and returns a new Config.
+// NewConfig returns a Config with sane defaults
 func NewConfig() *Config {
 	return &Config{
-		Meter: make(map[string]s0meters.MeterConfig),
+		Env:                    DevEnv,
+		LogLevel:               "info",
+		LogDestination:         "stdout",
+		DataCollectionInterval: 10,
+		BackupInterval:         60,
+		Meter:                  make(map[string]s0meters.MeterConfig),
 		HttpsServer: WebserverConfig{
+			ListenHost: "0.0.0.0",
+			ListenPort: "8443",
 			BlockedIPs: []string{},
 			AllowedIPs: []string{},
+		},
+		MQTT: MQTTConfig{
+			Enabled: false,
 		},
 	}
 }
 
-// LoadConfig loads a configuration file into the Config struct.
-// It reads the file, expands environment variables, and unmarshals the YAML content into the struct.
+// LoadConfig loads configuration from a YAML file and expands environment variables.
 func (c *Config) LoadConfig(fileName string) (*Config, error) {
-
 	fileName = filepath.ToSlash(fileName)
 
-	if fileInfo, err := os.Stat(fileName); err != nil || fileInfo.IsDir() {
-		return nil, fmt.Errorf("invalid or missing file %s", fileName)
+	fileInfo, err := os.Stat(fileName)
+	if err != nil {
+		return c, fmt.Errorf("failed to read config file %s: %w", fileName, err)
+	}
+	if fileInfo.IsDir() {
+		return c, fmt.Errorf("config path %s is a directory, not a file", fileName)
 	}
 
 	content, err := os.ReadFile(fileName)
 	if err != nil {
-		return c, err
+		return c, fmt.Errorf("failed to read config file %s: %w", fileName, err)
 	}
 
+	// Replace environment variables in the YAML
 	replaced := os.ExpandEnv(string(content))
-	err = yaml.Unmarshal([]byte(replaced), c)
-	return c, err
+
+	// Unmarshal YAML into the config struct
+	if err = yaml.Unmarshal([]byte(replaced), c); err != nil {
+		return c, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	return c, nil
 }
 
-// IsDevEnv returns true if "dev" is configured as app environment.
+// IsDevEnv returns true if the environment is development.
 func (c *Config) IsDevEnv() bool {
 	return c.Env == DevEnv
 }

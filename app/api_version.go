@@ -1,22 +1,24 @@
 package app
 
 import (
-	"github.com/womat/golib/web"
 	"log/slog"
 	"net/http"
+
+	"github.com/womat/golib/web"
 )
 
-// HandleVersion returns the version and name of the application.
+// HandleVersion returns the application name and version.
 //
 //	@Summary		Get application version and name
-//	@Description	This endpoint returns the name and version of the application to help with debugging and monitoring.
+//	@Description	Returns the name and version of the application for debugging and monitoring.
 //	@Tags			info
-//	@Success		200	{object}	app.HandleVersion.Response	"Application version and name successfully retrieved"
+//	@Success		200	{object}	object{name=string,version=string}	"Application version and name successfully retrieved"
 //	@Router			/api/version [get]
 func (app *App) HandleVersion() http.Handler {
-	type Response struct {
-		Name    string `json:"name"`
-		Version string `json:"version"`
+	// Response defines the JSON structure returned by /api/version
+	type HandleVersionResponse struct {
+		Name    string `json:"name"`    // Application name (MODULE)
+		Version string `json:"version"` // Application version (VERSION)
 	}
 
 	return http.HandlerFunc(
@@ -25,6 +27,6 @@ func (app *App) HandleVersion() http.Handler {
 				"method", r.Method,
 				"path", r.URL.Path,
 				"client_ip", r.RemoteAddr)
-			web.Encode(w, http.StatusOK, Response{Version: VERSION, Name: MODULE})
+			web.Encode(w, http.StatusOK, HandleVersionResponse{Version: VERSION, Name: MODULE})
 		})
 }

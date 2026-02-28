@@ -52,7 +52,7 @@ webserver:
 dataCollectionInterval: 60
 
 # dataFile defines the file in which the counters are saved
-dataFile: /opt/s0counter/data/measurement.yaml
+dataFile: /opt/s0meter/data/measurement.yaml
 
 # backupInterval defines the interval, in which counters are saved to datafile
 backupInterval: 60
