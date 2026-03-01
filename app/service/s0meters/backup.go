@@ -16,7 +16,7 @@ import (
 //
 // This function saves the current counter values to the configured DataFile
 // every BackupInterval seconds. Errors are logged but do not stop execution.
-func (h *Handler) StartPeriodicBackup(ctx context.Context, interval time.Duration) {
+func (h *Handler) StartPeriodicBackup(ctx context.Context, interval time.Duration, filename string) {
 	ticker := time.NewTicker(interval)
 
 	go func() {
@@ -28,8 +28,8 @@ func (h *Handler) StartPeriodicBackup(ctx context.Context, interval time.Duratio
 				slog.Info("Stopping periodic meter backup")
 				return
 			case <-ticker.C:
-				slog.Debug("Starting meter data backup", "file", h.config.DataFile)
-				if err := h.saveMeterData(); err != nil {
+				slog.Debug("Starting meter data backup", "file", filename)
+				if err := h.SaveMeterData(filename); err != nil {
 					slog.Error("Failed to backup meter data", "error", err)
 				}
 			}
@@ -48,11 +48,11 @@ func (h *Handler) StartPeriodicBackup(ctx context.Context, interval time.Duratio
 // Returns:
 // - nil on success
 // - an error if reading or unmarshalling the YAML fails
-func (h *Handler) LoadMeterData() error {
-	data, err := os.ReadFile(h.config.DataFile)
+func (h *Handler) LoadMeterData(file string) error {
+	data, err := os.ReadFile(file)
 	if os.IsNotExist(err) {
-		slog.Info("Meter data file not found, creating default", "file", h.config.DataFile)
-		return h.saveMeterData()
+		slog.Info("Meter data file not found, creating default", "file", file)
+		return h.SaveMeterData(file)
 	}
 	if err != nil {
 		return err
@@ -76,7 +76,7 @@ func (h *Handler) LoadMeterData() error {
 	return nil
 }
 
-// saveMeterData writes the current counter values of all meters to the configured YAML file.
+// SaveMeterData writes the current counter values of all meters to the configured YAML file.
 //
 // The function is thread-safe and uses RLock for reading meter data.
 // It marshals the meter counters into YAML and writes the file with 0600 permissions.
@@ -84,7 +84,7 @@ func (h *Handler) LoadMeterData() error {
 // Returns:
 // - nil on success
 // - an error if marshalling or file writing fails
-func (h *Handler) saveMeterData() error {
+func (h *Handler) SaveMeterData(file string) error {
 	h.RLock()
 	data := make(map[string]pulsecounter.Counter, len(h.meters))
 	for name, m := range h.meters {
@@ -99,7 +99,7 @@ func (h *Handler) saveMeterData() error {
 		return err
 	}
 
-	dir := filepath.Dir(h.config.DataFile)
+	dir := filepath.Dir(file)
 	if _, err = os.Stat(dir); os.IsNotExist(err) {
 		slog.Info("Creating meter data dir", "dir", dir)
 		if err = os.MkdirAll(dir, 0755); err != nil {
@@ -107,8 +107,8 @@ func (h *Handler) saveMeterData() error {
 		}
 	}
 
-	if err = os.WriteFile(h.config.DataFile, yamlData, 0o600); err != nil {
-		slog.Error("Failed to write meter data to file", "file", h.config.DataFile, "error", err)
+	if err = os.WriteFile(file, yamlData, 0o600); err != nil {
+		slog.Error("Failed to write meter data to file", "file", file, "error", err)
 		return err
 	}
 

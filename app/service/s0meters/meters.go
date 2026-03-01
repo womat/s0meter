@@ -41,15 +41,10 @@ import (
 	"time"
 )
 
-// Config defines global settings for the meter manager.
-type Config struct {
-	DataFile string // Path to YAML file for meter backup
-}
-
 // Handler manages all registered meters, MQTT, and data persistence.
 type Handler struct {
 	sync.RWMutex
-	config Config
+	logger *slog.Logger
 	meters map[string]*MeterInstance
 }
 
@@ -82,27 +77,22 @@ type MeterData struct {
 }
 
 // New initializes the meter manager with the provided configuration.
-func New(config Config) *Handler {
+func New() *Handler {
 	return &Handler{
-		config: config,
 		meters: make(map[string]*MeterInstance),
 	}
 }
 
-// Close shuts down all meters, disconnects MQTT, and persists data.
+// Close shuts down all meters, disconnects MQTT.
 func (h *Handler) Close() error {
 	h.RLock()
 	defer h.RUnlock()
 
-	var err error
+	var errs error
 	for _, m := range h.meters {
-		slog.Debug("Closing meter", "name", m.Config.Gpio)
-		err = errors.Join(err, m.Meter.Close())
+		errs = errors.Join(errs, m.Meter.Close())
 	}
-
-	slog.Debug("Saving meter data")
-	err = errors.Join(err, h.saveMeterData())
-	return err
+	return errs
 }
 
 // RegisterMeter adds a new S0 meter and initializes its pulse handler.

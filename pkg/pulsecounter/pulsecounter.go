@@ -25,7 +25,6 @@ import (
 
 	"github.com/womat/golib/gpio"
 	"github.com/womat/golib/gpio/rpi"
-	_ "github.com/womat/golib/gpio/rpi"
 )
 
 // Counter stores S0 pulse data.

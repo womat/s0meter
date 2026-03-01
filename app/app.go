@@ -13,15 +13,17 @@ package app
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"s0meter/app/service/s0meters"
-	"s0meter/pkg/mqtt"
 	"syscall"
 	"time"
+
+	"github.com/womat/golib/mqtt"
 )
 
 // VERSION holds the version information with the following logic in mind
@@ -67,9 +69,7 @@ func New(config *Config, baseDir string) *App {
 			Addr: net.JoinHostPort(config.HttpsServer.ListenHost, config.HttpsServer.ListenPort),
 		},
 
-		meters: s0meters.New(s0meters.Config{
-			DataFile: config.DataFile,
-		}),
+		meters: s0meters.New(),
 
 		restart:    make(chan struct{}),
 		shutdown:   make(chan struct{}),
@@ -87,27 +87,33 @@ func (app *App) Run() (*App, error) {
 		return app, err
 	}
 
-	if app.config.MQTT.Connection != "" {
-		slog.Info("Connecting to MQTT broker", "broker", app.config.MQTT.Connection)
+	if broker := app.config.MQTT.Connection; broker != "" {
+		slog.Info("Connecting to MQTT broker", "broker", broker)
 		hostname, _ := os.Hostname()
 		clientID := MODULE + hostname
 
-		mqttHandler, err := mqtt.New(app.config.MQTT.Connection, clientID)
+		mqttHandler, err := mqtt.New(broker, clientID,
+			mqtt.WithOnConnected(func() {
+				slog.Info("MQTT connected", "broker", broker)
+			}),
+			mqtt.WithOnConnectionLost(func(err error) {
+				slog.Warn("MQTT connection lost", "error", err)
+			}))
 		if err != nil {
-			slog.Error("Failed to connect to MQTT broker", "broker", app.config.MQTT.Connection, "error", err)
+			slog.Error("Failed to connect to MQTT broker", "broker", broker, "error", err)
 			return app, err
 		}
 
 		app.mqtt = mqttHandler
 		// periodically calculate the gauge- and counter-values for each meter and send the results over MQTT
 		interval := time.Duration(app.config.MQTT.PublishInterval) * time.Second
-		slog.Info("Starting periodic MQTT publishing", "interval", interval, "broker", app.config.MQTT.Connection)
+		slog.Info("Starting periodic MQTT publishing", "interval", interval, "broker", broker)
 		app.meters.StartPeriodicPublish(app.ctx, interval, app.mqtt)
 	}
 
 	interval := time.Duration(app.config.BackupInterval) * time.Second
 	slog.Info("Starting periodic meter data backup", "interval", interval, "file", app.config.DataFile)
-	app.meters.StartPeriodicBackup(app.ctx, interval)
+	app.meters.StartPeriodicBackup(app.ctx, interval, app.config.DataFile)
 
 	// handle the OS signals
 	app.HandleOSSignals()
@@ -142,9 +148,10 @@ func (app *App) Init() (err error) {
 		}
 	}
 
-	slog.Info("Loading meter data", "file", app.config.DataFile)
-	if err = app.meters.LoadMeterData(); err != nil {
-		slog.Error("Failed to load meter data", "file", app.config.DataFile, "error", err)
+	dataFile := app.config.DataFile
+	slog.Info("Loading meter data", "file", dataFile)
+	if err = app.meters.LoadMeterData(dataFile); err != nil {
+		slog.Error("Failed to load meter data", "file", dataFile, "error", err)
 		return err
 	}
 
@@ -231,12 +238,14 @@ func (app *App) shutdownProcedure(mode int) {
 // It's called when the application is shutdown or restarted.
 // Should be used to free up resources.
 func (app *App) Cleanup() error {
-	var err error
+	var errs error
 
-	// Close all meters and mqtt broker connection if active
 	if app.meters != nil {
-		slog.Info("Close all meters")
-		err = app.meters.Close()
+		slog.Info("Saving meter data", "file", app.config.DataFile)
+		errs = errors.Join(errs, app.meters.SaveMeterData(app.config.DataFile))
+
+		slog.Info("Closing all meters")
+		errs = errors.Join(errs, app.meters.Close())
 	}
 
 	if app.mqtt != nil {
@@ -244,6 +253,5 @@ func (app *App) Cleanup() error {
 		app.mqtt.Disconnect()
 	}
 
-	return err
-
+	return errs
 }

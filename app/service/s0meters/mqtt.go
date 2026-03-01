@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"s0meter/pkg/mqtt"
 	"time"
+
+	"github.com/womat/golib/mqtt"
 )
 
 // StartPeriodicPublish runs a periodic publishing loop in a separate goroutine.
