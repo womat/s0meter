@@ -1,6 +1,7 @@
 # s0meter
 
-**s0meter** reads impulses from S0 interfaces compliant with DIN 43864 standards, calculates energy counters and flow rates, and publishes the results via MQTT.
+**s0meter** reads impulses from S0 interfaces compliant with DIN 43864 standards, calculates energy counters and flow
+rates, and publishes the results via MQTT.
 
 ## Features
 
@@ -16,13 +17,13 @@
 
 ## Command-line Flags
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--config` | `/opt/s0meter/etc/config.yaml` | Path to the configuration file |
-| `--debug` | `false` | Enable debug logging to stdout (overrides log settings from config) |
-| `--version` | | Print the application version and exit |
-| `--about` | | Print application details and exit |
-| `--help` | | Print this help message and exit |
+| Flag        | Default                        | Description                                                         |
+|-------------|--------------------------------|---------------------------------------------------------------------|
+| `--config`  | `/opt/s0meter/etc/config.yaml` | Path to the configuration file                                      |
+| `--debug`   | `false`                        | Enable debug logging to stdout (overrides log settings from config) |
+| `--version` |                                | Print the application version and exit                              |
+| `--about`   |                                | Print application details and exit                                  |
+| `--help`    |                                | Print this help message and exit                                    |
 
 The config file path can also be set via the environment variable `CONFIG_FILE`.
 
@@ -76,12 +77,12 @@ webserver:
   certFile: /opt/s0meter/etc/cert.pem
 
   # Blocked IP addresses or networks (empty = none blocked)
-  blockedIPs: []
+  blockedIPs: [ ]
   #  - 192.168.0.1
   #  - 192.168.0.0/16
 
   # Allowed IP addresses or networks (empty = all allowed)
-  allowedIPs: []
+  allowedIPs: [ ]
   #  - 127.0.0.1
   #  - ::1
   #  - 192.168.0.0/16
@@ -146,13 +147,13 @@ meter:
 
 ### Meter Configuration Reference
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `gpio` | int | GPIO pin number for S0 pulse input |
-| `bounceTime` | int (ms) | Debounce time in milliseconds to suppress signal noise |
-| `unitCounter` | string | Unit of the total counter (e.g. `kWh`, `m³`, `l`) |
-| `ticksPerUnit` | float | Pulses per unit — see meter datasheet (Zählerkonstante) |
-| `unitGauge` | string | Unit of the flow rate (e.g. `kW`, `l/h`, `l/s`) |
-| `scaleFactor` | float | Scale factor applied to the gauge value (e.g. `0.2777778` to convert m³/h → l/s) |
-| `precision` | int | Number of decimal places for the gauge value |
-| `mqttTopic` | string | MQTT topic to publish to (empty = not published) |
+| Field          | Type     | Description                                                                      |
+|----------------|----------|----------------------------------------------------------------------------------|
+| `gpio`         | int      | GPIO pin number for S0 pulse input                                               |
+| `bounceTime`   | int (ms) | Debounce time in milliseconds to suppress signal noise                           |
+| `unitCounter`  | string   | Unit of the total counter (e.g. `kWh`, `m³`, `l`)                                |
+| `ticksPerUnit` | float    | Pulses per unit — see meter datasheet (Zählerkonstante)                          |
+| `unitGauge`    | string   | Unit of the flow rate (e.g. `kW`, `l/h`, `l/s`)                                  |
+| `scaleFactor`  | float    | Scale factor applied to the gauge value (e.g. `0.2777778` to convert m³/h → l/s) |
+| `precision`    | int      | Number of decimal places for the gauge value                                     |
+| `mqttTopic`    | string   | MQTT topic to publish to (empty = not published)                                 |

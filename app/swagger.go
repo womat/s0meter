@@ -11,7 +11,7 @@ import (
 )
 
 func (app *App) registerSwaggerRoute(mux *http.ServeMux) {
-	mux.Handle(PathSwagger, NewRouteMap(map[string]http.Handler{
-		"GET": httpSwagger.Handler(httpSwagger.PersistAuthorization(true)),
-	}))
+	mux.Handle("GET "+PathSwagger, httpSwagger.Handler(
+		httpSwagger.PersistAuthorization(true),
+	))
 }

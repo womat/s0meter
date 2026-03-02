@@ -1,7 +1,8 @@
 # 🚀 s0meter — S0 Pulse Energy Monitor
 
 s0meter collects and exposes data from one or more **S0 pulse energy meters** compliant with **DIN 43864**,
-supporting electricity, water, and gas meters. It runs efficiently on **Raspberry Pi** hardware (tested on Raspberry Pi Zero and above).
+supporting electricity, water, and gas meters. It runs efficiently on **Raspberry Pi** hardware (tested on Raspberry Pi
+Zero and above).
 
 ---
 
@@ -19,16 +20,19 @@ supporting electricity, water, and gas meters. It runs efficiently on **Raspberr
 ## API
 
 ### Get meter data
+
 ```sh
 curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/data
 ```
 
 ### Get application version
+
 ```sh
 curl -k https://localhost:8443/version
 ```
 
 ### Health check
+
 ```sh
 curl -k https://localhost:8443/health
 ```
@@ -38,6 +42,7 @@ curl -k https://localhost:8443/health
 ## TLS Certificate
 
 Generate a self-signed certificate for development:
+
 ```sh
 openssl req -x509 -nodes -newkey rsa:2048 \
   -keyout /opt/s0meter/etc/key.pem \
@@ -48,15 +53,15 @@ openssl req -x509 -nodes -newkey rsa:2048 \
 
 **Subject fields:**
 
-| Field | Example | Description |
-|-------|---------|-------------|
-| `/C` | `AT` | Country code (2 letters) |
-| `/ST` | `Vienna` | State or province (optional) |
-| `/L` | `Vienna` | City (optional) |
-| `/O` | `MyCompany` | Organization (optional) |
-| `/OU` | `DEV` | Organizational unit (optional) |
-| `/CN` | `localhost` | **Common Name — your domain or `localhost`** |
-| `/emailAddress` | `admin@example.com` | E-mail address (optional) |
+| Field           | Example             | Description                                  |
+|-----------------|---------------------|----------------------------------------------|
+| `/C`            | `AT`                | Country code (2 letters)                     |
+| `/ST`           | `Vienna`            | State or province (optional)                 |
+| `/L`            | `Vienna`            | City (optional)                              |
+| `/O`            | `MyCompany`         | Organization (optional)                      |
+| `/OU`           | `DEV`               | Organizational unit (optional)               |
+| `/CN`           | `localhost`         | **Common Name — your domain or `localhost`** |
+| `/emailAddress` | `admin@example.com` | E-mail address (optional)                    |
 
 > **Note:** Browsers enforce a maximum certificate validity of 825 days. Use `-days 365` for production-like setups.
 
@@ -65,6 +70,7 @@ openssl req -x509 -nodes -newkey rsa:2048 \
 ## Installation
 
 ### 1. Create system user and directories
+
 ```sh
 sudo groupadd -f s0meter
 sudo useradd -r -s /usr/sbin/nologin -g s0meter s0meter
@@ -75,6 +81,7 @@ sudo chown -R s0meter:s0meter /opt/s0meter
 ```
 
 ### 2. Copy binary and configuration
+
 ```sh
 sudo cp s0meter /opt/s0meter/bin/
 sudo cp config.yaml /opt/s0meter/etc/
@@ -83,6 +90,7 @@ sudo chown -R s0meter:s0meter /opt/s0meter
 ```
 
 ### 3. Create systemd service
+
 ```sh
 SERVICE_PATH="/etc/systemd/system/s0meter.service"
 sudo tee "$SERVICE_PATH" > /dev/null <<'EOF'
@@ -108,6 +116,7 @@ sudo systemctl status s0meter
 ```
 
 ### 4. View logs
+
 ```sh
 journalctl -u s0meter -n 50 -f
 ```
@@ -117,6 +126,7 @@ journalctl -u s0meter -n 50 -f
 ## Firewall (optional)
 
 If ufw is active, allow the configured port:
+
 ```sh
 # Check which port s0meter is listening on
 sudo netstat -tulpn | grep s0meter
@@ -131,11 +141,13 @@ sudo ufw status
 ## Backup & Restore
 
 ### Backup
+
 ```sh
 sudo tar czvf /tmp/s0meter-backup.tar.gz /opt/s0meter
 ```
 
 ### Restore
+
 ```sh
 sudo tar xzvf /tmp/s0meter-backup.tar.gz -C /
 sudo chown -R s0meter:s0meter /opt/s0meter
@@ -146,19 +158,20 @@ sudo systemctl restart s0meter
 
 ## Command Line Flags
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--config` | `/opt/s0meter/etc/config.yaml` | Path to the config file |
-| `--debug` | `false` | Enable debug logging to stdout (overrides config) |
-| `--version` | `false` | Print the app version and exit |
-| `--about` | `false` | Print app details and exit |
-| `--help` | `false` | Print a help message and exit |
+| Flag        | Default                        | Description                                       |
+|-------------|--------------------------------|---------------------------------------------------|
+| `--config`  | `/opt/s0meter/etc/config.yaml` | Path to the config file                           |
+| `--debug`   | `false`                        | Enable debug logging to stdout (overrides config) |
+| `--version` | `false`                        | Print the app version and exit                    |
+| `--about`   | `false`                        | Print app details and exit                        |
+| `--help`    | `false`                        | Print a help message and exit                     |
 
 ---
 
 ## Configuration
 
-The configuration file is located at `/opt/s0meter/etc/config.yaml`. See the included `config.yaml` for all available options and documentation.
+The configuration file is located at `/opt/s0meter/etc/config.yaml`. See the included `config.yaml` for all available
+options and documentation.
 
 ---
 
