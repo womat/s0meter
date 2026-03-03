@@ -87,10 +87,10 @@ meter:
   wallbox:
     gpio: 17
     bounceTime: 1
-    unitCounter: "kWh"
-    ticksPerUnit: 1000
+    unitCounter: "Wh"
+    ticksPerUnit: 1
     unitGauge: "kW"
-    scaleFactor: 1
+    scaleFactor: 0.001
     precision: 2
     mqttTopic: test/wallbox/summary
 
