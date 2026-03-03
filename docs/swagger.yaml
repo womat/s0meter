@@ -1,6 +1,9 @@
 definitions:
   health.Model:
     properties:
+      app:
+        description: Application name (MODULE)
+        type: string
       appVersion:
         description: Current version of the application
         type: string
@@ -96,9 +99,9 @@ paths:
           description: Application version and name successfully retrieved
           schema:
             properties:
-              name:
+              app:
                 type: string
-              version:
+              appVersion:
                 type: string
             type: object
       summary: Get application version and name

@@ -66,7 +66,7 @@ func New(config *Config, baseDir string) *App {
 		baseDir: baseDir,
 		config:  config,
 		web: &http.Server{
-			Addr: net.JoinHostPort(config.HttpsServer.ListenHost, config.HttpsServer.ListenPort),
+			Addr: net.JoinHostPort(config.Webserver.ListenHost, config.Webserver.ListenPort),
 		},
 
 		meters: s0meters.New(),

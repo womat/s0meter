@@ -1,7 +1,6 @@
 package app
 
 import (
-	"log/slog"
 	"net/http"
 
 	"github.com/womat/golib/web"
@@ -23,10 +22,6 @@ func (app *App) HandleVersion() http.Handler {
 
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			slog.Debug("Incoming web request for version info",
-				"method", r.Method,
-				"path", r.URL.Path,
-				"client_ip", r.RemoteAddr)
 			web.Encode(w, http.StatusOK, HandleVersionResponse{App: MODULE, AppVersion: VERSION})
 		})
 }

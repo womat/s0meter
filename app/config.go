@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"s0meter/app/service/s0meters"
+	"slices"
 
 	"gopkg.in/yaml.v3"
 )
@@ -20,7 +21,7 @@ type Config struct {
 	Env            string                          `yaml:"env"`            // Application environment: dev | prod
 	LogLevel       string                          `yaml:"logLevel"`       // Log level: debug | info | warning | error
 	LogDestination string                          `yaml:"logDestination"` // Log output: stdout | stderr | /path/to/logfile
-	HttpsServer    WebserverConfig                 `yaml:"webserver"`      // Webserver configuration
+	Webserver      WebserverConfig                 `yaml:"webserver"`      // Webserver configuration
 	MQTT           MQTTConfig                      `yaml:"mqtt"`           // MQTT client configuration
 	DataFile       string                          `yaml:"dataFile"`       // Path to meter data YAML file
 	BackupInterval int                             `yaml:"backupInterval"` // Backup interval in seconds
@@ -56,7 +57,7 @@ func NewConfig() *Config {
 		BackupInterval: 60,
 		Meter:          make(map[string]s0meters.MeterConfig),
 		DataFile:       filepath.Join("/opt", MODULE, "data", "s0meter.yaml"),
-		HttpsServer: WebserverConfig{
+		Webserver: WebserverConfig{
 			ListenHost: "0.0.0.0",
 			ListenPort: "8443",
 			BlockedIPs: []string{},
@@ -70,31 +71,31 @@ func NewConfig() *Config {
 }
 
 // LoadConfig loads configuration from a YAML file and expands environment variables.
-func (c *Config) LoadConfig(fileName string) (*Config, error) {
-	fileName = filepath.ToSlash(fileName)
+func LoadConfig(fileName string) (*Config, error) {
+	cfg := NewConfig()
 
 	fileInfo, err := os.Stat(fileName)
 	if err != nil {
-		return c, err
+		return cfg, err
 	}
 	if fileInfo.IsDir() {
-		return c, errors.New("config path is a directory, not a file")
+		return cfg, errors.New("config path is a directory, not a file")
 	}
 
 	content, err := os.ReadFile(fileName)
 	if err != nil {
-		return c, err
+		return cfg, err
 	}
 
 	// Replace environment variables in the YAML
 	replaced := os.ExpandEnv(string(content))
 
 	// Unmarshal YAML into the config struct
-	if err = yaml.Unmarshal([]byte(replaced), c); err != nil {
-		return c, fmt.Errorf("failed to unmarshal config: %w", err)
+	if err = yaml.Unmarshal([]byte(replaced), cfg); err != nil {
+		return cfg, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	return c, nil
+	return cfg, nil
 }
 
 // IsDevEnv returns true if the environment is development.
@@ -105,22 +106,23 @@ func (c *Config) IsDevEnv() bool {
 // Validate checks the Config for invalid or missing values.
 func (c *Config) Validate() error {
 
-	for name, meter := range c.Meter {
-		if err := meter.Validate(); err != nil {
-			return fmt.Errorf("invalid config for meter %q: %w", name, err)
-		}
-	}
-
-	if c.HttpsServer.ApiKey == "" {
-		return errors.New("ApiKey is not configured")
-	}
-
 	if c.Env != ProdEnv && c.Env != DevEnv {
 		return fmt.Errorf("invalid environment: %s, must be %s or %s", c.Env, ProdEnv, DevEnv)
 	}
 
-	if c.LogLevel != "debug" && c.LogLevel != "info" && c.LogLevel != "warning" && c.LogLevel != "error" {
-		return fmt.Errorf("invalid log level: %s, must be debug, info, warning, or error", c.LogLevel)
+	if c.Webserver.ApiKey == "" {
+		return errors.New("ApiKey is not configured")
+	}
+
+	validLogLevels := []string{"debug", "info", "warning", "error"}
+	if !slices.Contains(validLogLevels, c.LogLevel) {
+		return fmt.Errorf("invalid log level: %s, must be one of %v", c.LogLevel, validLogLevels)
+	}
+
+	for name, meter := range c.Meter {
+		if err := meter.Validate(); err != nil {
+			return fmt.Errorf("invalid config for meter %q: %w", name, err)
+		}
 	}
 
 	if c.MQTT.PublishInterval <= 0 {

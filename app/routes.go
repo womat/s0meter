@@ -14,6 +14,7 @@
 package app
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/womat/golib/web"
@@ -32,9 +33,9 @@ const (
 // SetupRoutes configures all HTTP routes and global middleware for the application.
 func (app *App) SetupRoutes() {
 	webCfg := web.Config{
-		ApiKey:    app.config.HttpsServer.ApiKey,
-		JwtSecret: app.config.HttpsServer.JwtSecret,
-		JwtID:     app.config.HttpsServer.JwtID,
+		ApiKey:    app.config.Webserver.ApiKey,
+		JwtSecret: app.config.Webserver.JwtSecret,
+		JwtID:     app.config.Webserver.JwtID,
 		AppName:   MODULE,
 	}
 
@@ -57,6 +58,17 @@ func (app *App) SetupRoutes() {
 
 	// Apply global middleware: CORS + IP filter
 	handler := web.WithCORS(mux)
-	handler = web.WithIPFilter(handler, app.config.HttpsServer.AllowedIPs, app.config.HttpsServer.BlockedIPs)
+	handler = web.WithIPFilter(handler, app.config.Webserver.AllowedIPs, app.config.Webserver.BlockedIPs)
+	handler = WithLogging(handler)
 	app.web.Handler = handler
+}
+
+func WithLogging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		slog.Debug("Incoming web request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"client_ip", r.RemoteAddr)
+		next.ServeHTTP(w, r)
+	})
 }

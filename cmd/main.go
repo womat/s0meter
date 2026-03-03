@@ -149,7 +149,7 @@ func About() string {
 // If debug mode is enabled, log level is forced to "debug" and logs are written to stdout.
 func loadConfig(configFile string, debug bool) (*app.Config, error) {
 
-	config, err := app.NewConfig().LoadConfig(configFile)
+	config, err := app.LoadConfig(configFile)
 	if err != nil {
 		return nil, err
 	}

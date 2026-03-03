@@ -9,7 +9,6 @@
 package app
 
 import (
-	"log/slog"
 	"net/http"
 	"s0meter/app/service/health"
 
@@ -26,11 +25,6 @@ import (
 func (app *App) HandleHealth() http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			slog.Debug("Incoming web request for health check",
-				"method", r.Method,
-				"path", r.URL.Path,
-				"client_ip", r.RemoteAddr)
-
 			resp := health.GetCurrentHealth(MODULE, VERSION)
 			web.Encode(w, http.StatusOK, resp)
 		},
@@ -49,11 +43,6 @@ func (app *App) HandleHealth() http.Handler {
 //	@Router			/api/ready [get]
 func (app *App) HandleLive() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		slog.Debug("Liveness check requested",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"client_ip", r.RemoteAddr)
-
 		resp := health.GetCurrentHealth(MODULE, VERSION)
 		web.Encode(w, http.StatusOK, resp)
 	})
@@ -71,10 +60,6 @@ func (app *App) HandleLive() http.Handler {
 //	@Router			/api/ready [get]
 func (app *App) HandleReady() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		slog.Debug("Readiness check requested",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"client_ip", r.RemoteAddr)
 
 		if !app.meters.IsReady() {
 			web.Encode(w, http.StatusServiceUnavailable, map[string]string{"error": "meters not initialized"})

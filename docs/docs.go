@@ -84,10 +84,10 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "properties": {
-                                "name": {
+                                "app": {
                                     "type": "string"
                                 },
-                                "version": {
+                                "appVersion": {
                                     "type": "string"
                                 }
                             }
@@ -101,6 +101,10 @@ const docTemplate = `{
         "health.Model": {
             "type": "object",
             "properties": {
+                "app": {
+                    "description": "Application name (MODULE)",
+                    "type": "string"
+                },
                 "appVersion": {
                     "description": "Current version of the application",
                     "type": "string"
