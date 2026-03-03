@@ -8,19 +8,31 @@
             "get": {
                 "security": [
                     {
-                        "APIKeyAuth \"API key must be provided in the header\"": []
+                        "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves meter readings for the application.",
+                "description": "Returns the current counter and gauge values for all registered S0 meters.\nEach entry is keyed by the meter name as defined in the configuration.\nRequires a valid API key in the X-Api-Key header.",
+                "produces": [
+                    "application/json"
+                ],
                 "tags": [
                     "monitoring"
                 ],
-                "summary": "Get monitoring data",
+                "summary": "Get meter readings",
                 "responses": {
                     "200": {
-                        "description": "Monitoring data successfully retrieved",
+                        "description": "Meter readings successfully retrieved",
                         "schema": {
-                            "$ref": "#/definitions/s0meters.MeterData"
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/s0meters.MeterData"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized — missing or invalid API key",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 }

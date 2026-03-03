@@ -17,13 +17,13 @@ rates, and publishes the results via MQTT.
 
 ## Command-line Flags
 
-| Flag        | Default                        | Description                                                         |
-|-------------|--------------------------------|---------------------------------------------------------------------|
-| `--config`  | `/opt/s0meter/etc/config.yaml` | Path to the configuration file                                      |
-| `--debug`   | `false`                        | Enable debug logging to stdout (overrides log settings from config) |
-| `--version` |                                | Print the application version and exit                              |
-| `--about`   |                                | Print application details and exit                                  |
-| `--help`    |                                | Print this help message and exit                                    |
+| Flag        | Default                          | Description                                                         |
+|-------------|----------------------------------|---------------------------------------------------------------------|
+| `--config`  | `/opt/s0meter/etc/config.yaml`   | Path to the configuration file                                      |
+| `--debug`   | `false`                          | Enable debug logging to stdout (overrides log settings from config) |
+| `--version` | `false`                          | Print the application version and exit                              |
+| `--about`   | `false`                          | Print application details and exit                                  |
+| `--help`    | `false`                          | Print this help message and exit                                    |
 
 The config file path can also be set via the environment variable `CONFIG_FILE`.
 
@@ -64,8 +64,8 @@ webserver:
   # Host address the HTTPS server listens on (0.0.0.0 = all interfaces)
   listenHost: 0.0.0.0
 
-  # Port the HTTPS server listens on
-  listenPort: 443
+  # Port the HTTPS server listens on (default: 8443)
+  listenPort: 8443
 
   # Global API key for protected endpoints
   apiKey: changeme!
@@ -147,13 +147,13 @@ meter:
 
 ### Meter Configuration Reference
 
-| Field          | Type     | Description                                                                      |
-|----------------|----------|----------------------------------------------------------------------------------|
-| `gpio`         | int      | GPIO pin number for S0 pulse input                                               |
-| `bounceTime`   | int (ms) | Debounce time in milliseconds to suppress signal noise                           |
-| `unitCounter`  | string   | Unit of the total counter (e.g. `kWh`, `m³`, `l`)                                |
-| `ticksPerUnit` | float    | Pulses per unit — see meter datasheet (Zählerkonstante)                          |
-| `unitGauge`    | string   | Unit of the flow rate (e.g. `kW`, `l/h`, `l/s`)                                  |
-| `scaleFactor`  | float    | Scale factor applied to the gauge value (e.g. `0.2777778` to convert m³/h → l/s) |
-| `precision`    | int      | Number of decimal places for the gauge value                                     |
-| `mqttTopic`    | string   | MQTT topic to publish to (empty = not published)                                 |
+| Field          | Type     | Description                                                                        |
+|----------------|----------|------------------------------------------------------------------------------------|
+| `gpio`         | int      | GPIO pin number for S0 pulse input                                                 |
+| `bounceTime`   | int (ms) | Debounce time in milliseconds to suppress signal noise                             |
+| `unitCounter`  | string   | Unit of the total counter (e.g. `kWh`, `m³`, `l`)                                 |
+| `ticksPerUnit` | float    | Pulses per unit — see meter datasheet (Zählerkonstante)                            |
+| `unitGauge`    | string   | Unit of the flow rate (e.g. `kW`, `l/h`, `l/s`)                                   |
+| `scaleFactor`  | float    | Scale factor applied to the gauge value (e.g. `0.2777778` to convert m³/h → l/s)  |
+| `precision`    | int      | Number of decimal places for the gauge value                                       |
+| `mqttTopic`    | string   | MQTT topic to publish to (empty = not published)                                   |

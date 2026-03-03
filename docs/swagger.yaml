@@ -55,15 +55,26 @@ info:
 paths:
   /data:
     get:
-      description: Retrieves meter readings for the application.
+      description: |-
+        Returns the current counter and gauge values for all registered S0 meters.
+        Each entry is keyed by the meter name as defined in the configuration.
+        Requires a valid API key in the X-Api-Key header.
+      produces:
+      - application/json
       responses:
         "200":
-          description: Monitoring data successfully retrieved
+          description: Meter readings successfully retrieved
           schema:
-            $ref: '#/definitions/s0meters.MeterData'
+            additionalProperties:
+              $ref: '#/definitions/s0meters.MeterData'
+            type: object
+        "401":
+          description: Unauthorized — missing or invalid API key
+          schema:
+            type: string
       security:
-      - APIKeyAuth "API key must be provided in the header": []
-      summary: Get monitoring data
+      - ApiKeyAuth: []
+      summary: Get meter readings
       tags:
       - monitoring
   /health:
