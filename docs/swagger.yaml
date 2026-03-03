@@ -76,7 +76,7 @@ paths:
       - ApiKeyAuth: []
       summary: Get meter readings
       tags:
-      - monitoring
+      - s0meter
   /health:
     get:
       description: Retrieves memory usage, goroutine count, version, hostname, Go
@@ -128,4 +128,9 @@ paths:
       summary: Get application version and name
       tags:
       - info
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: X-API-Key
+    type: apiKey
 swagger: "2.0"

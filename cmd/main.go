@@ -31,6 +31,9 @@ var (
 	buildCommit = "none"
 )
 
+// @securityDefinitions.apikey	ApiKeyAuth
+// @in							header
+// @name						X-API-Key
 func main() {
 	// Parse command line flags.
 	flags := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)

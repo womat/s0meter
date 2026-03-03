@@ -1,10 +1,5 @@
-// This package is designed to support Kubernetes-style health checks by exposing
-// separate Liveness (/live) and Readiness (/ready) endpoints. Liveness checks
-// verify that the application is running, whereas Readiness checks ensure that
-// the application and its dependencies (DB, GPIO, etc.) are ready to serve traffic.
-//
-// The health data includes metrics such as memory usage, goroutine count, application
-// version, hostname, Go runtime version, and operating system.
+// Package app provides HTTP handlers for application health and readiness checks.
+// Health returns runtime metrics; Ready is a Kubernetes readiness probe.
 
 package app
 
@@ -34,25 +29,24 @@ func (app *App) HandleHealth() http.Handler {
 	)
 }
 
-// HandleReady provides a readiness check endpoint for Kubernetes.
-//
-// Readiness is used by Kubernetes to determine if the pod is ready to serve traffic.
-// It should check dependencies such as GPIO initialization, DB connections, or other services.
+// HandleReady is a Kubernetes readiness probe endpoint.
+// It returns 200 OK when all dependencies are initialized and ready to serve traffic,
+// or 503 Service Unavailable if any dependency (e.g. meters) is not yet ready.
 //
 //	@Summary		Readiness check
-//	@Description	Checks if the application and its dependencies are ready to serve traffic.
+//	@Description	Returns 200 if all dependencies are ready, 503 otherwise. No authentication required.
 //	@Tags			info
-//	@Success		200	{object}	health.Model	"Application is ready"
+//	@Produce		json
+//	@Success		200	{object}	map[string]string	"Application is ready"
+//	@Failure		503	{object}	map[string]string	"Service unavailable"
 //	@Router			/ready [get]
 func (app *App) HandleReady() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		if !app.meters.IsReady() {
 			web.Encode(w, http.StatusServiceUnavailable, map[string]string{"error": "meters not initialized"})
 			return
 		}
 
-		resp := health.GetCurrentHealth(MODULE, VERSION)
-		web.Encode(w, http.StatusOK, resp)
+		web.Encode(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
 }

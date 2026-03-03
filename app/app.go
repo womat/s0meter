@@ -83,14 +83,14 @@ func New(config *Config, baseDir string) *App {
 // Run initializes the application, starts MQTT publishing, backups,
 // and the web server, and sets up OS signal handling.
 func (app *App) Run() (*App, error) {
-	slog.Info("Initializing application")
+	slog.Debug("Initializing application")
 
 	if err := app.Init(); err != nil {
 		return app, err
 	}
 
 	if broker := app.config.MQTT.Connection; broker != "" {
-		slog.Info("Connecting to MQTT broker", "broker", broker)
+		slog.Debug("Connecting to MQTT broker", "broker", broker)
 		hostname, _ := os.Hostname()
 		clientID := MODULE + hostname
 
@@ -158,7 +158,7 @@ func (app *App) Init() (err error) {
 	}
 
 	// initRoutes should always be called at the end
-	slog.Info("Initializing API routes")
+	slog.Debug("Initializing API routes")
 	app.SetupRoutes()
 
 	return nil
@@ -182,7 +182,7 @@ func (app *App) HandleOSSignals() {
 		signal.Notify(sig, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
 		defer signal.Stop(sig) // Cleanup: rollback signal.Notify
 
-		slog.Info("Starting signal handler")
+		slog.Debug("Starting signal handler")
 
 		// Use select instead of a plain channel receive so the goroutine has
 		// two exit paths and always terminates cleanly:

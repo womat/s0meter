@@ -26,7 +26,6 @@ const (
 	PathHealth  = "/health"
 	PathReady   = "/ready"
 	PathData    = "/data"
-	PathSwagger = "/swagger/"
 )
 
 // SetupRoutes configures all HTTP routes and global middleware for the application.
@@ -48,10 +47,10 @@ func (app *App) SetupRoutes() {
 
 	// Public routes
 	mux.Handle("GET "+PathVersion, app.HandleVersion())
+	mux.Handle("GET "+PathReady, app.HandleReady())
 
 	// Protected routes
 	mux.Handle("GET "+PathHealth, web.WithAuth(app.HandleHealth(), webCfg))
-	mux.Handle("GET "+PathReady, web.WithAuth(app.HandleReady(), webCfg))
 	mux.Handle("GET "+PathData, web.WithAuth(app.HandleData(), webCfg))
 
 	// Apply global middleware: CORS + IP filter

@@ -95,14 +95,10 @@ build_mac_arm64: ## build binary mac M1
 
 
 deploy: build_arm64 ## build binary and copy binary to ${TARGET_NODE}:/tmp
-	#scp -q ./bin/arm64/${BINARY_NAME} ${TARGET_NODE}:/tmp
-	#@echo
-	#@echo 'logon to "${TARGET_NODE}":'
-	#@echo '		ssh ${TARGET_NODE}'
-	#@echo
-	#@echo 'install "${BINARY_NAME}" on ${TARGET_NODE}'
-	#@echo '		sudo systemctl stop ${BINARY_NAME};sudo cp /tmp/${BINARY_NAME} /opt/${BINARY_NAME}/bin/${BINARY_NAME};sudo /opt/${BINARY_NAME}/bin/${BINARY_NAME} --version;sudo systemctl start ${BINARY_NAME}'
-	#@echo
+	@echo "Copying binary to  $(PI_USER)@$(PI_HOST):$(PI_PATH)"
+	scp ./bin/arm64/${BINARY_NAME} $(PI_USER)@$(PI_HOST):$(PI_PATH)
+
+deploy_dev: build_arm64_dev ## build binary and copy binary to ${TARGET_NODE}:/tmp
 	@echo "Copying binary to  $(PI_USER)@$(PI_HOST):$(PI_PATH)"
 	scp ./bin/arm64/${BINARY_NAME} $(PI_USER)@$(PI_HOST):$(PI_PATH)
 
