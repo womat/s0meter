@@ -31,7 +31,7 @@ type Config struct {
 // WebserverConfig holds HTTPS server settings.
 type WebserverConfig struct {
 	ListenHost string   `yaml:"listenHost"` // Host address for web server
-	ListenPort string   `yaml:"listenPort"` // Port for web server
+	ListenPort int      `yaml:"listenPort"` // Port for web server
 	ApiKey     string   `yaml:"apiKey"`     // API key for requests
 	JwtSecret  string   `yaml:"jwtSecret"`  // Secret for JWT tokens
 	JwtID      string   `yaml:"jwtID"`      // Unique JWT ID
@@ -59,7 +59,7 @@ func NewConfig() *Config {
 		DataFile:       filepath.Join("/opt", MODULE, "data", "s0meter.yaml"),
 		Webserver: WebserverConfig{
 			ListenHost: "0.0.0.0",
-			ListenPort: "8443",
+			ListenPort: 8443,
 			BlockedIPs: []string{},
 			AllowedIPs: []string{},
 		},
@@ -114,9 +114,13 @@ func (c *Config) Validate() error {
 		return errors.New("ApiKey is not configured")
 	}
 
-	validLogLevels := []string{"debug", "info", "warning", "error"}
+	validLogLevels := []string{"debug", "info", "warning", "warn", "error"}
 	if !slices.Contains(validLogLevels, c.LogLevel) {
 		return fmt.Errorf("invalid log level: %s, must be one of %v", c.LogLevel, validLogLevels)
+	}
+
+	if c.Webserver.ListenPort < 1 || c.Webserver.ListenPort > 65535 {
+		return fmt.Errorf("invalid port: %d", c.Webserver.ListenPort)
 	}
 
 	for name, meter := range c.Meter {

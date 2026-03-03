@@ -53,7 +53,7 @@ definitions:
 info:
   contact: {}
 paths:
-  /api/data:
+  /data:
     get:
       description: Retrieves meter readings for the application.
       responses:
@@ -66,19 +66,27 @@ paths:
       summary: Get monitoring data
       tags:
       - monitoring
-  /api/health:
+  /health:
     get:
       description: Retrieves memory usage, goroutine count, version, hostname, Go
         runtime version, and OS.
+      produces:
+      - application/json
       responses:
         "200":
           description: Health data successfully retrieved
           schema:
             $ref: '#/definitions/health.Model'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
       summary: Get health data
       tags:
       - info
-  /api/ready:
+  /ready:
     get:
       description: Checks if the application and its dependencies are ready to serve
         traffic.
@@ -90,13 +98,15 @@ paths:
       summary: Readiness check
       tags:
       - info
-  /api/version:
+  /version:
     get:
-      description: Returns the name and version of the application for debugging and
-        monitoring.
+      description: Returns the current application name and version. No authentication
+        required.
+      produces:
+      - application/json
       responses:
         "200":
-          description: Application version and name successfully retrieved
+          description: Application version and name
           schema:
             properties:
               app:

@@ -34,14 +34,15 @@ func (h *Handler) StartPeriodicPublish(ctx context.Context, interval time.Durati
 
 // PublishAllMetrics sends all metrics to the given MQTT handler
 func (h *Handler) PublishAllMetrics(mqttHandler *mqtt.Handler) {
-	h.RLock()
-	defer h.RUnlock()
-
 	if mqttHandler == nil {
 		return
 	}
+
+	h.RLock()
+	defer h.RUnlock()
+
 	for name, meterInstance := range h.meters {
-		b, err := h.SerializeMetric(name)
+		b, err := h.serializeMetricLocked(name)
 		if err != nil {
 			slog.Warn("Failed to serialize metric", "meter", name, "error", err)
 			continue
@@ -60,15 +61,19 @@ func (h *Handler) PublishAllMetrics(mqttHandler *mqtt.Handler) {
 	}
 }
 
-// SerializeMetric returns the JSON payload for a meter
+// SerializeMetric — public, acquires own lock
 func (h *Handler) SerializeMetric(name string) ([]byte, error) {
 	h.RLock()
+	defer h.RUnlock()
+	return h.serializeMetricLocked(name)
+}
+
+// serializeMetricLocked — caller must hold RLock
+func (h *Handler) serializeMetricLocked(name string) ([]byte, error) {
 	m, ok := h.meters[name]
-	h.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("meter %s not registered", name)
 	}
-
 	payload := MeterData{
 		TimeStamp:   time.Now(),
 		Counter:     calcCounter(m),
@@ -76,6 +81,5 @@ func (h *Handler) SerializeMetric(name string) ([]byte, error) {
 		Gauge:       calcGauge(m),
 		UnitGauge:   m.Config.UnitGauge,
 	}
-
 	return json.Marshal(payload)
 }

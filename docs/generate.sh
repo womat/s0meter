@@ -4,11 +4,12 @@
 #
 #  Usage:
 #   go install github.com/swaggo/swag/cmd/swag@latest
-#   cd /opt/src/app
-#   docs/generate.sh # must be called in the src root dir
+#   cd /path/to/s0counter          # must be called from the project root
+#   docs/generate.sh
 #
-#   go run cmd/app/main.go
-#   https://localhost/swagger
-#
-swag fmt
-swag init -g ./cmd/main.go -o ./docs
+swag fmt -d ./app
+swag init \
+  --generalInfo  main.go \
+  --dir          ./cmd,./app \
+  --output       ./docs \
+  --parseInternal

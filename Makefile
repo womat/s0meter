@@ -63,11 +63,11 @@ build_arm64_dev: ## build binary for raspberry models 3/4/5/Zero2 64bit with Swa
 
 build_arm6: ## build binary for all raspberry models 32bit except Pi5
 	GOOS=linux GOARCH=arm GOARM=6 \
-	go build -ldflags "$(LDFLAGS)" -o ../bin/arm6/${BINARY_NAME} ./cmd/main.go
+	go build -ldflags "$(LDFLAGS)" -o ./bin/arm6/${BINARY_NAME} ./cmd/main.go
 
 build_arm7: ## build binary for raspberry models 2/3/4/5/Zero2 32bit
 	GOOS=linux GOARCH=arm GOARM=7 \
-	go build -ldflags "$(LDFLAGS)" -o ../bin/arm7/${BINARY_NAME} ./cmd/main.go
+	go build -ldflags "$(LDFLAGS)" -o ./bin/arm7/${BINARY_NAME} ./cmd/main.go
 
 build_arm64: ## build binary for raspberry models 3/4/5/Zero2 64bit
 	GOOS=linux GOARCH=arm64 \
@@ -75,27 +75,27 @@ build_arm64: ## build binary for raspberry models 3/4/5/Zero2 64bit
 
 build_windows386: ## build binary for windows
 	GOOS=windows GOARCH=386 \
-	go build -ldflags "$(LDFLAGS)" -o ../bin/386/${BINARY_NAME}.exe ./cmd/main.go
+	go build -ldflags "$(LDFLAGS)" -o ./bin/386/${BINARY_NAME}.exe ./cmd/main.go
 
 build_windows64: ## build binary for windows 64bit
 	GOOS=windows GOARCH=amd64 \
-	go build -ldflags "$(LDFLAGS)" -o ../bin/amd64/${BINARY_NAME}.exe ./cmd/main.go
+	go build -ldflags "$(LDFLAGS)" -o ./bin/amd64/${BINARY_NAME}.exe ./cmd/main.go
 
 build_linux386: ## build binary for linux
 	GOOS=linux GOARCH=386 \
-	go build -ldflags "$(LDFLAGS)" -o ../bin/386/${BINARY_NAME} ./cmd/main.go
+	go build -ldflags "$(LDFLAGS)" -o ./bin/386/${BINARY_NAME} ./cmd/main.go
 
 build_linux64: ## build binary for linux 64bit
 	GOOS=linux GOARCH=amd64 \
-	go build -ldflags "$(LDFLAGS)" -o ../bin/amd64/${BINARY_NAME} ./cmd/main.go
+	go build -ldflags "$(LDFLAGS)" -o ./bin/amd64/${BINARY_NAME} ./cmd/main.go
 
 build_mac_arm64: ## build binary mac M1
 	GOOS=darwin GOARCH=arm64 \
-	go build -ldflags "$(LDFLAGS)" -o ../bin/darwin/${BINARY_NAME} ./cmd/main.go
+	go build -ldflags "$(LDFLAGS)" -o ./bin/darwin/${BINARY_NAME} ./cmd/main.go
 
 
 deploy: build_arm64 ## build binary and copy binary to ${TARGET_NODE}:/tmp
-	#scp -q ../bin/arm64/${BINARY_NAME} ${TARGET_NODE}:/tmp
+	#scp -q ./bin/arm64/${BINARY_NAME} ${TARGET_NODE}:/tmp
 	#@echo
 	#@echo 'logon to "${TARGET_NODE}":'
 	#@echo '		ssh ${TARGET_NODE}'

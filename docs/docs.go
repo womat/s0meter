@@ -15,7 +15,7 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api/data": {
+        "/data": {
             "get": {
                 "security": [
                     {
@@ -37,9 +37,17 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/health": {
+        "/health": {
             "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
                 "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, and OS.",
+                "produces": [
+                    "application/json"
+                ],
                 "tags": [
                     "info"
                 ],
@@ -50,11 +58,17 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/health.Model"
                         }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 }
             }
         },
-        "/api/ready": {
+        "/ready": {
             "get": {
                 "description": "Checks if the application and its dependencies are ready to serve traffic.",
                 "tags": [
@@ -71,16 +85,19 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/version": {
+        "/version": {
             "get": {
-                "description": "Returns the name and version of the application for debugging and monitoring.",
+                "description": "Returns the current application name and version. No authentication required.",
+                "produces": [
+                    "application/json"
+                ],
                 "tags": [
                     "info"
                 ],
                 "summary": "Get application version and name",
                 "responses": {
                     "200": {
-                        "description": "Application version and name successfully retrieved",
+                        "description": "Application version and name",
                         "schema": {
                             "type": "object",
                             "properties": {

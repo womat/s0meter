@@ -15,7 +15,7 @@ import (
 //	@Description	Retrieves meter readings for the application.
 //	@Tags			monitoring
 //	@Success		200	{object}	s0meters.MeterData	"Monitoring data successfully retrieved"
-//	@Router			/api/data [get]
+//	@Router			/data [get]
 //	@Security		APIKeyAuth "API key must be provided in the header"
 func (app *App) HandleData() http.Handler {
 	return http.HandlerFunc(

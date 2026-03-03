@@ -31,10 +31,10 @@ const (
 // openssl req -new -x509 -key dev_key.pem -out dev_cert.pem -days 365 -subj "/C=AT/ST=Vienna/L=Vienna/O=Dev/OU=Dev/CN=localhost"
 
 //go:embed certs/dev_cert.pem
-var embeddedCertFile string
+var embeddedCertFile []byte
 
 //go:embed certs/dev_key.pem
-var embeddedKeyFile string
+var embeddedKeyFile []byte
 
 // StartWebServer initializes and starts the HTTPS server asynchronously.
 // - Production: uses file-based cert/key from config
@@ -81,7 +81,10 @@ func (app *App) StartWebServer() error {
 	}()
 
 	// Goroutine to monitor runtime errors and handle shutdown
+	app.wg.Add(1) // before shutdown
 	go func() {
+		defer app.wg.Done() // after shutdown
+
 		select {
 		case err := <-serverErrCh:
 			slog.Error("Webserver runtime error", "error", err)
@@ -109,7 +112,7 @@ func loadTLSCert(certFile, keyFile string) (tls.Certificate, error) {
 	} else if errors.Is(err, os.ErrNotExist) {
 		// Dev fallback
 		slog.Info("TLS cert file not found, using embedded fallback", "file", certFile)
-		return tls.X509KeyPair([]byte(embeddedCertFile), []byte(embeddedKeyFile))
+		return tls.X509KeyPair(embeddedCertFile, embeddedKeyFile)
 	} else {
 		return tls.Certificate{}, fmt.Errorf("failed to read cert file: %w", err)
 	}

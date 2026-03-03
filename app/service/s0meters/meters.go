@@ -85,8 +85,8 @@ func New() *Handler {
 
 // Close shuts down all meters, disconnects MQTT.
 func (h *Handler) Close() error {
-	h.RLock()
-	defer h.RUnlock()
+	h.Lock()
+	defer h.Unlock()
 
 	var errs error
 	for _, m := range h.meters {
@@ -178,17 +178,21 @@ func (c *MeterConfig) Validate() error {
 // calcGauge computes the flow rate based on the last two pulses.
 func calcGauge(m *MeterInstance) float64 {
 	c := m.Meter.GetCounter()
-	dt := c.TimeStamp.Sub(c.LastTimeStamp)
 
-	if time.Since(c.TimeStamp) > dt {
-		dt = time.Since(c.LastTimeStamp)
+	if c.LastTimeStamp.IsZero() || c.TimeStamp.IsZero() {
+		return 0
+	}
+
+	dt := c.TimeStamp.Sub(c.LastTimeStamp)
+	if elapsed := time.Since(c.TimeStamp); elapsed > dt {
+		dt = elapsed
 	}
 
 	if dt.Seconds() <= 0 || m.Config.TicksPerUnit == 0 {
 		return 0
 	}
 
-	val := float64(c.Ticks) * 3600 / (dt.Seconds() * m.Config.TicksPerUnit) * m.Config.ScaleFactor
+	val := 3600 / (dt.Seconds() * m.Config.TicksPerUnit) * m.Config.ScaleFactor
 	return round(val, m.Config.Precision)
 }
 

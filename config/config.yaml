@@ -11,6 +11,10 @@ logLevel: info
 # Supported values: stdout | stderr | /path/to/logfile
 logDestination: stdout
 
+# environment: dev | prod
+env: dev
+
+
 # =============================================================================
 # Webserver configuration (HTTPS)
 # =============================================================================
