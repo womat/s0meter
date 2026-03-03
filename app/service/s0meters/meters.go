@@ -111,8 +111,8 @@ func (h *Handler) RegisterMeter(ctx context.Context, name string, cfg MeterConfi
 	return nil
 }
 
-// GetMeterData returns the current reading of all meters.
-func (h *Handler) GetMeterData() map[string]MeterData {
+// GetMeterAll returns the current reading of all meters.
+func (h *Handler) GetMeterAll() map[string]MeterData {
 	h.RLock()
 	defer h.RUnlock()
 

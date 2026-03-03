@@ -15,40 +15,6 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/data": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Returns the current counter and gauge values for all registered S0 meters.\nEach entry is keyed by the meter name as defined in the configuration.\nRequires a valid API key in the X-Api-Key header.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "s0meter"
-                ],
-                "summary": "Get meter readings",
-                "responses": {
-                    "200": {
-                        "description": "Meter readings successfully retrieved",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "$ref": "#/definitions/s0meters.MeterData"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized — missing or invalid API key",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
         "/health": {
             "get": {
                 "security": [
@@ -80,9 +46,92 @@ const docTemplate = `{
                 }
             }
         },
+        "/meters": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the current counter and gauge values for all registered S0 meters, keyed by meter name.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "meters"
+                ],
+                "summary": "Get all meter readings",
+                "responses": {
+                    "200": {
+                        "description": "Meter readings successfully retrieved",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/s0meters.MeterData"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/meters/{name}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the current counter and gauge values for a specific S0 meter by name.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "meters"
+                ],
+                "summary": "Get single meter reading",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Meter name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Meter reading successfully retrieved",
+                        "schema": {
+                            "$ref": "#/definitions/s0meters.MeterData"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Meter not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/ready": {
             "get": {
-                "description": "Checks if the application and its dependencies are ready to serve traffic.",
+                "description": "Returns 200 if all dependencies are ready, 503 otherwise. No authentication required.",
+                "produces": [
+                    "application/json"
+                ],
                 "tags": [
                     "info"
                 ],
@@ -91,7 +140,19 @@ const docTemplate = `{
                     "200": {
                         "description": "Application is ready",
                         "schema": {
-                            "$ref": "#/definitions/health.Model"
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Service unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
