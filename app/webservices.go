@@ -111,7 +111,7 @@ func loadTLSCert(certFile, keyFile string) (tls.Certificate, error) {
 		return tls.LoadX509KeyPair(certFile, keyFile)
 	} else if errors.Is(err, os.ErrNotExist) {
 		// Dev fallback
-		slog.Info("TLS cert file not found, using embedded fallback", "file", certFile)
+		slog.Warn("TLS cert file not found, using embedded fallback", "file", certFile)
 		return tls.X509KeyPair(embeddedCertFile, embeddedKeyFile)
 	} else {
 		return tls.Certificate{}, fmt.Errorf("failed to read cert file: %w", err)

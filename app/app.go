@@ -37,7 +37,6 @@ import (
 //
 // VERSION differs from semantic versioning as described in https://semver.org/
 // but we keep the correct syntax.
-// TODO: increase version number
 const (
 	VERSION = "4.6.2+20260228"
 	MODULE  = "s0meter"

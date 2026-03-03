@@ -2,6 +2,7 @@ package s0meters
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -50,7 +51,7 @@ func (h *Handler) StartPeriodicBackup(ctx context.Context, interval time.Duratio
 // - an error if reading or unmarshalling the YAML fails
 func (h *Handler) LoadMeterData(file string) error {
 	data, err := os.ReadFile(file)
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		slog.Info("Meter data file not found, creating default", "file", file)
 		return h.SaveMeterData(file)
 	}
