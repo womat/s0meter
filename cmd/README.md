@@ -17,13 +17,13 @@ rates, and publishes the results via MQTT.
 
 ## Command-line Flags
 
-| Flag        | Default                          | Description                                                         |
-|-------------|----------------------------------|---------------------------------------------------------------------|
-| `--config`  | `/opt/s0meter/etc/config.yaml`   | Path to the configuration file                                      |
-| `--debug`   | `false`                          | Enable debug logging to stdout (overrides log settings from config) |
-| `--version` | `false`                          | Print the application version and exit                              |
-| `--about`   | `false`                          | Print application details and exit                                  |
-| `--help`    | `false`                          | Print this help message and exit                                    |
+| Flag        | Default                        | Description                                                         |
+|-------------|--------------------------------|---------------------------------------------------------------------|
+| `--config`  | `/opt/s0meter/etc/config.yaml` | Path to the configuration file                                      |
+| `--debug`   | `false`                        | Enable debug logging to stdout (overrides log settings from config) |
+| `--version` | `false`                        | Print the application version and exit                              |
+| `--about`   | `false`                        | Print application details and exit                                  |
+| `--help`    | `false`                        | Print this help message and exit                                    |
 
 The config file path can also be set via the environment variable `CONFIG_FILE`.
 
@@ -117,43 +117,47 @@ meter:
   wallbox:
     gpio: 17
     bounceTime: 1
-    unitCounter: "kWh"
-    ticksPerUnit: 1000
-    unitGauge: "kW"
-    scaleFactor: 1
-    precision: 2
+    counterUnit: "kWh"
+    counterPulsesPerUnit: 1000
+    counterPrecision: 2
+    gaugeUnit: "kW"
+    gaugeScale: 1
+    gaugePrecision: 2
     mqttTopic: test/wallbox/summary
 
   greywater:
     gpio: 27
     bounceTime: 1
-    unitCounter: "l"
-    ticksPerUnit: 1
-    unitGauge: "l/h"
-    scaleFactor: 1
-    precision: 0
+    counterUnit: "l"
+    counterPulsesPerUnit: 1
+    counterPrecision: 0
+    gaugeUnit: "l/h"
+    gaugeScale: 1
+    gaugePrecision: 0
     mqttTopic: test/rawwater/summary
 
   drinkingwater:
     gpio: 22
     bounceTime: 1
-    unitCounter: "m³"
-    ticksPerUnit: 1000
-    unitGauge: "l/s"
-    scaleFactor: 0.2777778
-    precision: 3
+    counterUnit: "m³"
+    counterPulsesPerUnit: 1000
+    counterPrecision: 3
+    gaugeUnit: "l/s"
+    gaugeScale: 0.2777778
+    gaugePrecision: 3
     mqttTopic: test/portablewater/summary
 ```
 
 ### Meter Configuration Reference
 
-| Field          | Type     | Description                                                                        |
-|----------------|----------|------------------------------------------------------------------------------------|
-| `gpio`         | int      | GPIO pin number for S0 pulse input                                                 |
-| `bounceTime`   | int (ms) | Debounce time in milliseconds to suppress signal noise                             |
-| `unitCounter`  | string   | Unit of the total counter (e.g. `kWh`, `m³`, `l`)                                 |
-| `ticksPerUnit` | float    | Pulses per unit — see meter datasheet (Zählerkonstante)                            |
-| `unitGauge`    | string   | Unit of the flow rate (e.g. `kW`, `l/h`, `l/s`)                                   |
-| `scaleFactor`  | float    | Scale factor applied to the gauge value (e.g. `0.2777778` to convert m³/h → l/s)  |
-| `precision`    | int      | Number of decimal places for the gauge value                                       |
-| `mqttTopic`    | string   | MQTT topic to publish to (empty = not published)                                   |
+| Field                  | Type     | Description                                                                      |
+|------------------------|----------|----------------------------------------------------------------------------------|
+| `gpio`                 | int      | GPIO pin number for S0 pulse input                                               |
+| `bounceTime`           | int (ms) | Debounce time in milliseconds to suppress signal noise                           |
+| `counterUnit`          | string   | Unit of the total counter (e.g. `kWh`, `m³`, `l`)                                |
+| `gaugeUnit`            | string   | Unit of the flow rate (e.g. `kW`, `l/h`, `l/s`)                                  |
+| `counterPulsesPerUnit` | float    | Meter constant (Zählerkonstante): pulses per counterUnit                         |
+| `gaugeScale`           | float    | Scale factor applied to the gauge value (e.g. `0.2777778` to convert m³/h → l/s) |
+| `counterPrecision`     | int      | Number of decimal places for the counter value                                   |
+| `gaugePrecision`       | int      | Number of decimal places for the gauge value                                     |
+| `mqttTopic`            | string   | MQTT topic to publish to (empty = not published)                                 |

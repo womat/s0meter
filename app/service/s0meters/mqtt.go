@@ -77,9 +77,9 @@ func (h *Handler) serializeMetricLocked(name string) ([]byte, error) {
 	payload := MeterData{
 		TimeStamp:   time.Now(),
 		Counter:     calcCounter(m),
-		UnitCounter: m.Config.UnitCounter,
+		CounterUnit: m.Config.CounterUnit,
 		Gauge:       calcGauge(m),
-		UnitGauge:   m.Config.UnitGauge,
+		GaugeUnit:   m.Config.GaugeUnit,
 	}
 	return json.Marshal(payload)
 }

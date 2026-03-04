@@ -18,11 +18,12 @@
 //	handler.AddMeter("power", meters.MeterConfig{
 //	    Gpio:            17,
 //	    BounceTime:      100,
-//	    TicksPerUnit:    1000,
-//	    UnitCounter:     "kWh",
-//	    ScaleFactor:     1.0,
-//	    Precision:       2,
-//	    UnitGauge:       "kW",
+//	    counterPulsesPerUnit:    1000,
+//	    CounterUnit:     "kWh",
+//	    GaugeScale:     1.0,
+//	    CounterPrecision:       2,
+//	    GaugePrecision:       2,
+//	    GaugeUnit:       "kW",
 //	    MqttTopic:       "meters/power",
 //	})
 //
@@ -50,15 +51,19 @@ type Handler struct {
 
 // MeterConfig defines the configuration of a single meter.
 type MeterConfig struct {
-	Gpio         int     `yaml:"gpio"`         // GPIO pin for pulse input
-	BounceTime   int     `yaml:"bounceTime"`   // Debounce in ms
-	TicksPerUnit float64 `yaml:"ticksPerUnit"` // Pulses per unit (calibration)
-	UnitCounter  string  `yaml:"unitCounter"`  // Unit of counter (e.g., kWh)
-	ScaleFactor  float64 `yaml:"scaleFactor"`  // Scale factor for gauge
-	Precision    int     `yaml:"precision"`    // Decimal precision
-	UnitGauge    string  `yaml:"unitGauge"`    // Unit of gauge (e.g., kW)
-	MqttTopic    string  `yaml:"mqttTopic"`    // MQTT topic for this meter
-	MqttRetained bool    `yaml:"mqttRetained"` // MQTT retained flag
+	Gpio       int `yaml:"gpio"`       // GPIO pin for pulse input
+	BounceTime int `yaml:"bounceTime"` // Debounce in ms
+
+	CounterUnit          string  `yaml:"counterUnit"`          // unit of counter value (e.g. kWh, Wh)
+	CounterPulsesPerUnit float64 `yaml:"counterPulsesPerUnit"` // number of pulses per counterUnit (e.g. 1000 imp/kWh)
+	CounterPrecision     int     `yaml:"counterPrecision"`     // decimal places for counter
+
+	GaugeUnit      string  `yaml:"gaugeUnit"`      // unit of gauge value (e.g. W, kW)
+	GaugeScale     float64 `yaml:"gaugeScale"`     // scale factor for gauge (1=W, 0.001=kW)
+	GaugePrecision int     `yaml:"gaugePrecision"` // decimal places for gauge
+
+	MqttTopic    string `yaml:"mqttTopic"`    // MQTT topic for this meter
+	MqttRetained bool   `yaml:"mqttRetained"` // MQTT retained flag
 }
 
 // MeterInstance holds a registered meter and its pulse handler.
@@ -71,9 +76,9 @@ type MeterInstance struct {
 type MeterData struct {
 	TimeStamp   time.Time `json:"timeStamp"`   // Timestamp of reading
 	Counter     float64   `json:"counter"`     // Total meter value
-	UnitCounter string    `json:"unitCounter"` // Counter unit
+	CounterUnit string    `json:"counterUnit"` // Counter unit
 	Gauge       float64   `json:"gauge"`       // Flow rate
-	UnitGauge   string    `json:"unitGauge"`   // Gauge unit
+	GaugeUnit   string    `json:"gaugeUnit"`   // Gauge unit
 }
 
 // New initializes the meter manager with the provided configuration.
@@ -122,9 +127,9 @@ func (h *Handler) GetMeterAll() map[string]MeterData {
 		data[name] = MeterData{
 			TimeStamp:   now,
 			Counter:     calcCounter(m),
-			UnitCounter: m.Config.UnitCounter,
+			CounterUnit: m.Config.CounterUnit,
 			Gauge:       calcGauge(m),
-			UnitGauge:   m.Config.UnitGauge,
+			GaugeUnit:   m.Config.GaugeUnit,
 		}
 	}
 	return data
@@ -143,9 +148,9 @@ func (h *Handler) GetMeter(name string) (MeterData, error) {
 	return MeterData{
 		TimeStamp:   time.Now(),
 		Counter:     calcCounter(m),
-		UnitCounter: m.Config.UnitCounter,
+		CounterUnit: m.Config.CounterUnit,
 		Gauge:       calcGauge(m),
-		UnitGauge:   m.Config.UnitGauge,
+		GaugeUnit:   m.Config.GaugeUnit,
 	}, nil
 }
 
@@ -157,20 +162,23 @@ func (h *Handler) IsReady() bool {
 
 // Validate checks the MeterConfig for invalid or missing values.
 func (c *MeterConfig) Validate() error {
-	if c.TicksPerUnit <= 0 {
-		return fmt.Errorf("ticksPerUnit must be greater than 0, got %v", c.TicksPerUnit)
-	}
 	if c.Gpio <= 0 {
 		return fmt.Errorf("gpio pin must be greater than 0, got %v", c.Gpio)
 	}
 	if c.BounceTime < 0 {
 		return fmt.Errorf("bounceTime must be >= 0, got %v", c.BounceTime)
 	}
-	if c.ScaleFactor == 0 {
-		return fmt.Errorf("scaleFactor must not be 0")
+	if c.CounterPulsesPerUnit <= 0 {
+		return fmt.Errorf("counterPulsesPerUnit must be greater than 0, got %v", c.CounterPulsesPerUnit)
 	}
-	if c.Precision < 0 {
-		return fmt.Errorf("precision must be >= 0, got %d", c.Precision)
+	if c.CounterPrecision < 0 {
+		return fmt.Errorf("counter precision must be >= 0, got %d", c.CounterPrecision)
+	}
+	if c.GaugeScale == 0 {
+		return fmt.Errorf("gaugeScale must not be 0")
+	}
+	if c.GaugePrecision < 0 {
+		return fmt.Errorf("gauge precision must be >= 0, got %d", c.GaugePrecision)
 	}
 	return nil
 }
@@ -188,21 +196,21 @@ func calcGauge(m *MeterInstance) float64 {
 		dt = elapsed
 	}
 
-	if dt.Seconds() <= 0 || m.Config.TicksPerUnit == 0 {
+	if dt <= 0 {
 		return 0
 	}
 
-	val := 3600 / (dt.Seconds() * m.Config.TicksPerUnit) * m.Config.ScaleFactor
-	return round(val, m.Config.Precision)
+	val := 3600 / dt.Seconds() * m.Config.GaugeScale
+	return round(val, m.Config.GaugePrecision)
 }
 
-// calcCounter computes the total meter value from pulse ticks.
+// calcCounter computes the total meter value from pulses.
 func calcCounter(m *MeterInstance) float64 {
 	c := m.Meter.GetCounter()
-	if m.Config.TicksPerUnit == 0 {
+	if m.Config.CounterPulsesPerUnit == 0 {
 		return 0
 	}
-	return float64(c.Ticks) / m.Config.TicksPerUnit
+	return round(float64(c.Pulses)/m.Config.CounterPulsesPerUnit, m.Config.CounterPrecision)
 }
 
 // round rounds a float to a given precision.

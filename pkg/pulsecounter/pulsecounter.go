@@ -29,7 +29,7 @@ import (
 
 // Counter stores S0 pulse data.
 type Counter struct {
-	Ticks         uint64    `yaml:"ticks"`         // total number of pulses
+	Pulses        uint64    `yaml:"pulses"`        // total number of pulses
 	TimeStamp     time.Time `yaml:"timestamp"`     // timestamp of last pulse
 	LastTimeStamp time.Time `yaml:"lastTimestamp"` // timestamp of penultimate pulse
 }
@@ -68,7 +68,7 @@ func New(ctx context.Context, port int, debounce time.Duration) (*Handler, error
 }
 
 // GetCounter returns a snapshot of the current counter.
-// Safe for concurrent access. Returns ticks and timestamps of the last two pulses.
+// Safe for concurrent access. Returns count of pulse and timestamps of the last two pulses.
 func (h *Handler) GetCounter() Counter {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -113,13 +113,13 @@ func (h *Handler) handlePulseEvent(e gpio.Event) {
 
 	h.counter.LastTimeStamp = h.counter.TimeStamp
 	h.counter.TimeStamp = e.Time
-	h.counter.Ticks++
+	h.counter.Pulses++
 	snapshot := h.counter
 	h.mu.Unlock()
 
 	slog.Debug("s0 pulse",
 		"gpio", h.pin,
-		"tick", snapshot.Ticks,
+		"tick", snapshot.Pulses,
 		"lastTimestamp", snapshot.LastTimeStamp,
 		"currentTimestamp", snapshot.TimeStamp,
 	)

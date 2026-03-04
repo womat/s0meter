@@ -158,13 +158,13 @@ sudo systemctl restart s0meter
 
 ## Command Line Flags
 
-| Flag        | Default                          | Description                                       |
-|-------------|----------------------------------|---------------------------------------------------|
-| `--config`  | `/opt/s0meter/etc/config.yaml`   | Path to the config file                           |
-| `--debug`   | `false`                          | Enable debug logging to stdout (overrides config) |
-| `--version` | `false`                          | Print the app version and exit                    |
-| `--about`   | `false`                          | Print app details and exit                        |
-| `--help`    | `false`                          | Print a help message and exit                     |
+| Flag        | Default                        | Description                                       |
+|-------------|--------------------------------|---------------------------------------------------|
+| `--config`  | `/opt/s0meter/etc/config.yaml` | Path to the config file                           |
+| `--debug`   | `false`                        | Enable debug logging to stdout (overrides config) |
+| `--version` | `false`                        | Print the app version and exit                    |
+| `--about`   | `false`                        | Print app details and exit                        |
+| `--help`    | `false`                        | Print a help message and exit                     |
 
 The config file path can also be set via the environment variable `CONFIG_FILE`.
 
@@ -177,16 +177,17 @@ options and documentation.
 
 ### Meter Configuration Reference
 
-| Field          | Type     | Description                                                                        |
-|----------------|----------|------------------------------------------------------------------------------------|
-| `gpio`         | int      | GPIO pin number for S0 pulse input                                                 |
-| `bounceTime`   | int (ms) | Debounce time in milliseconds to suppress signal noise                             |
-| `unitCounter`  | string   | Unit of the total counter (e.g. `kWh`, `m³`, `l`)                                 |
-| `ticksPerUnit` | float    | Pulses per unit — see meter datasheet (Zählerkonstante)                            |
-| `unitGauge`    | string   | Unit of the flow rate (e.g. `kW`, `l/h`, `l/s`)                                   |
-| `scaleFactor`  | float    | Scale factor applied to the gauge value (e.g. `0.2777778` to convert m³/h → l/s)  |
-| `precision`    | int      | Number of decimal places for the gauge value                                       |
-| `mqttTopic`    | string   | MQTT topic to publish to (empty = not published)                                   |
+| Field                  | Type     | Description                                                                      |
+|------------------------|----------|----------------------------------------------------------------------------------|
+| `gpio`                 | int      | GPIO pin number for S0 pulse input                                               |
+| `bounceTime`           | int (ms) | Debounce time in milliseconds to suppress signal noise                           |
+| `counterUnit`          | string   | Unit of the total counter (e.g. `kWh`, `m³`, `l`)                                |
+| `counterPulsesPerUnit` | float    | Meter constant (Zählerkonstante): pulses per counterUnit                         |
+| `counterPrecision`     | int      | Number of decimal places for the counter value                                   |
+| `gaugeUnit`            | string   | Unit of the flow rate (e.g. `kW`, `l/h`, `l/s`)                                  |
+| `gaugeScale`           | float    | Scale factor applied to the gauge value (e.g. `0.2777778` to convert m³/h → l/s) |
+| `gaugePrecision`       | int      | Number of decimal places for the gauge value                                     |
+| `mqttTopic`            | string   | MQTT topic to publish to (empty = not published)                                 |
 
 ---
 

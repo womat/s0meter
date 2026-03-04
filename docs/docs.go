@@ -240,20 +240,20 @@ const docTemplate = `{
                     "description": "Total meter value",
                     "type": "number"
                 },
+                "counterUnit": {
+                    "description": "Counter unit",
+                    "type": "string"
+                },
                 "gauge": {
                     "description": "Flow rate",
                     "type": "number"
                 },
+                "gaugeUnit": {
+                    "description": "Gauge unit",
+                    "type": "string"
+                },
                 "timeStamp": {
                     "description": "Timestamp of reading",
-                    "type": "string"
-                },
-                "unitCounter": {
-                    "description": "Counter unit",
-                    "type": "string"
-                },
-                "unitGauge": {
-                    "description": "Gauge unit",
                     "type": "string"
                 }
             }
