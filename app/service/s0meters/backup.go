@@ -64,8 +64,8 @@ func (h *Handler) LoadMeterData(file string) error {
 		return err
 	}
 
-	h.Lock()
-	defer h.Unlock()
+	h.mux.Lock()
+	defer h.mux.Unlock()
 	for name, counter := range saved {
 		if m, ok := h.meters[name]; ok {
 			m.Meter.SetCounter(counter)
@@ -86,12 +86,12 @@ func (h *Handler) LoadMeterData(file string) error {
 // - nil on success
 // - an error if marshalling or file writing fails
 func (h *Handler) SaveMeterData(file string) error {
-	h.RLock()
+	h.mux.RLock()
 	data := make(map[string]pulsecounter.Counter, len(h.meters))
 	for name, m := range h.meters {
 		data[name] = m.Meter.GetCounter()
 	}
-	h.RUnlock()
+	h.mux.RUnlock()
 
 	// marshal to YAML
 	yamlData, err := yaml.Marshal(data)

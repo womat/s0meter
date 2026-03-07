@@ -38,8 +38,8 @@ func (h *Handler) PublishAllMetrics(mqttHandler *mqtt.Handler) {
 		return
 	}
 
-	h.RLock()
-	defer h.RUnlock()
+	h.mux.RLock()
+	defer h.mux.RUnlock()
 
 	for name, meterInstance := range h.meters {
 		b, err := h.serializeMetricLocked(name)
@@ -63,8 +63,8 @@ func (h *Handler) PublishAllMetrics(mqttHandler *mqtt.Handler) {
 
 // SerializeMetric — public, acquires own lock
 func (h *Handler) SerializeMetric(name string) ([]byte, error) {
-	h.RLock()
-	defer h.RUnlock()
+	h.mux.RLock()
+	defer h.mux.RUnlock()
 	return h.serializeMetricLocked(name)
 }
 

@@ -44,7 +44,7 @@ import (
 
 // Handler manages all registered meters, MQTT, and data persistence.
 type Handler struct {
-	sync.RWMutex
+	mux    sync.RWMutex
 	logger *slog.Logger
 	meters map[string]*MeterInstance
 }
@@ -90,8 +90,8 @@ func New() *Handler {
 
 // Close shuts down all meters, disconnects MQTT.
 func (h *Handler) Close() error {
-	h.Lock()
-	defer h.Unlock()
+	h.mux.Lock()
+	defer h.mux.Unlock()
 
 	var errs error
 	for _, m := range h.meters {
@@ -107,19 +107,19 @@ func (h *Handler) RegisterMeter(ctx context.Context, name string, cfg MeterConfi
 		return err
 	}
 
-	h.Lock()
+	h.mux.Lock()
 	h.meters[name] = &MeterInstance{
 		Config: cfg,
 		Meter:  meter,
 	}
-	h.Unlock()
+	h.mux.Unlock()
 	return nil
 }
 
 // GetMeterAll returns the current reading of all meters.
 func (h *Handler) GetMeterAll() map[string]MeterData {
-	h.RLock()
-	defer h.RUnlock()
+	h.mux.RLock()
+	defer h.mux.RUnlock()
 
 	now := time.Now()
 	data := make(map[string]MeterData, len(h.meters))
@@ -137,9 +137,9 @@ func (h *Handler) GetMeterAll() map[string]MeterData {
 
 // GetMeter returns the reading of a specific meter.
 func (h *Handler) GetMeter(name string) (MeterData, error) {
-	h.RLock()
+	h.mux.RLock()
 	m, ok := h.meters[name]
-	h.RUnlock()
+	h.mux.RUnlock()
 
 	if !ok {
 		return MeterData{}, fmt.Errorf("meter %s not found", name)
