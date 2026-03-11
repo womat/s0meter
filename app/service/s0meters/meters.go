@@ -36,10 +36,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+
 	"math"
-	"s0meter/pkg/pulsecounter"
 	"sync"
 	"time"
+
+	"github.com/womat/s0meter/pkg/pulsecounter"
 )
 
 // Handler manages all registered meters, MQTT, and data persistence.

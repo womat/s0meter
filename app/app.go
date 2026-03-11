@@ -19,13 +19,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"s0meter/app/service/s0meters"
 	"strconv"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/womat/golib/mqtt"
+	"github.com/womat/s0meter/app/service/s0meters"
 )
 
 // VERSION holds the version information with the following logic in mind
@@ -38,7 +38,7 @@ import (
 // VERSION differs from semantic versioning as described in https://semver.org/
 // but we keep the correct syntax.
 const (
-	VERSION = "4.6.2+20260228"
+	VERSION = "4.6.3+20260311"
 	MODULE  = "s0meter"
 
 	ModeStop    = 0

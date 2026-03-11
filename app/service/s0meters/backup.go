@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"s0meter/pkg/pulsecounter"
 	"time"
 
+	"github.com/womat/s0meter/pkg/pulsecounter"
 	"gopkg.in/yaml.v3"
 )
 

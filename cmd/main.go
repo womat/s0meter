@@ -13,10 +13,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"s0meter/app"
 	"time"
 
 	"github.com/womat/golib/xlog"
+	"github.com/womat/s0meter/app"
 	"gopkg.in/yaml.v3"
 )
 

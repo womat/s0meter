@@ -59,7 +59,7 @@ func New(ctx context.Context, port int, debounce time.Duration) (*Handler, error
 
 	h := &Handler{pin: port, gpioPin: p}
 
-	if err = p.WatchFunc(ctx, gpio.RisingEdge, h.handlePulseEvent); err != nil {
+	if err = p.WatchFunc(gpio.RisingEdge, h.handlePulseEvent); err != nil {
 		p.Close()
 		return nil, fmt.Errorf("start watching events on GPIO port %d: %w", port, err)
 	}

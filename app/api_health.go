@@ -5,9 +5,9 @@ package app
 
 import (
 	"net/http"
-	"s0meter/app/service/health"
 
 	"github.com/womat/golib/web"
+	"github.com/womat/s0meter/app/service/health"
 )
 
 // HandleHealth returns the current health data of the application.

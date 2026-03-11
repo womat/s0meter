@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"s0meter/app/service/s0meters"
 	"slices"
 
+	"github.com/womat/s0meter/app/service/s0meters"
 	"gopkg.in/yaml.v3"
 )
 
