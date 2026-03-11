@@ -1,75 +1,120 @@
-# datacollectioninterval defines the interval in seconds, in which the gauges are calculated
-# default 60 seconds
-datacollectioninterval: 5
+# =============================================================================
+# s0meter configuration
+# =============================================================================
 
-# datafile defines the file in which the counters are saved
-# default /opt/womat/data/measurement.yaml
-datafile: C:\temp\measurement.yaml
+# logLevel defines the minimum log level.
+# Messages with at least this level are logged.
+# Allowed values: debug | info | warn | error
+logLevel: info
 
-# backupinterval defines the interval, in which counters are saved to datafile
-# default 60 seconds
-backupinterval: 313
+# logDestination defines where logs are written to.
+# Supported values: stdout | stderr | /path/to/logfile
+logDestination: stdout
 
-# debug activates the debug level and the output device/file
-debug:
-  # log file e.g. /tmp/emu.log; stderr; stdout
-  # default: stderr
-  file: stderr
-  # flag: (default: standard)
-  #       standard (default) >> Warning | Info | Error | Fatal
-  #       trace              >> Warning | Info | Error | Fatal | Debug | Trace
-  #       debug              >> Warning | Info | Error | Fatal | Debug
-  flag: trace
+# environment: dev | prod
+env: dev
 
+
+# =============================================================================
+# Webserver configuration (HTTPS)
+# =============================================================================
+webserver:
+  # Host address the HTTPS server listens on (0.0.0.0 = all interfaces)
+  listenHost: 0.0.0.0
+
+  # Port the HTTPS server listens on
+  listenPort: 8443
+
+  # Global API key for protected endpoints
+  apiKey: changeme!
+
+  # TLS private key file
+  keyFile: /opt/s0meter/etc/key.pem
+
+  # TLS certificate file
+  certFile: /opt/s0meter/etc/cert.pem
+
+  # Blocked IP addresses or networks (empty = none blocked)
+  # Examples: 192.168.0.1, 192.168.0.0/16, 10.0.0.0/8
+  blockedIPs: [ ]
+  #  - 192.168.0.1
+  #  - 192.168.0.0/16
+
+  # Allowed IP addresses or networks (empty = all allowed)
+  # Note: ::1 is the IPv6 loopback address
+  # Examples: 127.0.0.1, ::1, 192.168.0.0/16
+  allowedIPs: [ ]
+  #  - 127.0.0.1
+  #  - ::1
+  #  - 192.168.0.0/16
+
+# =============================================================================
+# Data collection
+# =============================================================================
+
+# File where counters are persisted
+dataFile: /opt/s0meter/data/s0meter.yaml
+
+# Interval in seconds for saving counters to dataFile
+backupInterval: 60
+
+# =============================================================================
+# MQTT configuration (disabled when connection is empty)
+# =============================================================================
 mqtt:
-  # connection >> defines the connection string to the mqtt broker
+  # Broker connection string (empty = MQTT disabled)
   connection: "tcp://raspberrypi4.fritz.box:1883"
 
-# meter configurations
-# key >> name of device
-#    gpio >> S0 input gpio pin
-#    bouncetime >> time to wait for a stable signal on gpio pin (ms) to get a "clean" level (suppress key bouncing)
-#    unitcounter >> unit of counter eg "kWh, m³, ..."
-#    counterconstant >> (Zählerkonstante) >> ticks/unitcounter: e.g. ticks/kWh
-#    unitgauge >> unit of gauge (unit/t) eg "kW, l/h, ..."
-#    scalefactor >> scale factor of gauge, based on hour: eg 1000: m³/h >> l/h,  0.27777778 m3/h >> l/s
-#    precision >> rounding gauge to a specified number of decimals
-#    mqtttopic >> mqtt topic, if it isn't defined, values aren't send to the mqtt broker
+  # Retain messages on the broker
+  retained: false
+
+  # Publish interval in seconds
+  publishInterval: 10
+
+# =============================================================================
+# S0 Meter configurations
+# =============================================================================
+# gpio                 - GPIO pin for S0 pulse input
+# bounceTime           - Debounce time in ms (suppress signal noise)
+# counterPulsesPerUnit - Meter constant (Zählerkonstante): pulses per counterUnit
+#                        (see meter datasheet, e.g. 1000 imp/kWh)
+# counterUnit          - Unit of the total counter (e.g. kWh, m³, l)
+# counterPrecision     - Decimal places for rounding the counter value
+# gaugeUnit            - Unit of the flow rate (e.g. kW, W, l/h, l/s)
+# gaugeScale           - Scale factor for gauge (e.g. 0.2777778 for m³/h → l/s)
+# gaugePrecision       - Decimal places for rounding the gauge value
+# mqttTopic            - MQTT topic to publish meter data (empty = disabled)
+# =============================================================================
 meter:
   wallbox:
     gpio: 17
-    bouncetime: 1
-    unitcounter: "kWh"
-    counterconstant: 1000
-    unitgauge: "kW"
-    scalefactor: 1
-    precision: 0
-  #  mqtttopic: testt/wallbox/summary
-  rawwater:
-    gpio: 27
-    bouncetime: 1
-    unitcounter: "l"
-    counterconstant: 1
-    unitgauge: "l/h"
-    scalefactor: 1
-    precision: 0
-  #  mqtttopic: testt/rawwater/summary
-  portablewater:
-    gpio: 22
-    bouncetime: 1
-    unitcounter: "m³"
-    counterconstant: 1000
-    unitgauge: "l/s"
-    scalefactor: 0.2777777778
-    precision: 0
-  #  mqtttopic: test/portablewater/summary
+    bounceTime: 1
+    counterUnit: "Wh"
+    counterPulsesPerUnit: 1
+    counterPrecision: 2
+    gaugeUnit: "kW"
+    gaugeScale: 0.001
+    gaugePrecision: 2
+    mqttTopic: test/wallbox/summary
 
-# webserver configuration
-webserver:
-  # url defines the bound of host (default: 0.0.0.0:4000)
-  url: http://0.0.0.0:4020
-  # enable/disable webservices (default: disabled)
-  webservices:
-    version: true
-    health: true
-    currentdata: true
+  greywater:
+    gpio: 27
+    bounceTime: 1
+    counterUnit: "l"
+    counterPulsesPerUnit: 1
+    counterPrecision: 0
+    gaugeUnit: "l/h"
+    gaugeScale: 1
+    gaugePrecision: 0
+    mqttTopic: test/rawwater/summary
+
+  drinkingwater:
+    gpio: 22
+    bounceTime: 1
+    counterUnit: "m³"
+    counterPulsesPerUnit: 1000
+    counterPrecision: 3
+    gaugeUnit: "l/s"
+    gaugeScale: 0.2777778
+    gaugePrecision: 3
+    mqttTopic: test/portablewater/summary

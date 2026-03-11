@@ -1,0 +1,258 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "contact": {}
+    },
+    "paths": {
+        "/health": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, and OS.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "info"
+                ],
+                "summary": "Get health data",
+                "responses": {
+                    "200": {
+                        "description": "Health data successfully retrieved",
+                        "schema": {
+                            "$ref": "#/definitions/health.Model"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/meters": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the current counter and gauge values for all registered S0 meters, keyed by meter name.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "meters"
+                ],
+                "summary": "Get all meter readings",
+                "responses": {
+                    "200": {
+                        "description": "Meter readings successfully retrieved",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/s0meters.MeterData"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/meters/{name}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the current counter and gauge values for a specific S0 meter by name.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "meters"
+                ],
+                "summary": "Get single meter reading",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Meter name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Meter reading successfully retrieved",
+                        "schema": {
+                            "$ref": "#/definitions/s0meters.MeterData"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Meter not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/ready": {
+            "get": {
+                "description": "Returns 200 if all dependencies are ready, 503 otherwise. No authentication required.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "info"
+                ],
+                "summary": "Readiness check",
+                "responses": {
+                    "200": {
+                        "description": "Application is ready",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Service unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/version": {
+            "get": {
+                "description": "Returns the current application name and version. No authentication required.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "info"
+                ],
+                "summary": "Get application version and name",
+                "responses": {
+                    "200": {
+                        "description": "Application version and name",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "app": {
+                                    "type": "string"
+                                },
+                                "appVersion": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "health.Model": {
+            "type": "object",
+            "properties": {
+                "app": {
+                    "description": "Application name (MODULE)",
+                    "type": "string"
+                },
+                "appVersion": {
+                    "description": "Current version of the application",
+                    "type": "string"
+                },
+                "goVersion": {
+                    "description": "Go runtime version",
+                    "type": "string"
+                },
+                "heapAllocBytes": {
+                    "description": "Allocated heap memory in bytes",
+                    "type": "integer"
+                },
+                "hostname": {
+                    "description": "Machine name where the app runs",
+                    "type": "string"
+                },
+                "numGoroutines": {
+                    "description": "Current number of active goroutines",
+                    "type": "integer"
+                },
+                "os": {
+                    "description": "Operating system name",
+                    "type": "string"
+                },
+                "sysMemoryBytes": {
+                    "description": "Total memory obtained from the OS",
+                    "type": "integer"
+                },
+                "timestamp": {
+                    "description": "UTC timestamp when health info was collected (RFC3339)",
+                    "type": "string"
+                },
+                "uptimeSeconds": {
+                    "description": "Application uptime in seconds",
+                    "type": "number"
+                }
+            }
+        },
+        "s0meters.MeterData": {
+            "type": "object",
+            "properties": {
+                "counter": {
+                    "description": "Total meter value",
+                    "type": "number"
+                },
+                "counterUnit": {
+                    "description": "Counter unit",
+                    "type": "string"
+                },
+                "gauge": {
+                    "description": "Flow rate",
+                    "type": "number"
+                },
+                "gaugeUnit": {
+                    "description": "Gauge unit",
+                    "type": "string"
+                },
+                "timeStamp": {
+                    "description": "Timestamp of reading",
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "name": "X-API-Key",
+            "in": "header"
+        }
+    }
+}
