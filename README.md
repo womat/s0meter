@@ -22,7 +22,9 @@ Zero and above).
 ### Get meter data
 
 ```sh
-curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/data
+curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/meters
+curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/meters/{name}
+
 ```
 
 ### Get application version

@@ -81,7 +81,7 @@ mqtt:
 # counterUnit          - Unit of the total counter (e.g. kWh, m³, l)
 # counterPrecision     - Decimal places for rounding the counter value
 # gaugeUnit            - Unit of the flow rate (e.g. kW, W, l/h, l/s)
-# gaugeScale           - Scale factor for gauge (e.g. 0.2777778 for m³/h → l/s)
+# gaugeScale           - Scale factor for gauge (e.g. 0.2777778 for m³/h to l/s)
 # gaugePrecision       - Decimal places for rounding the gauge value
 # mqttTopic            - MQTT topic to publish meter data (empty = disabled)
 # =============================================================================
