@@ -8,12 +8,24 @@ Zero and above).
 
 ## Features
 
-- Reads S0 pulse signals via GPIO
-- Calculates energy counters and flow rates (gauge)
-- Exposes data via HTTPS REST API (with API key or JWT authentication)
-- Publishes data to an MQTT broker
-- IP allowlist / blocklist support
-- Persists counter data to disk
+- Counts **S0 pulses** from GPIO pins (Raspberry Pi)
+- Applies **debouncing** to filter signal noise
+- Calculates **total counters** and **flow rates** (gauge values)
+- **Persists counters** to a YAML file for recovery after restart
+- Publishes measurements to an **MQTT broker** (configurable interval + delta trigger)
+- Exposes a secured **HTTPS REST API** (API key authentication)
+- **IP allowlist / blocklist** support
+- **Hot-reload** of configuration via `SIGHUP`
+- Embedded self-signed TLS certificate for development (no setup required)
+- Optional **Swagger UI** (build tag `swagger`, dev only)
+
+---
+
+## Where to start
+
+- Runtime, API, build, deploy, and Swagger usage: [`cmd/README.md`](cmd/README.md)
+- Example configuration: [`config/config.yaml`](config/config.yaml)
+- Swagger generation script: [`docs/generate.sh`](docs/generate.sh)
 
 ---
 
@@ -72,7 +84,6 @@ CONFIG_FILE=/etc/s0meter/config.yaml s0meter
 
 Default location: `/opt/s0meter/etc/config.yaml`
 Environment variables are expanded inside the file, e.g. `apiKey: ${TADL_API_KEY}`.
-
 
 ```yaml
 # =============================================================================
