@@ -45,8 +45,13 @@ type WebserverConfig struct {
 // MQTTConfig holds MQTT client settings.
 type MQTTConfig struct {
 	Connection      string        `yaml:"connection"`      // Broker connection string
-	Retained        bool          `yaml:"retained"`        // Whether messages are retained
-	PublishInterval time.Duration `yaml:"publishInterval"` // publish interval as Go duration string (e.g. 60s)
+	PublishInterval time.Duration `yaml:"publishInterval"` // heartbeat interval as Go duration string (e.g. 60s)
+
+	// MinPublishInterval is how often the publish loop checks for new pulses, and therefore the
+	// shortest possible spacing between two messages of the same meter. It keeps a fast pulsing
+	// meter from flooding the broker. Zero disables the change trigger: meters are then published
+	// on the heartbeat only.
+	MinPublishInterval time.Duration `yaml:"minPublishInterval"`
 }
 
 // NewConfig returns a Config with sane defaults
@@ -65,8 +70,9 @@ func NewConfig() *Config {
 			AllowedIPs: []string{},
 		},
 		MQTT: MQTTConfig{
-			Connection:      "", // e.g. "tcp://mqtt.example.com:1883", empty means MQTT is disabled
-			PublishInterval: 10 * time.Second,
+			Connection:         "", // e.g. "tcp://mqtt.example.com:1883", empty means MQTT is disabled
+			PublishInterval:    60 * time.Second,
+			MinPublishInterval: 2 * time.Second,
 		},
 	}
 }
@@ -131,7 +137,16 @@ func (c *Config) Validate() error {
 	}
 
 	if c.MQTT.PublishInterval < time.Second {
-		return fmt.Errorf("dataCollectionInterval must be greater than 1s, got %v", c.MQTT.PublishInterval)
+		return fmt.Errorf("publishInterval must be greater than 1s, got %v", c.MQTT.PublishInterval)
+	}
+
+	if c.MQTT.MinPublishInterval < 0 {
+		return fmt.Errorf("minPublishInterval must not be negative, got %v", c.MQTT.MinPublishInterval)
+	}
+
+	if c.MQTT.MinPublishInterval > c.MQTT.PublishInterval {
+		return fmt.Errorf("minPublishInterval (%v) must not exceed publishInterval (%v)",
+			c.MQTT.MinPublishInterval, c.MQTT.PublishInterval)
 	}
 
 	if c.BackupInterval < time.Second {

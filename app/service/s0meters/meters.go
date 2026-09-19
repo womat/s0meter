@@ -53,8 +53,8 @@ type Handler struct {
 
 // MeterConfig defines the configuration of a single meter.
 type MeterConfig struct {
-	Gpio         int           `yaml:"gpio"`       // GPIO pin for pulse input
-	DebounceTime time.Duration `yaml:"bounceTime"` // Debounce as Go duration string (e.g. 10ms)
+	Gpio         int           `yaml:"gpio"`         // GPIO pin for pulse input
+	DebounceTime time.Duration `yaml:"debounceTime"` // Debounce as Go duration string (e.g. 10ms)
 
 	CounterUnit          string  `yaml:"counterUnit"`          // unit of counter value (e.g. kWh, Wh)
 	CounterPulsesPerUnit float64 `yaml:"counterPulsesPerUnit"` // number of pulses per counterUnit (e.g. 1000 imp/kWh)
@@ -65,7 +65,7 @@ type MeterConfig struct {
 	GaugePrecision int     `yaml:"gaugePrecision"` // decimal places for gauge
 
 	MqttTopic    string `yaml:"mqttTopic"`    // MQTT topic for this meter
-	MqttRetained bool   `yaml:"mqttRetained"` // MQTT retained flag
+	MqttRetained bool   `yaml:"mqttRetained"` // broker keeps the last message of this topic (default: false)
 }
 
 // MeterInstance holds a registered meter and its pulse handler.

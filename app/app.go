@@ -21,6 +21,7 @@ import (
 	"os/signal"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/womat/golib/mqtt"
@@ -47,16 +48,20 @@ const (
 // App is the main application struct.
 // App is where the application is wired up.
 type App struct {
-	wg         sync.WaitGroup // wait group to track running webserver
-	baseDir    string         // working directory
-	config     *Config        // app configuration
-	web        *http.Server   // HTTP server
-	meters     *s0meters.Handler
-	mqtt       *mqtt.Handler
-	restart    chan struct{} // signals application restart
-	shutdown   chan struct{} // signals application shutdown
-	ctx        context.Context
-	cancelFunc context.CancelFunc
+	wg      sync.WaitGroup // wait group to track running webserver
+	baseDir string         // working directory
+	config  *Config        // app configuration
+	web     *http.Server   // HTTP server
+	meters  *s0meters.Handler
+	mqtt    *mqtt.Handler
+	// mqttConnected mirrors the broker connection state reported by the MQTT callbacks.
+	// The publish loop reads it to skip ticks while the client is disconnected, which
+	// avoids blocking on Publish() until its timeout expires.
+	mqttConnected atomic.Bool
+	restart       chan struct{} // signals application restart
+	shutdown      chan struct{} // signals application shutdown
+	ctx           context.Context
+	cancelFunc    context.CancelFunc
 }
 
 // New initializes the App struct but does not start services.
@@ -95,9 +100,11 @@ func (app *App) Run() (*App, error) {
 
 		mqttHandler, err := mqtt.New(broker, clientID,
 			mqtt.WithOnConnected(func() {
+				app.mqttConnected.Store(true)
 				slog.Info("MQTT connected", "broker", broker)
 			}),
 			mqtt.WithOnConnectionLost(func(err error) {
+				app.mqttConnected.Store(false)
 				slog.Warn("MQTT connection lost", "error", err)
 			}))
 		if err != nil {
@@ -107,8 +114,12 @@ func (app *App) Run() (*App, error) {
 
 		app.mqtt = mqttHandler
 		// periodically calculate the gauge- and counter-values for each meter and send the results over MQTT
-		slog.Info("Starting periodic MQTT publishing", "interval", app.config.MQTT.PublishInterval, "broker", broker)
-		app.meters.StartPeriodicPublish(app.ctx, app.config.MQTT.PublishInterval, app.mqtt)
+		slog.Info("Starting periodic MQTT publishing",
+			"heartbeat", app.config.MQTT.PublishInterval,
+			"minInterval", app.config.MQTT.MinPublishInterval,
+			"broker", broker)
+		app.meters.StartPeriodicPublish(app.ctx, app.config.MQTT.PublishInterval, app.config.MQTT.MinPublishInterval,
+			app.mqtt, app.mqttConnected.Load)
 	}
 
 	slog.Info("Starting periodic meter data backup", "interval", app.config.BackupInterval, "file", app.config.DataFile)

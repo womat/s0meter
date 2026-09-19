@@ -13,9 +13,9 @@ DOCKER_REGISTRY?= #if set it should finished by /
 EXPORT_RESULT?=false # for CI please set EXPORT_RESULT to true
 
 # Raspberry Pi Login / IP
-PI_USER := pv
-PI_HOST := pi400ssd
-PI_PATH := /home/pv/
+PI_USER ?= pv
+PI_HOST ?= pi400ssd
+PI_PATH ?= /home/pv/
 
 GREEN  := $(shell tput -Txterm setaf 2)
 YELLOW := $(shell tput -Txterm setaf 3)
@@ -30,7 +30,7 @@ BUILD_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown"
 LDFLAGS := -X 'main.buildDate=$(BUILD_DATE)' \
            -X 'main.buildCommit=$(BUILD_COMMIT)'
 
-.PHONY: all test build vendor copy build_dev build_arm6 build_arm7 build_arm64 build_windows386 build_windows64 build_linux386 build_linux64 build_mac_arm64 deploy clean help ensure_dev_certs
+.PHONY: all test build vendor copy build_dev build_arm6 build_arm7 build_arm64 build_windows386 build_windows64 build_linux386 build_linux64 build_mac_arm64 deploy deploy_arm6 clean help ensure_dev_certs
 
 all: help
 
@@ -114,6 +114,10 @@ build_mac_arm64: ensure_dev_certs ## build binary mac M1
 deploy: build_arm64 ## build binary and copy binary to ${TARGET_NODE}:/tmp
 	@echo "Copying binary to  $(PI_USER)@$(PI_HOST):$(PI_PATH)"
 	scp ./bin/arm64/${BINARY_NAME} $(PI_USER)@$(PI_HOST):$(PI_PATH)
+
+deploy_arm6: build_arm6 ## build armv6 binary and copy to $(PI_USER)@$(PI_HOST) (override: make deploy_arm6 PI_HOST=water)
+	@echo "Copying armv6 binary to  $(PI_USER)@$(PI_HOST):$(PI_PATH)"
+	scp ./bin/arm6/${BINARY_NAME} $(PI_USER)@$(PI_HOST):$(PI_PATH)
 
 deploy_dev: build_arm64_dev ## build binary and copy binary to ${TARGET_NODE}:/tmp
 	@echo "Copying binary to  $(PI_USER)@$(PI_HOST):$(PI_PATH)"
