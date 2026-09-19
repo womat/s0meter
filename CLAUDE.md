@@ -16,17 +16,29 @@ GOOS=linux GOARCH=arm64 go build ./...
 ```
 
 ```sh
-make build_arm64       # Pi 3/4/5/Zero2, 64-bit OS
+make build_arm6        # Pi 1 / Zero, 32-bit OS — the deployment target
 make build_arm7        # Pi 2/3/4/Zero2, 32-bit OS
-make build_arm6        # Pi 1 / Zero, 32-bit OS
-make build_arm64_dev   # + Swagger UI (-tags swagger)
-make deploy            # build_arm64 then scp to $(PI_USER)@$(PI_HOST) — see Makefile vars
+make build_arm64       # Pi 3/4/5/Zero2, 64-bit OS
+make build_arm6_dev    # + Swagger UI (-tags swagger); _dev variants exist per arch
+make deploy            # build for $(PI_ARCH) then scp to $(PI_USER)@$(PI_HOST)
 make clean
 ```
 
 `ensure_dev_certs` (a prerequisite of every build target) generates `app/certs/dev_{cert,key}.pem` if missing; these are `//go:embed`-ed and gitignored, so a fresh clone must build via `make`, not bare `go build`.
 
-There are **no tests** in this repo. `VERSION` is a hand-maintained const in `app/app.go`; `buildDate`/`buildCommit` come from `-ldflags` in the Makefile.
+There are **no tests** in this repo. `VERSION` (`app/app.go`), `buildDate` and `buildCommit` (`cmd/main.go`) are all `var`s injected via `-ldflags` — never edit them in source. The Makefile derives `VERSION` from `git describe --tags`; GoReleaser uses the tag itself.
+
+### Releases
+
+Versioning is SemVer and the Git tag is the single source of truth. `make release TAG=vX.Y.Z` verifies the tag shape and a clean tree, then tags and pushes; `.github/workflows/release.yml` runs `goreleaser release --clean`, which builds linux arm64/armv7/armv6 and publishes a GitHub release with checksums and a grouped changelog.
+
+Two things to keep in mind when touching `.goreleaser.yaml`: its `before` hook must keep running `make ensure_dev_certs` (GoReleaser calls `go build` directly, so the `//go:embed`-ed dev certs would otherwise be missing), and archives must keep shipping `README.md` — it carries the third-party license overview, and the statically linked Paho MQTT client is EPL-2.0. Validate changes with `goreleaser check` and `goreleaser release --snapshot --clean`.
+
+`.github/workflows/ci.yml` vets and builds on every push/PR against `develop`, with `GOOS=linux GOARCH=arm64` set at the job level.
+
+Two ways onto a Pi, deliberately kept apart: `make deploy` builds locally and is the development loop (its binary reports a `-dirty` version, which is how you tell it apart on the device); `make deploy_release TAG=vX.Y.Z` downloads the published archive via `gh`, verifies the checksum and copies that.
+
+**`PI_ARCH` defaults to `arm6`** because the deployment target is a Raspberry Pi Zero (1st gen) — ARMv6, 32-bit only. Every `deploy*` target follows it, so none of them may hardcode an architecture; an arm64 binary dies on that device with `Exec format error`. CI therefore runs a matrix over armv6/armv7/arm64 rather than arm64 alone.
 
 ### Swagger
 
@@ -78,3 +90,4 @@ blocks for up to 5 s per message when disconnected), and a failed publish is not
 - Logging is `log/slog` with key/value pairs throughout; `slog.SetDefault` is set once in `cmd`. Do not use `fmt.Print` outside pre-logger startup and `--about`/`--version`/`--help`.
 - Doc comments: every package and exported symbol is documented, German-free, and Swagger annotations live directly on the handlers.
 - Config field docs are duplicated in `README.md`, `cmd/README.md`, and `config/config.yaml` — update all three when adding a config key.
+- Commit subjects use the prefixes `feat()`, `fix()`, `docu()`, `chore()`, `refactor()`. The release changelog groups on them (`.goreleaser.yaml`), and anything unprefixed lands under "Other". Note it is `docu()`, not `docs()` — the regex accepts both, the repo's history uses `docu`.
