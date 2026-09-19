@@ -1,0 +1,57 @@
+# Vet and build on every push and pull request.
+#
+# GOOS/GOARCH are set explicitly because the GPIO dependency
+# (warthog618/go-gpiocdev via womat/golib/gpio/rpi) only compiles for Linux.
+# A bare `go vet ./...` on any other platform fails with `undefined: uapi.*`.
+name: ci
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The three targets that are actually released. armv6 is the deployment
+        # target (Raspberry Pi Zero, 1st gen), so it must not be the one that
+        # goes untested.
+        include:
+          - goarch: arm
+            goarm: "6"
+          - goarch: arm
+            goarm: "7"
+          - goarch: arm64
+            goarm: ""
+    env:
+      GOOS: linux
+      GOARCH: ${{ matrix.goarch }}
+      GOARM: ${{ matrix.goarm }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # app/certs/ is gitignored but embedded by app/webservices.go.
+      - name: Generate development TLS certificates
+        run: make ensure_dev_certs
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./...
+
+      # The Swagger UI sits behind a build tag, so a plain build never compiles it.
+      - name: Build with Swagger UI
+        run: go build -tags swagger ./...

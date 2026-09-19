@@ -286,6 +286,13 @@ timeout, and resumes automatically once the client reconnects.
 
 ## TLS Certificate
 
+> **Warning — always configure a real certificate.** If `certFile` does not exist, the server falls
+> back to a self-signed certificate compiled into the binary and only logs a warning. That
+> certificate's private key ships inside every published release archive, so it is public knowledge:
+> anyone can extract it and impersonate an instance running on the fallback. It exists solely so a
+> fresh checkout starts up during development. A machine reachable by anyone but you must never run
+> on it.
+
 Generate a self-signed certificate for development:
 
 ```sh
@@ -382,29 +389,87 @@ Verify with `journalctl --list-boots` - it should list more than the current boo
 
 ---
 
-## Build
+## Releases
+
+Versioning follows [semantic versioning](https://semver.org/) and the Git tag is the single source
+of truth: the version is injected at build time via `-ldflags`, never maintained in the sources. A
+binary therefore always reports the tag it was cut from (`s0meter --version`); builds from an
+untagged or modified working copy report a descriptive fallback such as `4.7.0-5-g0c13781-dirty`.
+
+Pushing a semver tag triggers a GitHub Actions workflow that builds all Raspberry Pi architectures
+and publishes them as a GitHub release with checksums and a generated changelog:
 
 ```sh
-# Raspberry Pi 4/5 (64-bit OS)
-make build_arm64
+make release TAG=v4.7.0
+```
 
-# Raspberry Pi 2/3/4 (32-bit OS)
-make build_arm7
+Prebuilt archives are attached to every release at
+<https://github.com/womat/s0meter/releases>:
 
+| Archive        | Raspberry Pi model                           |
+|----------------|----------------------------------------------|
+| `linux_arm64`  | Pi 3 / 4 / 5 / Zero 2 W with a 64-bit OS     |
+| `linux_armv7`  | Pi 2 / 3 / 4 / 5 / Zero 2 W with a 32-bit OS |
+| `linux_armv6`  | Pi 1 and Zero (1st gen)                      |
+
+Each archive contains the binary, `config/config.yaml`, `README.md` and `LICENSE`. Verify a download
+against `checksums.txt`:
+
+```sh
+sha256sum -c checksums.txt --ignore-missing
+```
+
+To put a published release straight onto a Pi — downloaded, checksum-verified and copied in one
+step, so the device provably runs the released binary rather than a local build:
+
+```sh
+make deploy_release TAG=v4.7.0
+
+# same host overrides as the other deploy targets
+make deploy_release TAG=v4.7.0 PI_HOST=my-pi PI_USER=pi
+```
+
+This needs the [GitHub CLI](https://cli.github.com). It fetches the archive matching `PI_ARCH`,
+which defaults to `arm6`; the binary lands in `$PI_PATH` and still has to be installed (see below).
+
+---
+
+## Build
+
+Building from source is the development loop: build, `scp`, test. For a normal install take a
+published release instead (`make deploy_release`, above) — a locally built binary reports a version
+like `4.7.0-5-g0c13781-dirty`, which is exactly how you can tell the two apart on a device.
+
+```sh
 # Raspberry Pi 1 / Zero (32-bit OS)
 make build_arm6
 
-# Build with Swagger UI (dev only)
-make build_arm64_dev
+# Raspberry Pi 2/3/4/Zero 2 W (32-bit OS)
+make build_arm7
 
-# Build and deploy to Raspberry Pi via SCP (arm64)
+# Raspberry Pi 3/4/5/Zero 2 W (64-bit OS)
+make build_arm64
+
+# Build with Swagger UI (dev only)
+make build_arm6_dev
+
+# Build and deploy to the Pi via SCP
 make deploy
 
-# Deploy to a 32-bit Pi, overriding the target host
-make deploy_arm6 PI_HOST=my-pi PI_USER=pi
+# Deploy with the Swagger UI enabled
+make deploy_dev
 ```
 
-`PI_USER`, `PI_HOST` and `PI_PATH` can be overridden on the command line; the binary is copied to
+`PI_ARCH` selects the target architecture for every `deploy*` target and defaults to **`arm6`**,
+matching a Raspberry Pi Zero (1st gen). Get this wrong and the binary simply will not start on the
+device — an arm64 build on an ARMv6 Pi fails with `Exec format error`. Use `arm7` for a 32-bit
+Pi 2/3/4/Zero 2 W and `arm64` for a 64-bit OS:
+
+```sh
+make deploy PI_ARCH=arm64 PI_HOST=my-pi PI_USER=pi
+```
+
+`PI_USER`, `PI_HOST` and `PI_PATH` can be overridden the same way; the binary is copied to
 `$PI_PATH` and still has to be installed:
 
 ```sh
