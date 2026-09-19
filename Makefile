@@ -18,10 +18,19 @@ EXPORT_RESULT?=false # for CI please set EXPORT_RESULT to true
 RELEASE_BRANCH ?= main
 DEVELOP_BRANCH ?= develop
 
-# Raspberry Pi Login / IP
+# Raspberry Pi Login / IP. These are placeholders - the real host name stays out
+# of this public repository. Put your device in Makefile.local instead (it is
+# gitignored and included below), so plain `make deploy` works without repeating
+# the address:
+#
+#   PI_USER := myuser
+#   PI_HOST := mypi
+#
+# PI_PATH defaults to the login directory, which is correct for any user name;
+# override it only to land the binary somewhere else.
 PI_USER ?= pi
 PI_HOST ?= raspberrypi
-PI_PATH ?= /home/pi/
+PI_PATH ?= .
 
 # Architecture of the target device, used by every deploy_* target.
 # The deployment target is a Raspberry Pi Zero (1st gen), which is ARMv6 and 32-bit
@@ -29,6 +38,9 @@ PI_PATH ?= /home/pi/
 #   make deploy PI_ARCH=arm64 PI_HOST=my-pi
 # See the compatibility table below for which value a model needs.
 PI_ARCH ?= arm6
+
+# Local, untracked overrides for the settings above. Missing file is fine.
+-include Makefile.local
 
 # Guard the value: PI_REL_ARCH below maps anything unrecognised to arm64, so a
 # typo would otherwise silently produce or download the wrong architecture.

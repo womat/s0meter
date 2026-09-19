@@ -475,8 +475,17 @@ Pi 2/3/4/Zero 2 W and `arm64` for a 64-bit OS:
 make deploy PI_ARCH=arm64 PI_HOST=my-pi PI_USER=pi
 ```
 
-`PI_USER`, `PI_HOST` and `PI_PATH` can be overridden the same way; the binary is copied to
-`$PI_PATH` and still has to be installed:
+`PI_USER`, `PI_HOST` and `PI_PATH` can be overridden the same way. Their defaults are
+placeholders, so rather than repeating your device on every call, put it in `Makefile.local` -
+untracked, and included automatically:
+
+```make
+PI_USER := myuser
+PI_HOST := mypi
+```
+
+`PI_PATH` defaults to the login directory and rarely needs setting. Command-line values still win
+over the file. The binary is copied to `$PI_PATH` and still has to be installed:
 
 ```sh
 sudo install -o s0meter -g s0meter -m 755 ~/s0meter /opt/s0meter/bin/s0meter

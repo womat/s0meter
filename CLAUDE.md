@@ -38,6 +38,8 @@ Two things to keep in mind when touching `.goreleaser.yaml`: its `before` hook m
 
 `.github/workflows/ci.yml` vets and builds on every push/PR against `develop`, with `GOOS=linux GOARCH=arm64` set at the job level.
 
+`PI_USER`/`PI_HOST`/`PI_PATH` default to placeholders (the real host name is deliberately not in this public repo — see `f83d16e`). `Makefile.local`, gitignored and pulled in via `-include`, carries the actual device; command-line values still override it. `PI_PATH` defaults to `.`, the login directory, so it is correct for any user name.
+
 Two ways onto a Pi, deliberately kept apart: `make deploy` builds locally and is the development loop (its binary reports a `-dirty` version, which is how you tell it apart on the device); `make deploy_release TAG=vX.Y.Z` downloads the published archive via `gh`, verifies the checksum and copies that.
 
 **`PI_ARCH` defaults to `arm6`** because the deployment target is a Raspberry Pi Zero (1st gen) — ARMv6, 32-bit only. Every `deploy*` target follows it, so none of them may hardcode an architecture; an arm64 binary dies on that device with `Exec format error`. CI therefore runs a matrix over armv6/armv7/arm64 rather than arm64 alone.
