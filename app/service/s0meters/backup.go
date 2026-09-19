@@ -16,7 +16,7 @@ import (
 // StartPeriodicBackup runs a periodic YAML backup in a separate goroutine.
 //
 // This function saves the current counter values to the configured DataFile
-// every BackupInterval seconds. Errors are logged but do not stop execution.
+// every BackupInterval. Errors are logged but do not stop execution.
 func (h *Handler) StartPeriodicBackup(ctx context.Context, interval time.Duration, filename string) {
 	ticker := time.NewTicker(interval)
 

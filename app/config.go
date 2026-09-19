@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"time"
 
 	"github.com/womat/s0meter/app/service/s0meters"
 	"gopkg.in/yaml.v3"
@@ -24,7 +25,7 @@ type Config struct {
 	Webserver      WebserverConfig                 `yaml:"webserver"`      // Webserver configuration
 	MQTT           MQTTConfig                      `yaml:"mqtt"`           // MQTT client configuration
 	DataFile       string                          `yaml:"dataFile"`       // Path to meter data YAML file
-	BackupInterval int                             `yaml:"backupInterval"` // Backup interval in seconds
+	BackupInterval time.Duration                   `yaml:"backupInterval"` // Backup interval as Go duration string (e.g. 60s)
 	Meter          map[string]s0meters.MeterConfig `yaml:"meter"`          // Map of S0 meter configurations
 }
 
@@ -43,9 +44,14 @@ type WebserverConfig struct {
 
 // MQTTConfig holds MQTT client settings.
 type MQTTConfig struct {
-	Connection      string `yaml:"connection"`      // Broker connection string
-	Retained        bool   `yaml:"retained"`        // Whether messages are retained
-	PublishInterval int    `yaml:"publishInterval"` // publish interval in seconds
+	Connection      string        `yaml:"connection"`      // Broker connection string
+	PublishInterval time.Duration `yaml:"publishInterval"` // heartbeat interval as Go duration string (e.g. 60s)
+
+	// MinPublishInterval is how often the publish loop checks for new pulses, and therefore the
+	// shortest possible spacing between two messages of the same meter. It keeps a fast pulsing
+	// meter from flooding the broker. Zero disables the change trigger: meters are then published
+	// on the heartbeat only.
+	MinPublishInterval time.Duration `yaml:"minPublishInterval"`
 }
 
 // NewConfig returns a Config with sane defaults
@@ -54,7 +60,7 @@ func NewConfig() *Config {
 		Env:            DevEnv,
 		LogLevel:       "info",
 		LogDestination: "stdout",
-		BackupInterval: 60,
+		BackupInterval: 60 * time.Second,
 		Meter:          make(map[string]s0meters.MeterConfig),
 		DataFile:       filepath.Join("/opt", MODULE, "data", "s0meter.yaml"),
 		Webserver: WebserverConfig{
@@ -64,8 +70,9 @@ func NewConfig() *Config {
 			AllowedIPs: []string{},
 		},
 		MQTT: MQTTConfig{
-			Connection:      "", // e.g. "tcp://mqtt.example.com:1883", empty means MQTT is disabled
-			PublishInterval: 10,
+			Connection:         "", // e.g. "tcp://mqtt.example.com:1883", empty means MQTT is disabled
+			PublishInterval:    60 * time.Second,
+			MinPublishInterval: 2 * time.Second,
 		},
 	}
 }
@@ -129,12 +136,21 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.MQTT.PublishInterval <= 0 {
-		return fmt.Errorf("dataCollectionInterval must be greater than 0, got %v", c.MQTT.PublishInterval)
+	if c.MQTT.PublishInterval < time.Second {
+		return fmt.Errorf("publishInterval must be greater than 1s, got %v", c.MQTT.PublishInterval)
 	}
 
-	if c.BackupInterval <= 0 {
-		return fmt.Errorf("backupInterval must be greater than 0, got %v", c.BackupInterval)
+	if c.MQTT.MinPublishInterval < 0 {
+		return fmt.Errorf("minPublishInterval must not be negative, got %v", c.MQTT.MinPublishInterval)
+	}
+
+	if c.MQTT.MinPublishInterval > c.MQTT.PublishInterval {
+		return fmt.Errorf("minPublishInterval (%v) must not exceed publishInterval (%v)",
+			c.MQTT.MinPublishInterval, c.MQTT.PublishInterval)
+	}
+
+	if c.BackupInterval < time.Second {
+		return fmt.Errorf("backupInterval must be greater than 1s, got %v", c.BackupInterval)
 	}
 
 	return nil

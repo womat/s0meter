@@ -55,27 +55,29 @@ webserver:
 # File where counters are persisted
 dataFile: /opt/s0meter/data/s0meter.yaml
 
-# Interval in seconds for saving counters to dataFile
-backupInterval: 60
+# Interval as Go duration string (e.g. 60s) for saving counters to dataFile
+backupInterval: 60s
 
 # =============================================================================
 # MQTT configuration (disabled when connection is empty)
 # =============================================================================
 mqtt:
   # Broker connection string (empty = MQTT disabled)
-  connection: "tcp://raspberrypi4.fritz.box:1883"
+  connection: "tcp://mqtt.example.com:1883"
 
-  # Retain messages on the broker
-  retained: false
+  # Heartbeat: every meter is published at least this often, as a Go duration string
+  publishInterval: 60s
 
-  # Publish interval in seconds
-  publishInterval: 10
+  # How often the publish loop checks for new pulses. A meter is published as soon as its
+  # counter advances, but never more than once per minPublishInterval - this throttles a
+  # fast pulsing meter. Set to 0 to publish on the heartbeat only.
+  minPublishInterval: 2s
 
 # =============================================================================
 # S0 Meter configurations
 # =============================================================================
 # gpio                 - GPIO pin for S0 pulse input
-# bounceTime           - Debounce time in ms (suppress signal noise)
+# debounceTime         - Debounce time as Go duration string (e.g. 1ms) to suppress signal noise
 # counterPulsesPerUnit - Meter constant (Zählerkonstante): pulses per counterUnit
 #                        (see meter datasheet, e.g. 1000 imp/kWh)
 # counterUnit          - Unit of the total counter (e.g. kWh, m³, l)
@@ -84,11 +86,12 @@ mqtt:
 # gaugeScale           - Scale factor for gauge (e.g. 0.2777778 for m³/h to l/s)
 # gaugePrecision       - Decimal places for rounding the gauge value
 # mqttTopic            - MQTT topic to publish meter data (empty = disabled)
+# mqttRetained         - Broker keeps the last message of this topic (default: false)
 # =============================================================================
 meter:
   wallbox:
     gpio: 17
-    bounceTime: 1
+    debounceTime: 1ms
     counterUnit: "Wh"
     counterPulsesPerUnit: 1
     counterPrecision: 2
@@ -96,10 +99,11 @@ meter:
     gaugeScale: 0.001
     gaugePrecision: 2
     mqttTopic: test/wallbox/summary
+    mqttRetained: true
 
   greywater:
     gpio: 27
-    bounceTime: 1
+    debounceTime: 1ms
     counterUnit: "l"
     counterPulsesPerUnit: 1
     counterPrecision: 0
@@ -110,7 +114,7 @@ meter:
 
   drinkingwater:
     gpio: 22
-    bounceTime: 1
+    debounceTime: 1ms
     counterUnit: "m³"
     counterPulsesPerUnit: 1000
     counterPrecision: 3

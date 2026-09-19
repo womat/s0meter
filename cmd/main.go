@@ -134,7 +134,7 @@ func About() string {
 		"Commit":   buildCommit,
 		"Desc":     app.MODULE + " reads impulses from an S0 interface compliant with DIN 43864 standards",
 		"Help":     filepath.Join("/opt", app.MODULE, "bin", app.MODULE) + " --help",
-		"Main":     filepath.Join("/opt/src", app.MODULE, "cmd", app.MODULE, "main.go"),
+		"Main":     filepath.Join("/opt/src", app.MODULE, "cmd", "main.go"),
 		"ProgLang": runtime.Version(),
 		"Repo":     "https://github.com/womat/" + app.MODULE + ".git",
 		"Version":  app.VERSION,

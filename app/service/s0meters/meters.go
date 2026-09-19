@@ -7,8 +7,8 @@
 //
 //	config := meters.Config{
 //	    DataFile:               "meter_data.yaml",
-//	    BackupInterval:         300,
-//	    DataCollectionInterval: 60,
+//	    BackupInterval:         300 * time.Second,
+//	    DataCollectionInterval: 60 * time.Second,
 //	    MqttRetained:           true,
 //	    MqttTopic:              "s0meters",
 //	}
@@ -17,7 +17,7 @@
 //
 //	handler.AddMeter("power", meters.MeterConfig{
 //	    Gpio:            17,
-//	    BounceTime:      100,
+//	    DebounceTime:      100 * time.Milisecond,
 //	    counterPulsesPerUnit:    1000,
 //	    CounterUnit:     "kWh",
 //	    GaugeScale:     1.0,
@@ -53,8 +53,8 @@ type Handler struct {
 
 // MeterConfig defines the configuration of a single meter.
 type MeterConfig struct {
-	Gpio       int `yaml:"gpio"`       // GPIO pin for pulse input
-	BounceTime int `yaml:"bounceTime"` // Debounce in ms
+	Gpio         int           `yaml:"gpio"`         // GPIO pin for pulse input
+	DebounceTime time.Duration `yaml:"debounceTime"` // Debounce as Go duration string (e.g. 10ms)
 
 	CounterUnit          string  `yaml:"counterUnit"`          // unit of counter value (e.g. kWh, Wh)
 	CounterPulsesPerUnit float64 `yaml:"counterPulsesPerUnit"` // number of pulses per counterUnit (e.g. 1000 imp/kWh)
@@ -65,7 +65,7 @@ type MeterConfig struct {
 	GaugePrecision int     `yaml:"gaugePrecision"` // decimal places for gauge
 
 	MqttTopic    string `yaml:"mqttTopic"`    // MQTT topic for this meter
-	MqttRetained bool   `yaml:"mqttRetained"` // MQTT retained flag
+	MqttRetained bool   `yaml:"mqttRetained"` // broker keeps the last message of this topic (default: false)
 }
 
 // MeterInstance holds a registered meter and its pulse handler.
@@ -104,7 +104,7 @@ func (h *Handler) Close() error {
 
 // RegisterMeter adds a new S0 meter and initializes its pulse handler.
 func (h *Handler) RegisterMeter(ctx context.Context, name string, cfg MeterConfig) error {
-	meter, err := pulsecounter.New(ctx, cfg.Gpio, time.Duration(cfg.BounceTime)*time.Millisecond)
+	meter, err := pulsecounter.New(ctx, cfg.Gpio, cfg.DebounceTime)
 	if err != nil {
 		return err
 	}
@@ -167,8 +167,8 @@ func (c *MeterConfig) Validate() error {
 	if c.Gpio <= 0 {
 		return fmt.Errorf("gpio pin must be greater than 0, got %v", c.Gpio)
 	}
-	if c.BounceTime < 0 {
-		return fmt.Errorf("bounceTime must be >= 0, got %v", c.BounceTime)
+	if c.DebounceTime < 0 {
+		return fmt.Errorf("debounceTime must be non-negative, got %v", c.DebounceTime)
 	}
 	if c.CounterPulsesPerUnit <= 0 {
 		return fmt.Errorf("counterPulsesPerUnit must be greater than 0, got %v", c.CounterPulsesPerUnit)
