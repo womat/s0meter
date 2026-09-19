@@ -396,12 +396,18 @@ of truth: the version is injected at build time via `-ldflags`, never maintained
 binary therefore always reports the tag it was cut from (`s0meter --version`); builds from an
 untagged or modified working copy report a descriptive fallback such as `4.7.0-5-g0c13781-dirty`.
 
-Pushing a semver tag triggers a GitHub Actions workflow that builds all Raspberry Pi architectures
-and publishes them as a GitHub release with checksums and a generated changelog:
+Releases are always cut from `main`, and `develop` has to be merged into it first — `develop` is
+where work happens, `main` is what is released and what GitHub Pages serves. Two steps:
 
 ```sh
-make release TAG=v4.7.0
+make merge_to_main            # merge develop into main and push
+make release TAG=v4.7.0       # tag main and push the tag
 ```
+
+Pushing the tag triggers a GitHub Actions workflow that builds all Raspberry Pi architectures and
+publishes them as a GitHub release with checksums and a generated changelog. Both steps are
+guarded: `make release` refuses to tag anything but an up-to-date `main` that contains `develop`,
+and the workflow rejects a tag whose commit is not on `main`.
 
 Prebuilt archives are attached to every release at
 <https://github.com/womat/s0meter/releases>:

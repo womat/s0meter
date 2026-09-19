@@ -30,6 +30,8 @@ There are **no tests** in this repo. `VERSION` (`app/app.go`), `buildDate` and `
 
 ### Releases
 
+**Releases are always cut from `main`, and `develop` must be merged into it first.** `develop` is the default branch and where work happens; `main` carries only `--no-ff` merges of it, every historical release tag is reachable from it, and GitHub Pages serves it at <https://womat.github.io/s0meter/>. So the order is `make merge_to_main`, then `make release TAG=vX.Y.Z` — the release target refuses to run from any other branch, when `main` and `origin/main` differ, or when `origin/develop` is not an ancestor, and `.github/workflows/release.yml` re-checks that the tagged commit is on `main` so a hand-made `git tag` cannot bypass it.
+
 Versioning is SemVer and the Git tag is the single source of truth. `make release TAG=vX.Y.Z` verifies the tag shape and a clean tree, then tags and pushes; `.github/workflows/release.yml` runs `goreleaser release --clean`, which builds linux arm64/armv7/armv6 and publishes a GitHub release with checksums and a grouped changelog.
 
 Two things to keep in mind when touching `.goreleaser.yaml`: its `before` hook must keep running `make ensure_dev_certs` (GoReleaser calls `go build` directly, so the `//go:embed`-ed dev certs would otherwise be missing), and archives must keep shipping `README.md` — it carries the third-party license overview, and the statically linked Paho MQTT client is EPL-2.0. Validate changes with `goreleaser check` and `goreleaser release --snapshot --clean`.
