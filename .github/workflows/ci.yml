@@ -55,3 +55,21 @@ jobs:
       # The Swagger UI sits behind a build tag, so a plain build never compiles it.
       - name: Build with Swagger UI
         run: go build -tags swagger ./...
+
+      # govulncheck must be BUILT for the runner but ANALYSE the target
+      # architecture. Installing it under the job-level GOOS/GOARCH would produce
+      # an arm binary the runner cannot execute ("exec format error"), so the
+      # install step clears them - empty values fall back to the host - while the
+      # scan step keeps them and so inspects the matrix target.
+      - name: Install govulncheck
+        env:
+          GOOS: ""
+          GOARCH: ""
+          GOARM: ""
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      # Exits non-zero when this code actually calls a vulnerable symbol.
+      # Advisories that only sit in required modules are reported but do not
+      # fail the build, which keeps the signal on what is reachable from here.
+      - name: Vulnerability scan
+        run: $(go env GOPATH)/bin/govulncheck ./...
