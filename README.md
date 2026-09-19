@@ -478,6 +478,26 @@ sudo systemctl restart s0meter
 
 ---
 
-# License
+## License
 
-MIT
+s0meter is released under the MIT License - see [`LICENSE`](LICENSE) for the full text.
+
+### Third-party licenses
+
+The source tree contains no third-party code, but a **compiled binary statically links** the
+modules below. Their terms apply to anyone distributing that binary, not to the sources here.
+
+| Module                                   | License                        |
+|------------------------------------------|--------------------------------|
+| `github.com/eclipse/paho.mqtt.golang`    | **EPL-2.0**, dual with EDL-1.0 |
+| `github.com/warthog618/go-gpiocdev`      | MIT                            |
+| `github.com/womat/golib`                 | MIT                            |
+| `github.com/swaggo/swag`, `http-swagger` | MIT                            |
+| `github.com/golang-jwt/jwt/v5`           | MIT                            |
+| `gopkg.in/yaml.v3`                       | MIT                            |
+| `github.com/gorilla/websocket`           | BSD-3-Clause                   |
+
+All of these are permissive except the Eclipse Paho MQTT client, which is weak copyleft at file
+level: if you hand out a built binary, the source of the EPL-covered parts has to remain available
+(it is, at <https://github.com/eclipse-paho/paho.mqtt.golang>). Paho is dual-licensed, so the
+BSD-style EDL-1.0 may be chosen instead. Neither obliges s0meter itself to change its license.
