@@ -148,7 +148,7 @@ backupInterval: 60s
 # =============================================================================
 mqtt:
   # Broker connection string (empty = MQTT disabled)
-  connection: "tcp://raspberrypi4.fritz.box:1883"
+  connection: "tcp://mqtt.example.com:1883"
 
   # Heartbeat: every meter is published at least this often, as a Go duration string
   publishInterval: 60s
@@ -389,7 +389,7 @@ make build_arm64_dev
 make deploy
 
 # Deploy to a 32-bit Pi, overriding the target host
-make deploy_arm6 PI_HOST=water
+make deploy_arm6 PI_HOST=my-pi PI_USER=pi
 ```
 
 `PI_USER`, `PI_HOST` and `PI_PATH` can be overridden on the command line; the binary is copied to

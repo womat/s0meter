@@ -13,9 +13,9 @@ DOCKER_REGISTRY?= #if set it should finished by /
 EXPORT_RESULT?=false # for CI please set EXPORT_RESULT to true
 
 # Raspberry Pi Login / IP
-PI_USER ?= pv
-PI_HOST ?= pi400ssd
-PI_PATH ?= /home/pv/
+PI_USER ?= pi
+PI_HOST ?= raspberrypi
+PI_PATH ?= /home/pi/
 
 GREEN  := $(shell tput -Txterm setaf 2)
 YELLOW := $(shell tput -Txterm setaf 3)
@@ -115,7 +115,7 @@ deploy: build_arm64 ## build binary and copy binary to ${TARGET_NODE}:/tmp
 	@echo "Copying binary to  $(PI_USER)@$(PI_HOST):$(PI_PATH)"
 	scp ./bin/arm64/${BINARY_NAME} $(PI_USER)@$(PI_HOST):$(PI_PATH)
 
-deploy_arm6: build_arm6 ## build armv6 binary and copy to $(PI_USER)@$(PI_HOST) (override: make deploy_arm6 PI_HOST=water)
+deploy_arm6: build_arm6 ## build armv6 binary and copy to $(PI_USER)@$(PI_HOST) (override: make deploy_arm6 PI_HOST=my-pi)
 	@echo "Copying armv6 binary to  $(PI_USER)@$(PI_HOST):$(PI_PATH)"
 	scp ./bin/arm6/${BINARY_NAME} $(PI_USER)@$(PI_HOST):$(PI_PATH)
 

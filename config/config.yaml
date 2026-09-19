@@ -63,7 +63,7 @@ backupInterval: 60s
 # =============================================================================
 mqtt:
   # Broker connection string (empty = MQTT disabled)
-  connection: "tcp://raspberrypi4.fritz.box:1883"
+  connection: "tcp://mqtt.example.com:1883"
 
   # Heartbeat: every meter is published at least this often, as a Go duration string
   publishInterval: 60s
