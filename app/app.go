@@ -38,7 +38,7 @@ import (
 // VERSION differs from semantic versioning as described in https://semver.org/
 // but we keep the correct syntax.
 const (
-	VERSION = "4.6.3+20260311"
+	VERSION = "4.6.9+20260901"
 	MODULE  = "s0meter"
 
 	ModeStop    = 0
