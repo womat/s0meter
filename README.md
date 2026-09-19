@@ -368,6 +368,18 @@ sudo systemctl status s0meter
 journalctl -u s0meter -n 50 -f
 ```
 
+Raspberry Pi OS often keeps the journal in RAM only, which means everything is lost on reboot -
+exactly when a post-mortem would be needed. Check with `grep Storage /etc/systemd/journald.conf`;
+if it says `volatile` or is unset, make it persistent:
+
+```sh
+sudo mkdir -p /etc/systemd/journald.conf.d
+printf '[Journal]\nStorage=persistent\n' | sudo tee /etc/systemd/journald.conf.d/persistent.conf
+sudo systemctl restart systemd-journald
+```
+
+Verify with `journalctl --list-boots` - it should list more than the current boot.
+
 ---
 
 ## Build
@@ -412,6 +424,33 @@ sudo systemctl reload s0meter          # requires ExecReload in the unit (see ab
 # or, independent of the unit file:
 sudo systemctl kill -s HUP s0meter
 ```
+
+---
+
+## Troubleshooting
+
+**`Failed to publish MQTT message ... error="publish timeout"`**
+The client was not connected at that moment. `Publish()` waits up to 5 s for the broker and then
+reports this. The publish loop skips its tick while disconnected, so this should be rare; repeated
+occurrences mean the broker is unreachable rather than slow. Check with
+`ss -tn | grep 1883` whether a connection is established at all, and note which address it uses -
+a host name resolving to several addresses can send the client to the wrong one.
+
+**Counter does not advance, `gauge` is 0, but the service is healthy**
+No pulses are reaching the GPIO pin. This is wiring or the meter itself, not the software: the
+service keeps publishing the last known value on the heartbeat. `--debug` logs every counted pulse,
+so a run without `s0 pulse` entries confirms the input is silent.
+
+**Counter drifts away from the physical meter**
+Running ahead points to a debounce that is too short for a bouncing contact, running behind to one
+longer than the pulse - see [Choosing a debounce time](#choosing-a-debounce-time). Correct the value
+as described under [Correcting a counter](#correcting-a-counter).
+
+**Service is `dead` immediately after start**
+A configuration error; the process exits with code 1 before the logger is even in place, so the
+reason is printed on stdout: `Failed to load config file` (YAML could not be parsed - durations such
+as `backupInterval` must be Go duration strings like `60s`, not plain numbers) or
+`config validation failed`.
 
 ---
 
