@@ -22,7 +22,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, and OS.",
+                "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, and the GPIO events dropped per meter (each one a lost pulse).",
                 "produces": [
                     "application/json"
                 ],
@@ -198,6 +198,14 @@ const docTemplate = `{
                 "appVersion": {
                     "description": "Current version of the application",
                     "type": "string"
+                },
+                "droppedEvents": {
+                    "description": "DroppedEvents counts, per meter, the GPIO edge events dropped since the last start or\nreload because pulse processing fell behind. Anything above 0 means lost pulses.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
                 },
                 "goVersion": {
                     "description": "Go runtime version",

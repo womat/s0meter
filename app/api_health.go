@@ -13,7 +13,7 @@ import (
 // HandleHealth returns the current health data of the application.
 //
 //	@Summary		Get health data
-//	@Description	Retrieves memory usage, goroutine count, version, hostname, Go runtime version, and OS.
+//	@Description	Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, and the GPIO events dropped per meter (each one a lost pulse).
 //	@Tags			info
 //	@Produce		json
 //	@Security		ApiKeyAuth
@@ -24,6 +24,7 @@ func (app *App) HandleHealth() http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			resp := health.GetCurrentHealth(MODULE, VERSION)
+			resp.DroppedEvents = app.meters.DroppedEvents()
 			web.Encode(w, http.StatusOK, resp)
 		},
 	)

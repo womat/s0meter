@@ -35,7 +35,7 @@ Zero and above).
 |--------|------------------|---------|-------------------------------------------|
 | GET    | `/version`       | —       | Application name and version              |
 | GET    | `/ready`         | —       | Readiness probe: 200 ready, 503 otherwise |
-| GET    | `/health`        | API Key | Runtime metrics (memory, uptime …)        |
+| GET    | `/health`        | API Key | Runtime metrics, dropped events per meter |
 | GET    | `/meters`        | API Key | Current reading of all meters             |
 | GET    | `/meters/{name}` | API Key | Current reading of a single meter         |
 
@@ -525,6 +525,11 @@ so a run without `s0 pulse` entries confirms the input is silent.
 Running ahead points to a debounce that is too short for a bouncing contact, running behind to one
 longer than the pulse - see [Choosing a debounce time](#choosing-a-debounce-time). Correct the value
 as described under [Correcting a counter](#correcting-a-counter).
+
+If the counter runs behind, also check `droppedEvents` in `/health` and the log for
+`s0 pulses lost`. The GPIO layer buffers 32 edge events per meter; when pulse processing falls
+behind and the buffer is full, further events are dropped and each one is a pulse the counter
+never sees. The count starts at 0 with every start or reload.
 
 **Service is `dead` immediately after start**
 A configuration error; the process exits with code 1 before the logger is even in place, so the

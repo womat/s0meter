@@ -40,6 +40,7 @@ type Handler struct {
 	counter Counter
 	gpioPin gpio.Pin
 	pin     int
+	dropped uint64 // dropped events already reported by handlePulseEvent
 }
 
 // New initializes a GPIO pin for S0 pulses and returns a Handler.
@@ -84,6 +85,19 @@ func (h *Handler) SetCounter(s Counter) {
 	h.counter = s
 }
 
+// DroppedEvents returns how many edge events the GPIO layer dropped since the pin was
+// opened because pulse processing fell behind. Each one is a pulse missing from the counter.
+// The count starts at zero with every New, so it resets on a configuration reload.
+func (h *Handler) DroppedEvents() uint64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.gpioPin == nil {
+		return h.dropped
+	}
+	return h.gpioPin.DroppedEvents()
+}
+
 // Close stops event watching and releases the GPIO pin.
 // Safe to call multiple times. Returns any errors from StopWatching and Close.
 func (h *Handler) Close() error {
@@ -115,7 +129,21 @@ func (h *Handler) handlePulseEvent(e gpio.Event) {
 	h.counter.TimeStamp = e.Time
 	h.counter.Pulses++
 	snapshot := h.counter
+
+	// Events dropped while the buffer was full surface here, with the next event
+	// that did get through.
+	dropped := h.gpioPin.DroppedEvents()
+	newlyDropped := dropped - h.dropped
+	h.dropped = dropped
 	h.mu.Unlock()
+
+	if newlyDropped > 0 {
+		slog.Warn("s0 pulses lost, GPIO events were dropped because pulse processing fell behind",
+			"gpio", h.pin,
+			"dropped", newlyDropped,
+			"droppedTotal", dropped,
+		)
+	}
 
 	slog.Debug("s0 pulse",
 		"gpio", h.pin,

@@ -156,6 +156,19 @@ func (h *Handler) GetMeter(name string) (MeterData, error) {
 	}, nil
 }
 
+// DroppedEvents returns, per meter, how many GPIO edge events were dropped since the
+// meters were registered because pulse processing fell behind. Each is a lost pulse.
+func (h *Handler) DroppedEvents() map[string]uint64 {
+	h.mux.RLock()
+	defer h.mux.RUnlock()
+
+	dropped := make(map[string]uint64, len(h.meters))
+	for name, m := range h.meters {
+		dropped[name] = m.Meter.DroppedEvents()
+	}
+	return dropped
+}
+
 // IsReady returns true if all optional services are connected.
 // This can be used for Kubernetes-style Readiness checks (/ready endpoint).
 func (h *Handler) IsReady() bool {
