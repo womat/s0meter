@@ -103,8 +103,9 @@ func (h *Handler) Close() error {
 }
 
 // RegisterMeter adds a new S0 meter and initializes its pulse handler.
-func (h *Handler) RegisterMeter(ctx context.Context, name string, cfg MeterConfig) error {
-	meter, err := pulsecounter.New(ctx, cfg.Gpio, cfg.DebounceTime)
+// Counting continues from pulses, the value restored by ReadMeterData.
+func (h *Handler) RegisterMeter(ctx context.Context, name string, cfg MeterConfig, pulses uint64) error {
+	meter, err := pulsecounter.New(ctx, cfg.Gpio, cfg.DebounceTime, pulses)
 	if err != nil {
 		return err
 	}
@@ -199,6 +200,12 @@ func (c *MeterConfig) Validate() error {
 }
 
 // calcGauge computes the flow rate based on the last two pulses.
+//
+// The result is pulses per hour times GaugeScale; CounterPulsesPerUnit plays no part. The
+// interval is stretched to the time since the last pulse when that is longer, so the rate
+// decays toward 0 once pulses stop. An interval that is not positive yields 0 rather than
+// being replaced by that elapsed time, which right after a pulse is close to zero and would
+// turn into a huge spike - the case when the two timestamps come from clocks that disagree.
 func calcGauge(m *MeterInstance) float64 {
 	c := m.Meter.GetCounter()
 
@@ -206,14 +213,12 @@ func calcGauge(m *MeterInstance) float64 {
 		return 0
 	}
 
-	dt := c.TimeStamp.Sub(c.LastTimeStamp)
-	if elapsed := time.Since(c.TimeStamp); elapsed > dt {
-		dt = elapsed
-	}
-
-	if dt <= 0 {
+	interval := c.TimeStamp.Sub(c.LastTimeStamp)
+	if interval <= 0 {
 		return 0
 	}
+
+	dt := max(interval, time.Since(c.TimeStamp))
 
 	val := 3600 / dt.Seconds() * m.Config.GaugeScale
 	return round(val, m.Config.GaugePrecision)

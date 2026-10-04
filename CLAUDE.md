@@ -62,27 +62,29 @@ go run ./cmd/main.go --config config/config.yaml --debug   # Linux/Pi only
 
 Layering is strict: `cmd` → `app` → `app/service/*` → `pkg/*`. Lower layers never import upward.
 
-- **`cmd/main.go`** — flags, config load/validate, logger init, and the **restart loop**. `run()` loops forever: build `app.New(...).Run()`, then block on `a.Restart()` (reload config, construct a brand-new `App`) or `a.Shutdown()` (exit). `README.md` is `//go:embed`-ed as `--help` output, so keep it accurate.
-- **`app/app.go`** — wiring and lifecycle. Owns the `context.Context` that every goroutine (MQTT publish loop, backup loop, web server, signal handler) is cancelled by. SIGHUP → `shutdownProcedure(ModeRestart)`; SIGTERM/SIGINT → `ModeStop`. Cleanup saves meter counters before closing GPIO.
+- **`cmd/main.go`** — flags, config load/validate, logger init, and the **restart loop**. `run()` subscribes to SIGHUP/SIGTERM/SIGINT **once** and hands that channel to every `App`, so a signal arriving between two lifecycles waits for the next `App` instead of killing the process unsaved — never `signal.Stop`/`Reset` it inside `app`. It then loops forever: build `app.New(...).Run()`, then block on `a.Restart()` (reload config, construct a brand-new `App`) or `a.Shutdown()` (exit). `README.md` is `//go:embed`-ed as `--help` output, so keep it accurate.
+- **`app/app.go`** — wiring and lifecycle. Owns the `context.Context` that every goroutine (MQTT publish loop, backup loop, web server, signal handler) is cancelled by. SIGHUP → `shutdownProcedure(ModeRestart)`; SIGTERM/SIGINT → `ModeStop`. The web server, backup and publish loops run under `app.wg`, which `shutdownProcedure` waits for before `Cleanup`; `Cleanup` closes the GPIO pins **before** the final save, and `Init` reads the data file **before** registering meters, so no pulse falls between restore/save and counting.
 - **`app/config.go`** — YAML config with `os.ExpandEnv` applied to the raw file (so `${VAR}` works anywhere), defaults from `NewConfig()`, and a `Validate()` that `cmd` calls before `app.New`.
 - **`app/routes.go` / `api_*.go`** — `http.ServeMux` with Go 1.22 method patterns. Middleware chain, outermost first: `WithLogging` → `WithIPFilter` → `WithCORS` → mux. Auth is per-route via `web.WithAuth` (`X-API-Key`, from `womat/golib/web`). `/version` and `/ready` are public; `/health`, `/meters`, `/meters/{name}` are protected.
 - **`app/webservices.go`** — HTTPS only. Falls back to the embedded dev cert when `certFile` does not exist.
-- **`app/service/s0meters`** — the domain layer. `Handler` holds `map[name]*MeterInstance` under an `RWMutex`; `meters.go` has the pure calculation helpers (`calcCounter`, `calcGauge`), `backup.go` the YAML persistence + ticker, `mqtt.go` the publish loop. Note the locking convention: exported `SerializeMetric` takes the lock, `serializeMetricLocked` assumes the caller holds it — `collectPending` relies on this.
+- **`app/service/s0meters`** — the domain layer. `Handler` holds `map[name]*MeterInstance` under an `RWMutex`; `meters.go` has the pure calculation helpers (`calcCounter`, `calcGauge`), `backup.go` the YAML persistence (atomic temp-file + rename; an empty or unparsable file is a start-up error, never "start at zero") and backup loop, `mqtt.go` the publish loop. Note the locking convention: exported `SerializeMetric` takes the lock, `serializeMetricLocked` assumes the caller holds it — `collectPending` relies on this.
 - **`pkg/pulsecounter`** — hardware-facing only. Watches a rising edge on one GPIO pin and keeps `{Pulses, TimeStamp, LastTimeStamp}`. It knows nothing of units or scaling; all unit conversion lives in `s0meters`.
 
 **External dependency `github.com/womat/golib`** supplies `gpio`/`gpio/rpi`, `mqtt`, `web` (auth, CORS, IP filter, `Encode`), and `xlog`. It is not vendored — read it in `$(go env GOMODCACHE)/github.com/womat/golib@<version>` when behavior is unclear.
 
 ### Meter value model
 
-`counter = pulses / counterPulsesPerUnit`, rounded to `counterPrecision`. `gauge = 3600 / dt_seconds * gaugeScale`, where `dt` is the interval between the last two pulses — stretched to "time since last pulse" when that is longer, so the rate decays toward 0 when pulses stop.
+`counter = pulses / counterPulsesPerUnit`, rounded to `counterPrecision`. `gauge = 3600 / dt_seconds * gaugeScale`, where `dt` is the interval between the last two pulses — stretched to "time since last pulse" when that is longer, so the rate decays toward 0 when pulses stop. A non-positive interval yields 0.
+
+The gauge is "pulses per hour × `gaugeScale`" and does **not** use `counterPulsesPerUnit`, so `gaugeScale` is the amount per pulse in the target unit per hour (1 pulse = 1 l → `l/h` 1, `l/s` 1/3600). Only `pulses` is restored from the data file; the timestamps are not, because after a reboot without RTC they can lie ahead of the clock and produce a spike, so the gauge restarts with the second pulse of a run.
 
 ### MQTT publish model
 
-`StartPeriodicPublish` wakes every `minPublishInterval` and publishes a meter when its **counter**
-advanced (i.e. a pulse was counted) or when the last message is older than `publishInterval` (the
-heartbeat). The trigger deliberately watches the counter, not the gauge: `calcGauge` stretches its
-interval to the time since the last pulse, so the gauge decays continuously between pulses and would
-otherwise fire on every tick.
+`RunPeriodicPublish` wakes every `minPublishInterval` and publishes a meter when its **pulse count**
+advanced or when the last message is older than `publishInterval` (the heartbeat); meters without
+`mqttTopic` are skipped. The trigger deliberately watches the raw pulses — not the gauge, which
+`calcGauge` lets decay continuously between pulses and would fire on every tick, and not the rounded
+counter, which a coarse `counterPrecision` would hold still across several pulses.
 
 Two invariants worth preserving: publishing happens **outside** the `RWMutex` (`golib/mqtt.Publish`
 waits up to 5 s for the broker's acknowledgement), and a failed publish is not recorded in

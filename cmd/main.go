@@ -11,8 +11,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/womat/golib/xlog"
@@ -85,6 +87,14 @@ func run(configFile string, debug bool) int {
 	fmt.Printf("Starting %s %s\n", app.MODULE, app.VERSION)
 	fmt.Printf("Loading configuration from: %s\n", configFile)
 
+	// Subscribe once for the whole process, not per App: between two lifecycles no App is
+	// listening, and without a subscription a SIGTERM or a second SIGHUP in that gap would end
+	// the process with the default action, before the counters are saved. Here the signal
+	// waits in the buffer and the next App handles it.
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
+	defer signal.Stop(signals)
+
 	for {
 		// Reload configuration on every restart
 		config, err := loadConfig(configFile, debug)
@@ -108,7 +118,7 @@ func run(configFile string, debug bool) int {
 		slog.Info("Logging initialized/reloaded", "logLevel", config.LogLevel)
 
 		// Create and run the application
-		a, err := app.New(config, filepath.Join("/opt", app.MODULE)).Run()
+		a, err := app.New(config, filepath.Join("/opt", app.MODULE), signals).Run()
 		if err != nil {
 			slog.Error("Critical error occurred, shutting down", "error", err)
 			return 1

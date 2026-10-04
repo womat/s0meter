@@ -153,8 +153,8 @@ mqtt:
   # Heartbeat: every meter is published at least this often, as a Go duration string
   publishInterval: 60s
 
-  # How often the publish loop checks for new pulses. A meter is published as soon as its
-  # counter advances, but never more than once per minPublishInterval - this throttles a
+  # How often the publish loop checks for new pulses. A meter is published as soon as a new
+  # pulse is counted, but never more than once per minPublishInterval - this throttles a
   # fast pulsing meter. Set to 0 to publish on the heartbeat only.
   minPublishInterval: 2s
 
@@ -169,7 +169,7 @@ meter:
     counterPulsesPerUnit: 1000
     counterPrecision: 2
     gaugeUnit: "kW"
-    gaugeScale: 1
+    gaugeScale: 0.001
     gaugePrecision: 2
     mqttTopic: test/wallbox/summary
     mqttRetained: true
@@ -192,7 +192,7 @@ meter:
     counterPulsesPerUnit: 1000
     counterPrecision: 3
     gaugeUnit: "l/s"
-    gaugeScale: 0.2777778
+    gaugeScale: 0.000277778
     gaugePrecision: 3
     mqttTopic: test/portablewater/summary
 ```
@@ -206,11 +206,44 @@ meter:
 | `counterUnit`          | string | Unit of the total counter (e.g. `kWh`, `m³`, `l`)                                |
 | `gaugeUnit`            | string | Unit of the flow rate (e.g. `kW`, `l/h`, `l/s`)                                  |
 | `counterPulsesPerUnit` | float  | Meter constant (Zählerkonstante): pulses per counterUnit                         |
-| `gaugeScale`           | float  | Scale factor applied to the gauge value (e.g. `0.2777778` to convert m³/h → l/s) |
+| `gaugeScale`           | float  | Amount per pulse in the gauge unit per hour — see [Choosing gaugeScale](#choosing-gaugescale) |
 | `counterPrecision`     | int    | Number of decimal places for the counter value                                   |
 | `gaugePrecision`       | int    | Number of decimal places for the gauge value                                     |
 | `mqttTopic`            | string | MQTT topic to publish to (empty = not published)                                 |
 | `mqttRetained`         | bool   | Broker keeps the last message of this topic (default: `false`)                   |
+
+### Choosing gaugeScale
+
+The gauge is computed from the time between the last two pulses:
+
+```
+gauge = 3600 / seconds_between_pulses × gaugeScale    (= pulses per hour × gaugeScale)
+```
+
+`counterPulsesPerUnit` plays **no** part in it. `gaugeScale` is therefore the amount one pulse stands
+for, expressed in the gauge unit per hour:
+
+| One pulse is | `gaugeUnit` | `gaugeScale`  |
+|--------------|-------------|---------------|
+| 1 Wh         | `W`         | `1`           |
+| 1 Wh         | `kW`        | `0.001`       |
+| 1 l          | `l/h`       | `1`           |
+| 1 l          | `l/min`     | `0.0166667`   |
+| 1 l          | `l/s`       | `0.000277778` |
+| 1 m³         | `l/s`       | `0.2777778`   |
+
+So 1000 imp/kWh and 1 imp/Wh both mean one pulse per Wh, and 1000 imp/m³ means one pulse per litre.
+
+How the gauge behaves over time:
+
+- **Ramp-up:** it needs two pulses. The first pulse after a pause measures the whole pause and shows
+  close to 0; the real value appears with the second.
+- **After the load stops:** the interval is stretched to the time since the last pulse, so the value
+  decays toward 0 (`3600 / seconds_since_last_pulse × gaugeScale`) without quite reaching it. It is an
+  upper bound: the rate cannot have been higher, or another pulse would have arrived.
+- **After a restart:** only the pulse count is restored, not the timestamps. The gauge starts at 0 and
+  shows a value again from the second pulse — a restored timestamp could lie ahead of a clock that has
+  no RTC and is not yet synchronised, and would produce a spike.
 
 ### Choosing a debounce time
 
@@ -254,6 +287,13 @@ sudo nano /opt/s0meter/data/s0meter.yaml    # adjust "pulses:"
 sudo systemctl start s0meter
 ```
 
+Only `pulses:` is read back; the two timestamps in the file are informational. The file is replaced
+atomically (temporary file, sync, rename), so a power cut leaves either the previous or the new
+version. If it is nevertheless empty or not valid YAML, the service refuses to start with
+`Failed to load meter data` rather than silently counting from 0 — restore the file, or delete it to
+start every meter from 0 on purpose. A missing file is fine: all meters start from 0 and the file is
+created right away.
+
 Two worked examples:
 
 | Physical reading | `counterUnit` | `counterPulsesPerUnit` | `pulses:` |
@@ -265,9 +305,10 @@ Two worked examples:
 
 ## MQTT Publishing
 
-A meter is published **as soon as its counter advances** — that is, as soon as a new pulse has been
-counted — and in any case once per `publishInterval` (the heartbeat). Between two pulses only the
-gauge decays, and that alone does not trigger a message.
+A meter is published **as soon as a new pulse has been counted** — even when the pulse does not
+change the counter at its `counterPrecision` — and in any case once per `publishInterval` (the
+heartbeat). Between two pulses only the gauge decays, and that alone does not trigger a message.
+A meter with an empty `mqttTopic` is not published at all.
 
 `minPublishInterval` is how often the loop looks for new pulses. It is therefore both the worst-case
 delay of a pulse and the shortest spacing between two messages of the same meter, which is what keeps
@@ -535,7 +576,8 @@ never sees. The count starts at 0 with every start or reload.
 A configuration error; the process exits with code 1 before the logger is even in place, so the
 reason is printed on stdout: `Failed to load config file` (YAML could not be parsed - durations such
 as `backupInterval` must be Go duration strings like `60s`, not plain numbers) or
-`config validation failed`.
+`config validation failed`. Once the logger is up, `Failed to load meter data` in the log means the
+`dataFile` is empty or damaged — see [Correcting a counter](#correcting-a-counter).
 
 ---
 

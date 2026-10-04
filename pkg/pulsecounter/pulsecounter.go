@@ -47,8 +47,10 @@ type Handler struct {
 //
 // The returned Handler is fully initialized and ready to use.
 // The GPIO pin is configured as input, debounced, and events are watched.
+// Counting continues from pulses, which is set before watching starts, so no pulse
+// counted in the meantime can be overwritten by restoring a saved value later.
 // Returns an error if initialization fails.
-func New(ctx context.Context, port int, debounce time.Duration) (*Handler, error) {
+func New(ctx context.Context, port int, debounce time.Duration, pulses uint64) (*Handler, error) {
 
 	p, err := rpi.NewPin(port,
 		rpi.WithMode(gpio.Input),
@@ -58,7 +60,7 @@ func New(ctx context.Context, port int, debounce time.Duration) (*Handler, error
 		return nil, fmt.Errorf("create GPIO port %d: %w", port, err)
 	}
 
-	h := &Handler{pin: port, gpioPin: p}
+	h := &Handler{pin: port, gpioPin: p, counter: Counter{Pulses: pulses}}
 
 	if err = p.WatchFunc(gpio.RisingEdge, h.handlePulseEvent); err != nil {
 		p.Close()
@@ -75,14 +77,6 @@ func (h *Handler) GetCounter() Counter {
 	defer h.mu.Unlock()
 
 	return h.counter
-}
-
-// SetCounter sets the pulse counter to a specific value.
-func (h *Handler) SetCounter(s Counter) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	h.counter = s
 }
 
 // DroppedEvents returns how many edge events the GPIO layer dropped since the pin was
