@@ -22,7 +22,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, and OS.",
+                "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, and the GPIO events dropped per meter (each one a lost pulse).",
                 "produces": [
                     "application/json"
                 ],
@@ -128,7 +128,7 @@ const docTemplate = `{
         },
         "/ready": {
             "get": {
-                "description": "Returns 200 if all dependencies are ready, 503 otherwise. No authentication required.",
+                "description": "Returns 200 while the service delivers readings, 503 while a configured MQTT broker is not connected. No authentication required.",
                 "produces": [
                     "application/json"
                 ],
@@ -147,7 +147,7 @@ const docTemplate = `{
                         }
                     },
                     "503": {
-                        "description": "Service unavailable",
+                        "description": "MQTT broker not connected",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -199,6 +199,14 @@ const docTemplate = `{
                     "description": "Current version of the application",
                     "type": "string"
                 },
+                "droppedEvents": {
+                    "description": "DroppedEvents counts, per meter, the GPIO edge events dropped since the last start or\nreload because pulse processing fell behind. Anything above 0 means lost pulses.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                },
                 "goVersion": {
                     "description": "Go runtime version",
                     "type": "string"
@@ -237,7 +245,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "counter": {
-                    "description": "Total meter value",
+                    "description": "Total meter value in CounterUnit",
                     "type": "number"
                 },
                 "counterUnit": {
@@ -245,15 +253,19 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "gauge": {
-                    "description": "Flow rate",
+                    "description": "Flow rate in GaugeUnit",
                     "type": "number"
                 },
                 "gaugeUnit": {
                     "description": "Gauge unit",
                     "type": "string"
                 },
-                "timeStamp": {
-                    "description": "Timestamp of reading",
+                "meter": {
+                    "description": "Meter name from the config, like ecoflowd's \"sn\"",
+                    "type": "string"
+                },
+                "timestamp": {
+                    "description": "Time of the reading, local time, whole seconds",
                     "type": "string"
                 }
             }

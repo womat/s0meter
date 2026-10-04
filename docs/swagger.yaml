@@ -7,6 +7,14 @@ definitions:
       appVersion:
         description: Current version of the application
         type: string
+      droppedEvents:
+        additionalProperties:
+          format: int64
+          type: integer
+        description: |-
+          DroppedEvents counts, per meter, the GPIO edge events dropped since the last start or
+          reload because pulse processing fell behind. Anything above 0 means lost pulses.
+        type: object
       goVersion:
         description: Go runtime version
         type: string
@@ -35,19 +43,22 @@ definitions:
   s0meters.MeterData:
     properties:
       counter:
-        description: Total meter value
+        description: Total meter value in CounterUnit
         type: number
       counterUnit:
         description: Counter unit
         type: string
       gauge:
-        description: Flow rate
+        description: Flow rate in GaugeUnit
         type: number
       gaugeUnit:
         description: Gauge unit
         type: string
-      timeStamp:
-        description: Timestamp of reading
+      meter:
+        description: Meter name from the config, like ecoflowd's "sn"
+        type: string
+      timestamp:
+        description: Time of the reading, local time, whole seconds
         type: string
     type: object
 info:
@@ -56,7 +67,8 @@ paths:
   /health:
     get:
       description: Retrieves memory usage, goroutine count, version, hostname, Go
-        runtime version, and OS.
+        runtime version, OS, and the GPIO events dropped per meter (each one a lost
+        pulse).
       produces:
       - application/json
       responses:
@@ -127,8 +139,8 @@ paths:
       - meters
   /ready:
     get:
-      description: Returns 200 if all dependencies are ready, 503 otherwise. No authentication
-        required.
+      description: Returns 200 while the service delivers readings, 503 while a configured
+        MQTT broker is not connected. No authentication required.
       produces:
       - application/json
       responses:
@@ -139,7 +151,7 @@ paths:
               type: string
             type: object
         "503":
-          description: Service unavailable
+          description: MQTT broker not connected
           schema:
             additionalProperties:
               type: string

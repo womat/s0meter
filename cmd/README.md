@@ -45,4 +45,8 @@ CONFIG_FILE=/etc/s0meter/config.yaml s0meter
 
 The configuration file is a YAML file. By default it is loaded from `/opt/s0meter/etc/config.yaml`.
 
-Environment variables are expanded inside the file, e.g. `apiKey: ${TADL_API_KEY}`.
+Environment variables are expanded inside the file in the `${VAR}` form only, e.g.
+`apiKey: ${S0METER_API_KEY}`. Unknown keys are rejected.
+
+Every key is documented in the example configuration (`config/config.yaml`) and in the project
+README: <https://github.com/womat/s0meter#configuration>.

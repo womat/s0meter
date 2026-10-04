@@ -23,7 +23,8 @@ Zero and above).
 
 ## Where to start
 
-- Runtime, API, build, deploy, and Swagger usage: [`cmd/README.md`](cmd/README.md)
+- This README: API, configuration, MQTT, installation, build, deploy and troubleshooting
+- Command-line flags, as printed by `s0meter --help`: [`cmd/README.md`](cmd/README.md)
 - Example configuration: [`config/config.yaml`](config/config.yaml)
 - Swagger generation script: [`docs/generate.sh`](docs/generate.sh)
 
@@ -34,8 +35,8 @@ Zero and above).
 | Method | Path             | Auth    | Description                               |
 |--------|------------------|---------|-------------------------------------------|
 | GET    | `/version`       | —       | Application name and version              |
-| GET    | `/ready`         | —       | Readiness probe: 200 ready, 503 otherwise |
-| GET    | `/health`        | API Key | Runtime metrics (memory, uptime …)        |
+| GET    | `/ready`         | —       | Readiness probe: 200, or 503 while the configured MQTT broker is not connected |
+| GET    | `/health`        | API Key | Runtime metrics, dropped events per meter |
 | GET    | `/meters`        | API Key | Current reading of all meters             |
 | GET    | `/meters/{name}` | API Key | Current reading of a single meter         |
 
@@ -85,7 +86,10 @@ CONFIG_FILE=/etc/s0meter/config.yaml s0meter
 ## Configuration
 
 Default location: `/opt/s0meter/etc/config.yaml`
-Environment variables are expanded inside the file, e.g. `apiKey: ${TADL_API_KEY}`.
+Environment variables are expanded inside the file in the `${VAR}` form only, e.g.
+`apiKey: ${S0METER_API_KEY}`; an unset variable becomes empty. Any other `$` is kept literally, so
+keys and passwords may contain it. Unknown keys are rejected, so a misspelled or renamed setting
+stops the start instead of silently keeping its default.
 
 ```yaml
 # =============================================================================
@@ -153,8 +157,8 @@ mqtt:
   # Heartbeat: every meter is published at least this often, as a Go duration string
   publishInterval: 60s
 
-  # How often the publish loop checks for new pulses. A meter is published as soon as its
-  # counter advances, but never more than once per minPublishInterval - this throttles a
+  # How often the publish loop checks for new pulses. A meter is published as soon as a new
+  # pulse is counted, but never more than once per minPublishInterval - this throttles a
   # fast pulsing meter. Set to 0 to publish on the heartbeat only.
   minPublishInterval: 2s
 
@@ -169,7 +173,7 @@ meter:
     counterPulsesPerUnit: 1000
     counterPrecision: 2
     gaugeUnit: "kW"
-    gaugeScale: 1
+    gaugeScale: 0.001
     gaugePrecision: 2
     mqttTopic: test/wallbox/summary
     mqttRetained: true
@@ -192,7 +196,7 @@ meter:
     counterPulsesPerUnit: 1000
     counterPrecision: 3
     gaugeUnit: "l/s"
-    gaugeScale: 0.2777778
+    gaugeScale: 0.000277778
     gaugePrecision: 3
     mqttTopic: test/portablewater/summary
 ```
@@ -201,16 +205,49 @@ meter:
 
 | Field                  | Type   | Description                                                                      |
 |------------------------|--------|----------------------------------------------------------------------------------|
-| `gpio`                 | int    | GPIO pin number for S0 pulse input                                               |
+| `gpio`                 | int    | GPIO for the S0 input, BCM numbering, 2–27 (GPIO0/1 are reserved for HAT boards); one meter per GPIO |
 | `debounceTime`         | string | Debounce as Go duration string — see [Choosing a debounce time](#choosing-a-debounce-time) |
 | `counterUnit`          | string | Unit of the total counter (e.g. `kWh`, `m³`, `l`)                                |
 | `gaugeUnit`            | string | Unit of the flow rate (e.g. `kW`, `l/h`, `l/s`)                                  |
 | `counterPulsesPerUnit` | float  | Meter constant (Zählerkonstante): pulses per counterUnit                         |
-| `gaugeScale`           | float  | Scale factor applied to the gauge value (e.g. `0.2777778` to convert m³/h → l/s) |
-| `counterPrecision`     | int    | Number of decimal places for the counter value                                   |
-| `gaugePrecision`       | int    | Number of decimal places for the gauge value                                     |
+| `gaugeScale`           | float  | Amount per pulse in the gauge unit per hour — see [Choosing gaugeScale](#choosing-gaugescale) |
+| `counterPrecision`     | int    | Number of decimal places for the counter value (0–15)                            |
+| `gaugePrecision`       | int    | Number of decimal places for the gauge value (0–15)                              |
 | `mqttTopic`            | string | MQTT topic to publish to (empty = not published)                                 |
 | `mqttRetained`         | bool   | Broker keeps the last message of this topic (default: `false`)                   |
+
+### Choosing gaugeScale
+
+The gauge is computed from the time between the last two pulses:
+
+```
+gauge = 3600 / seconds_between_pulses × gaugeScale    (= pulses per hour × gaugeScale)
+```
+
+`counterPulsesPerUnit` plays **no** part in it. `gaugeScale` is therefore the amount one pulse stands
+for, expressed in the gauge unit per hour:
+
+| One pulse is | `gaugeUnit` | `gaugeScale`  |
+|--------------|-------------|---------------|
+| 1 Wh         | `W`         | `1`           |
+| 1 Wh         | `kW`        | `0.001`       |
+| 1 l          | `l/h`       | `1`           |
+| 1 l          | `l/min`     | `0.0166667`   |
+| 1 l          | `l/s`       | `0.000277778` |
+| 1 m³         | `l/s`       | `0.2777778`   |
+
+So 1000 imp/kWh and 1 imp/Wh both mean one pulse per Wh, and 1000 imp/m³ means one pulse per litre.
+
+How the gauge behaves over time:
+
+- **Ramp-up:** it needs two pulses. The first pulse after a pause measures the whole pause and shows
+  close to 0; the real value appears with the second.
+- **After the load stops:** the interval is stretched to the time since the last pulse, so the value
+  decays toward 0 (`3600 / seconds_since_last_pulse × gaugeScale`) without quite reaching it. It is an
+  upper bound: the rate cannot have been higher, or another pulse would have arrived.
+- **After a restart:** only the pulse count is restored, not the timestamps. The gauge starts at 0 and
+  shows a value again from the second pulse — a restored timestamp could lie ahead of a clock that has
+  no RTC and is not yet synchronised, and would produce a spike.
 
 ### Choosing a debounce time
 
@@ -254,6 +291,13 @@ sudo nano /opt/s0meter/data/s0meter.yaml    # adjust "pulses:"
 sudo systemctl start s0meter
 ```
 
+Only `pulses:` is read back; the two timestamps in the file are informational. The file is replaced
+atomically (temporary file, sync, rename), so a power cut leaves either the previous or the new
+version. If it is nevertheless empty or not valid YAML, the service refuses to start with
+`Failed to load meter data` rather than silently counting from 0 — restore the file, or delete it to
+start every meter from 0 on purpose. A missing file is fine: all meters start from 0 and the file is
+created right away.
+
 Two worked examples:
 
 | Physical reading | `counterUnit` | `counterPulsesPerUnit` | `pulses:` |
@@ -265,9 +309,36 @@ Two worked examples:
 
 ## MQTT Publishing
 
-A meter is published **as soon as its counter advances** — that is, as soon as a new pulse has been
-counted — and in any case once per `publishInterval` (the heartbeat). Between two pulses only the
-gauge decays, and that alone does not trigger a message.
+### Telegram
+
+Each meter is published as one JSON telegram on its `mqttTopic`; `/meters` and `/meters/{name}`
+return the same object:
+
+```
+myhome/wallbox/summary  {"meter":"wallbox","timestamp":"2026-10-04T22:50:35+02:00","counter":34341804,"counterUnit":"Wh","gauge":3.11,"gaugeUnit":"W"}
+```
+
+| Key           | Content                                                                              |
+|---------------|--------------------------------------------------------------------------------------|
+| `meter`       | Meter name from the configuration, so a telegram is identifiable without its topic    |
+| `timestamp`   | Time of the reading, RFC 3339 in local time with offset, whole seconds. For an S0 meter this is also the measuring time: every pulse is counted the moment it arrives |
+| `counter`     | Total, in `counterUnit`, rounded to `counterPrecision`                               |
+| `counterUnit` | Unit of `counter` from the configuration                                             |
+| `gauge`       | Flow rate, in `gaugeUnit`, rounded to `gaugePrecision` — see [Choosing gaugeScale](#choosing-gaugescale) |
+| `gaugeUnit`   | Unit of `gauge` from the configuration                                               |
+
+The keys follow the telegrams of ecoflowd: camelCase, `timestamp` as one word, the device named in
+every telegram. The units travel with the values because they are configured per meter.
+
+> **Changed in the release after 4.7.0:** `timeStamp` is now `timestamp`, in whole seconds instead of
+> nanoseconds, and `meter` is new. Consumers that read `timeStamp` have to be adapted.
+
+### When a meter is published
+
+A meter is published **as soon as a new pulse has been counted** — even when the pulse does not
+change the counter at its `counterPrecision` — and in any case once per `publishInterval` (the
+heartbeat). Between two pulses only the gauge decays, and that alone does not trigger a message.
+A meter with an empty `mqttTopic` is not published at all.
 
 `minPublishInterval` is how often the loop looks for new pulses. It is therefore both the worst-case
 delay of a pulse and the shortest spacing between two messages of the same meter, which is what keeps
@@ -286,8 +357,9 @@ timeout, and resumes automatically once the client reconnects.
 
 ## TLS Certificate
 
-> **Warning — always configure a real certificate.** If `certFile` does not exist, the server falls
-> back to a self-signed certificate compiled into the binary and only logs a warning. That
+> **Warning — always configure a real certificate.** With `env: prod` a missing `certFile` stops
+> the start. With `env: dev` the server instead falls back to a self-signed certificate compiled
+> into the binary and only logs a warning. That
 > certificate's private key ships inside every published release archive, so it is public knowledge:
 > anyone can extract it and impersonate an instance running on the fallback. It exists solely so a
 > fresh checkout starts up during development. A machine reachable by anyone but you must never run
@@ -464,7 +536,14 @@ make deploy
 
 # Deploy with the Swagger UI enabled
 make deploy_dev
+
+# Run the tests with the race detector (Linux; on macOS through Docker)
+make test
+docker run --rm -v "$PWD":/src -w /src golang:1.27 make test
 ```
+
+The tests need no hardware: `pkg/pulsecounter` is driven by golib's in-memory GPIO emulator. They
+still compile on Linux only, because the packages import the Linux GPIO backend.
 
 `PI_ARCH` selects the target architecture for every `deploy*` target and defaults to **`arm6`**,
 matching a Raspberry Pi Zero (1st gen). Get this wrong and the binary simply will not start on the
@@ -475,8 +554,17 @@ Pi 2/3/4/Zero 2 W and `arm64` for a 64-bit OS:
 make deploy PI_ARCH=arm64 PI_HOST=my-pi PI_USER=pi
 ```
 
-`PI_USER`, `PI_HOST` and `PI_PATH` can be overridden the same way; the binary is copied to
-`$PI_PATH` and still has to be installed:
+`PI_USER`, `PI_HOST` and `PI_PATH` can be overridden the same way. Their defaults are
+placeholders, so rather than repeating your device on every call, put it in `Makefile.local` -
+untracked, and included automatically:
+
+```make
+PI_USER := myuser
+PI_HOST := mypi
+```
+
+`PI_PATH` defaults to the login directory and rarely needs setting. Command-line values still win
+over the file. The binary is copied to `$PI_PATH` and still has to be installed:
 
 ```sh
 sudo install -o s0meter -g s0meter -m 755 ~/s0meter /opt/s0meter/bin/s0meter
@@ -489,6 +577,11 @@ sudo install -o s0meter -g s0meter -m 755 ~/s0meter /opt/s0meter/bin/s0meter
 Send `SIGHUP` to reload the configuration without restarting the process. The GPIO lines are closed
 and re-registered, so a changed `debounceTime` takes effect; counters are saved beforehand and
 restored afterwards.
+
+The new configuration is loaded and validated **before** anything is torn down. If it fails, the
+reload is refused with `Config reload rejected, keeping the running configuration` in the log and the
+service keeps counting with its current settings - fix the file and reload again. Warnings such as a
+short `apiKey` are logged after every start and reload.
 
 ```sh
 sudo systemctl reload s0meter          # requires ExecReload in the unit (see above)
@@ -517,11 +610,17 @@ Running ahead points to a debounce that is too short for a bouncing contact, run
 longer than the pulse - see [Choosing a debounce time](#choosing-a-debounce-time). Correct the value
 as described under [Correcting a counter](#correcting-a-counter).
 
+If the counter runs behind, also check `droppedEvents` in `/health` and the log for
+`s0 pulses lost`. The GPIO layer buffers 32 edge events per meter; when pulse processing falls
+behind and the buffer is full, further events are dropped and each one is a pulse the counter
+never sees. The count starts at 0 with every start or reload.
+
 **Service is `dead` immediately after start**
 A configuration error; the process exits with code 1 before the logger is even in place, so the
 reason is printed on stdout: `Failed to load config file` (YAML could not be parsed - durations such
-as `backupInterval` must be Go duration strings like `60s`, not plain numbers) or
-`config validation failed`.
+as `backupInterval` must be Go duration strings like `60s`, not plain numbers; `field … not found`
+names a key that does not exist, often a misspelled or renamed one) or `config validation failed`. Once the logger is up, `Failed to load meter data` in the log means the
+`dataFile` is empty or damaged — see [Correcting a counter](#correcting-a-counter).
 
 ---
 

@@ -1,11 +1,16 @@
 package app
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/womat/s0meter/app/service/s0meters"
@@ -34,8 +39,6 @@ type WebserverConfig struct {
 	ListenHost string   `yaml:"listenHost"` // Host address for web server
 	ListenPort int      `yaml:"listenPort"` // Port for web server
 	ApiKey     string   `yaml:"apiKey"`     // API key for requests
-	JwtSecret  string   `yaml:"jwtSecret"`  // Secret for JWT tokens
-	JwtID      string   `yaml:"jwtID"`      // Unique JWT ID
 	KeyFile    string   `yaml:"keyFile"`    // SSL private key file
 	CertFile   string   `yaml:"certFile"`   // SSL certificate file
 	BlockedIPs []string `yaml:"blockedIPs"` // Forbidden IP addresses or networks
@@ -77,7 +80,22 @@ func NewConfig() *Config {
 	}
 }
 
-// LoadConfig loads configuration from a YAML file and expands environment variables.
+// envBraces matches ${VAR} references; see expandEnvBraces.
+var envBraces = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+
+// expandEnvBraces replaces ${VAR} with the value of the environment variable VAR, or with an
+// empty string when it is unset. Unlike os.ExpandEnv it leaves every other "$" alone, so an API
+// key or password containing "$" is not silently cut short.
+func expandEnvBraces(s string) string {
+	return envBraces.ReplaceAllStringFunc(s, func(ref string) string {
+		return os.Getenv(envBraces.FindStringSubmatch(ref)[1])
+	})
+}
+
+// LoadConfig loads configuration from a YAML file and expands ${VAR} environment references.
+//
+// Unknown keys are an error rather than ignored, so a misspelled or renamed key cannot silently
+// leave its setting at the default.
 func LoadConfig(fileName string) (*Config, error) {
 	cfg := NewConfig()
 
@@ -94,20 +112,13 @@ func LoadConfig(fileName string) (*Config, error) {
 		return cfg, err
 	}
 
-	// Replace environment variables in the YAML
-	replaced := os.ExpandEnv(string(content))
-
-	// Unmarshal YAML into the config struct
-	if err = yaml.Unmarshal([]byte(replaced), cfg); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader([]byte(expandEnvBraces(string(content)))))
+	dec.KnownFields(true)
+	if err = dec.Decode(cfg); err != nil && !errors.Is(err, io.EOF) {
 		return cfg, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
 	return cfg, nil
-}
-
-// IsDevEnv returns true if the environment is development.
-func (c *Config) IsDevEnv() bool {
-	return c.Env == DevEnv
 }
 
 // Validate checks the Config for invalid or missing values.
@@ -130,10 +141,23 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid port: %d", c.Webserver.ListenPort)
 	}
 
-	for name, meter := range c.Meter {
+	// Visit the meters in a fixed order, so the reported duplicate does not depend on map order.
+	names := make([]string, 0, len(c.Meter))
+	for name := range c.Meter {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	gpioUsedBy := make(map[int]string, len(names))
+	for _, name := range names {
+		meter := c.Meter[name]
 		if err := meter.Validate(); err != nil {
 			return fmt.Errorf("invalid config for meter %q: %w", name, err)
 		}
+		if other, used := gpioUsedBy[meter.Gpio]; used {
+			return fmt.Errorf("meters %q and %q both use gpio %d", other, name, meter.Gpio)
+		}
+		gpioUsedBy[meter.Gpio] = name
 	}
 
 	if c.MQTT.PublishInterval < time.Second {
@@ -154,4 +178,23 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+// minApiKeyLength is the length below which Warnings flags the API key as weak.
+const minApiKeyLength = 16
+
+// Warnings returns findings that do not stop the service but should be fixed. It never includes
+// secret values.
+func (c *Config) Warnings() []string {
+	var warnings []string
+
+	key := c.Webserver.ApiKey
+	switch {
+	case strings.Contains(strings.ToLower(key), "changeme"):
+		warnings = append(warnings, "apiKey is still the example value from the documentation; set a random key")
+	case len(key) < minApiKeyLength:
+		warnings = append(warnings, fmt.Sprintf("apiKey is shorter than %d characters; use a longer random key", minApiKeyLength))
+	}
+
+	return warnings
 }

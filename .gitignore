@@ -3,3 +3,4 @@
 /app/certs/
 /config/*.pem
 /dist/
+/Makefile.local

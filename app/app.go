@@ -1,14 +1,19 @@
 // Package app provides the main application wiring for s0meter.
 //
-// It initializes S0 meters, handles MQTT publishing, periodic backups,
-// web server startup, and OS signal handling for graceful shutdowns
-// or restarts.
+// It initializes the S0 meters, MQTT publishing, periodic backups, the HTTPS API and the
+// OS signal handling for graceful stops and configuration reloads. One App lives for one
+// configuration; cmd/main.go builds a new one on every reload.
 //
 // Usage:
 //
-//	config := LoadConfig()
-//	app := app.New(config, "/opt/s0meter")
-//	app.Run()
+//	cfg, err := app.LoadConfig(file)          // then cfg.Validate()
+//	signals := make(chan os.Signal, 1)
+//	signal.Notify(signals, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
+//	a, err := app.New(cfg, signals, checkReload).Run()
+//	select {
+//	case <-a.Restart():  // build the next App
+//	case <-a.Shutdown(): // exit
+//	}
 package app
 
 import (
@@ -18,10 +23,8 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"syscall"
 
 	"github.com/womat/golib/mqtt"
@@ -46,29 +49,36 @@ const (
 // App is the main application struct.
 // App is where the application is wired up.
 type App struct {
-	wg      sync.WaitGroup // wait group to track running webserver
-	baseDir string         // working directory
-	config  *Config        // app configuration
-	web     *http.Server   // HTTP server
-	meters  *s0meters.Handler
-	mqtt    *mqtt.Handler
-	// mqttConnected mirrors the broker connection state reported by the MQTT callbacks.
-	// The publish loop reads it to skip ticks while the client is disconnected, which
-	// avoids blocking on Publish() until its timeout expires.
-	mqttConnected atomic.Bool
-	restart       chan struct{} // signals application restart
-	shutdown      chan struct{} // signals application shutdown
-	ctx           context.Context
-	cancelFunc    context.CancelFunc
+	wg          sync.WaitGroup // tracks the web server, backup and MQTT publish goroutines
+	config      *Config        // app configuration
+	web         *http.Server   // HTTP server
+	meters      *s0meters.Handler
+	mqtt        *mqtt.Handler
+	signals     <-chan os.Signal // OS signals, subscribed once by the caller for all lifecycles
+	checkReload func() error     // loads and validates the config file before a SIGHUP restart
+	restart     chan struct{}    // signals application restart
+	shutdown    chan struct{}    // signals application shutdown
+	ctx         context.Context
+	cancelFunc  context.CancelFunc
 }
 
 // New initializes the App struct but does not start services.
-func New(config *Config, baseDir string) *App {
+//
+// signals must already be subscribed (signal.Notify) to SIGHUP, SIGTERM and SIGINT, and stay
+// subscribed across restarts: a signal arriving while one App is torn down and the next is
+// built then waits in the channel for the next App, instead of hitting the default action,
+// which would end the process without saving the counters.
+//
+// checkReload is called on SIGHUP before anything is torn down. If it reports an error, the
+// restart is refused and the App keeps running with its current configuration, so a broken
+// config file cannot stop the counting. Passing nil skips the check.
+func New(config *Config, signals <-chan os.Signal, checkReload func() error) *App {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &App{
-		baseDir: baseDir,
-		config:  config,
+		config:      config,
+		signals:     signals,
+		checkReload: checkReload,
 		web: &http.Server{
 			Addr: net.JoinHostPort(config.Webserver.ListenHost, strconv.Itoa(config.Webserver.ListenPort)),
 		},
@@ -96,13 +106,15 @@ func (app *App) Run() (*App, error) {
 		hostname, _ := os.Hostname()
 		clientID := MODULE + hostname
 
+		// The callbacks only log. The publish loop asks IsConnectionOpen instead, which is
+		// false while a reconnect is pending; a flag set from these callbacks could go stale,
+		// because the client runs them in separate goroutines.
 		mqttHandler, err := mqtt.New(broker, clientID,
+			mqtt.WithLogger(slog.Default()),
 			mqtt.WithOnConnected(func() {
-				app.mqttConnected.Store(true)
 				slog.Info("MQTT connected", "broker", broker)
 			}),
 			mqtt.WithOnConnectionLost(func(err error) {
-				app.mqttConnected.Store(false)
 				slog.Warn("MQTT connection lost", "error", err)
 			}))
 		if err != nil {
@@ -116,12 +128,16 @@ func (app *App) Run() (*App, error) {
 			"heartbeat", app.config.MQTT.PublishInterval,
 			"minInterval", app.config.MQTT.MinPublishInterval,
 			"broker", broker)
-		app.meters.StartPeriodicPublish(app.ctx, app.config.MQTT.PublishInterval, app.config.MQTT.MinPublishInterval,
-			app.mqtt, app.mqttConnected.Load)
+		app.wg.Go(func() {
+			app.meters.RunPeriodicPublish(app.ctx, app.config.MQTT.PublishInterval, app.config.MQTT.MinPublishInterval,
+				app.mqtt, app.mqtt.IsConnectionOpen)
+		})
 	}
 
 	slog.Info("Starting periodic meter data backup", "interval", app.config.BackupInterval, "file", app.config.DataFile)
-	app.meters.StartPeriodicBackup(app.ctx, app.config.BackupInterval, app.config.DataFile)
+	app.wg.Go(func() {
+		app.meters.RunPeriodicBackup(app.ctx, app.config.BackupInterval, app.config.DataFile)
+	})
 
 	// handle the OS signals
 	app.HandleOSSignals()
@@ -142,24 +158,40 @@ func (app *App) Run() (*App, error) {
 }
 
 // Init prepares the application:
-// - adds meters
-// - loads meter data from backup
+// - loads the saved pulse counts
+// - adds meters, each counting on from its saved value
+// - writes the data file once, which also proves it is writable
 // - initializes API routes
 func (app *App) Init() (err error) {
 
+	// Read the saved values before any GPIO pin is watched, so every meter starts counting from
+	// its restored value and no pulse counted during start-up can be overwritten afterwards.
+	dataFile := app.config.DataFile
+	slog.Info("Loading meter data", "file", dataFile)
+	saved, err := s0meters.ReadMeterData(dataFile)
+	if err != nil {
+		slog.Error("Failed to load meter data", "file", dataFile, "error", err)
+		return err
+	}
+
 	// register the meters and the GPIO pins
 	for name, config := range app.config.Meter {
-		slog.Info("Register meter", "name", name, "gpio", config.Gpio)
-		if err = app.meters.RegisterMeter(app.ctx, name, config); err != nil {
+		slog.Info("Register meter", "name", name, "gpio", config.Gpio, "pulses", saved[name])
+		if err = app.meters.RegisterMeter(name, config, saved[name]); err != nil {
 			slog.Error("Failed to register meter", "name", name, "error", err)
 			return err
 		}
 	}
 
-	dataFile := app.config.DataFile
-	slog.Info("Loading meter data", "file", dataFile)
-	if err = app.meters.LoadMeterData(dataFile); err != nil {
-		slog.Error("Failed to load meter data", "file", dataFile, "error", err)
+	for name, pulses := range saved {
+		if _, ok := app.config.Meter[name]; !ok {
+			slog.Warn("Saved meter is not configured, its counter is dropped with the next save",
+				"meter", name, "pulses", pulses, "file", dataFile)
+		}
+	}
+
+	if err = app.meters.SaveMeterData(dataFile); err != nil {
+		slog.Error("Failed to save meter data", "file", dataFile, "error", err)
 		return err
 	}
 
@@ -180,38 +212,47 @@ func (app *App) Shutdown() <-chan struct{} {
 	return app.shutdown
 }
 
-// HandleOSSignals listens for SIGHUP, SIGTERM, and SIGINT signals.
+// HandleOSSignals handles SIGHUP (restart), SIGTERM and SIGINT (stop) from app.signals.
+//
+// The subscription itself belongs to the caller and outlives this App, so nothing here
+// stops or resets it; one goroutine per App consumes at most one signal.
 func (app *App) HandleOSSignals() {
 
 	go func() {
-		sig := make(chan os.Signal, 1)
-		signal.Notify(sig, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
-		defer signal.Stop(sig) // Cleanup: rollback signal.Notify
-
 		slog.Debug("Starting signal handler")
 
 		// Use select instead of a plain channel receive so the goroutine has
 		// two exit paths and always terminates cleanly:
 		//   - a signal is received and handled, or
 		//   - the context is cancelled externally (e.g. from a concurrent shutdown).
-		// Without this, the goroutine would block forever after signal.Reset()
-		// on a SIGHUP restart, leaking one goroutine per reload cycle.
-		select {
-		case receivedSignal := <-sig:
-			slog.Info("Received OS signal", "signal", receivedSignal)
-			switch receivedSignal {
-			case syscall.SIGHUP:
-				slog.Info("SIGHUP received, initiating restart")
-				app.shutdownProcedure(ModeRestart)
-				signal.Reset()
-			case syscall.SIGTERM, syscall.SIGINT:
-				slog.Info("SIGTERM/SIGINT received, stopping")
-				app.shutdownProcedure(ModeStop)
+		// Without the second path the goroutine would outlive its App and take
+		// the next signal away from the App that replaced it. The loop only
+		// continues after a SIGHUP whose config was rejected.
+		for {
+			select {
+			case receivedSignal := <-app.signals:
+				slog.Info("Received OS signal", "signal", receivedSignal)
+				switch receivedSignal {
+				case syscall.SIGHUP:
+					if app.checkReload != nil {
+						if err := app.checkReload(); err != nil {
+							slog.Error("Config reload rejected, keeping the running configuration", "error", err)
+							continue
+						}
+					}
+					slog.Info("SIGHUP received, initiating restart")
+					app.shutdownProcedure(ModeRestart)
+				case syscall.SIGTERM, syscall.SIGINT:
+					slog.Info("SIGTERM/SIGINT received, stopping")
+					app.shutdownProcedure(ModeStop)
+				}
+				return
+			case <-app.ctx.Done():
+				// Context was cancelled externally – exit without triggering
+				// a second shutdown procedure.
+				slog.Debug("Signal handler: context cancelled, exiting goroutine")
+				return
 			}
-		case <-app.ctx.Done():
-			// Context was cancelled externally – exit without triggering
-			// a second shutdown procedure.
-			slog.Debug("Signal handler: context cancelled, exiting goroutine")
 		}
 	}()
 }
@@ -224,7 +265,9 @@ func (app *App) shutdownProcedure(mode int) {
 
 	// cancel the application context to stop all running goroutines
 	app.cancelFunc()
-	app.wg.Wait() //wait for the web server to shutdown before cleaning up resources
+	// Wait for the web server, the backup loop and the MQTT loop, so the final save in Cleanup
+	// neither races a periodic backup nor runs while a publish is still in flight.
+	app.wg.Wait()
 
 	if err := app.Cleanup(); err != nil {
 		slog.Error("Cleanup failed", "error", err)
@@ -251,11 +294,13 @@ func (app *App) Cleanup() error {
 	var errs error
 
 	if app.meters != nil {
-		slog.Info("Saving meter data", "file", app.config.DataFile)
-		errs = errors.Join(errs, app.meters.SaveMeterData(app.config.DataFile))
-
+		// Close first, so no pulse can be counted after the values have been saved.
+		// The counters stay readable after Close.
 		slog.Info("Closing all meters")
 		errs = errors.Join(errs, app.meters.Close())
+
+		slog.Info("Saving meter data", "file", app.config.DataFile)
+		errs = errors.Join(errs, app.meters.SaveMeterData(app.config.DataFile))
 	}
 
 	if app.mqtt != nil {

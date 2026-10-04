@@ -12,6 +12,8 @@ logLevel: info
 logDestination: stdout
 
 # environment: dev | prod
+# With prod, a missing webserver.certFile is an error; dev falls back to the embedded,
+# publicly known development certificate.
 env: dev
 
 
@@ -68,22 +70,24 @@ mqtt:
   # Heartbeat: every meter is published at least this often, as a Go duration string
   publishInterval: 60s
 
-  # How often the publish loop checks for new pulses. A meter is published as soon as its
-  # counter advances, but never more than once per minPublishInterval - this throttles a
+  # How often the publish loop checks for new pulses. A meter is published as soon as a new
+  # pulse is counted, but never more than once per minPublishInterval - this throttles a
   # fast pulsing meter. Set to 0 to publish on the heartbeat only.
   minPublishInterval: 2s
 
 # =============================================================================
 # S0 Meter configurations
 # =============================================================================
-# gpio                 - GPIO pin for S0 pulse input
+# gpio                 - GPIO for the S0 input, BCM numbering 2-27, one meter per GPIO
 # debounceTime         - Debounce time as Go duration string (e.g. 1ms) to suppress signal noise
 # counterPulsesPerUnit - Meter constant (Zählerkonstante): pulses per counterUnit
 #                        (see meter datasheet, e.g. 1000 imp/kWh)
 # counterUnit          - Unit of the total counter (e.g. kWh, m³, l)
 # counterPrecision     - Decimal places for rounding the counter value
 # gaugeUnit            - Unit of the flow rate (e.g. kW, W, l/h, l/s)
-# gaugeScale           - Scale factor for gauge (e.g. 0.2777778 for m³/h to l/s)
+# gaugeScale           - Amount per pulse in gaugeUnit per hour; the gauge is pulses per hour
+#                        times gaugeScale and ignores counterPulsesPerUnit.
+#                        1 pulse = 1 Wh: W 1, kW 0.001 - 1 pulse = 1 l: l/h 1, l/s 0.000277778
 # gaugePrecision       - Decimal places for rounding the gauge value
 # mqttTopic            - MQTT topic to publish meter data (empty = disabled)
 # mqttRetained         - Broker keeps the last message of this topic (default: false)
@@ -119,6 +123,6 @@ meter:
     counterPulsesPerUnit: 1000
     counterPrecision: 3
     gaugeUnit: "l/s"
-    gaugeScale: 0.2777778
+    gaugeScale: 0.000277778
     gaugePrecision: 3
     mqttTopic: test/portablewater/summary

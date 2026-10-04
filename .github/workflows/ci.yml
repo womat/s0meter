@@ -1,8 +1,11 @@
-# Vet and build on every push and pull request.
+# Test, vet and build on every push and pull request.
 #
 # GOOS/GOARCH are set explicitly because the GPIO dependency
 # (warthog618/go-gpiocdev via womat/golib/gpio/rpi) only compiles for Linux.
 # A bare `go vet ./...` on any other platform fails with `undefined: uapi.*`.
+#
+# Actions are pinned to a commit SHA, with the release it belongs to in a
+# comment; dependabot (.github/dependabot.yml) proposes updates.
 name: ci
 
 on:
@@ -15,6 +18,22 @@ permissions:
   contents: read
 
 jobs:
+  # The tests run natively on the runner (linux/amd64): arm test binaries could
+  # not be executed there. They need no hardware - pulsecounter is driven by
+  # golib's GPIO emulator.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test with race detector
+        run: make test
+
   build:
     runs-on: ubuntu-latest
     strategy:
@@ -35,9 +54,9 @@ jobs:
       GOARCH: ${{ matrix.goarch }}
       GOARM: ${{ matrix.goarm }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
@@ -66,7 +85,9 @@ jobs:
           GOOS: ""
           GOARCH: ""
           GOARM: ""
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        # Pinned rather than @latest, so a new release cannot turn CI red without a
+        # change here. dependabot does not see go install lines - raise it by hand.
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
 
       # Exits non-zero when this code actually calls a vulnerable symbol.
       # Advisories that only sit in required modules are reported but do not

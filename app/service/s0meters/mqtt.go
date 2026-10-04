@@ -10,12 +10,15 @@ import (
 	"github.com/womat/golib/mqtt"
 )
 
-// StartPeriodicPublish runs the publishing loop in a separate goroutine.
+// RunPeriodicPublish runs the publishing loop. It blocks, so the caller runs it in a goroutine it
+// can wait for.
 //
-// A meter is published as soon as its counter advances, i.e. as soon as a new S0 pulse has been
-// counted, and in any case once per heartbeat. Between pulses only the gauge decays (calcGauge
-// stretches the interval to the time since the last pulse), which is not worth a message of its
-// own — the heartbeat carries it.
+// A meter is published as soon as a new S0 pulse has been counted, and in any case once per
+// heartbeat. The trigger compares the raw pulse count, not the rounded counter, so a pulse is
+// published even when it does not change the counter at its configured precision. Between pulses
+// only the gauge decays (gaugeAt stretches the interval to the time since the last pulse), which
+// is not worth a message of its own — the heartbeat carries it. Meters without an MQTT topic are
+// not published.
 //
 // The loop wakes every minInterval to look for new pulses, so minInterval is both the worst-case
 // delay of a pulse and the shortest spacing between two messages of the same meter. That spacing
@@ -23,63 +26,51 @@ import (
 // one pulse per Wh produces roughly three pulses per second. A minInterval of zero disables the
 // change trigger and leaves the plain heartbeat.
 //
-// isConnected reports whether the broker connection is currently established. Ticks are skipped
-// while it returns false, because Publish() blocks until its timeout expires when the client is
-// disconnected. Passing nil disables the check.
+// isConnected reports whether a broker connection is open right now. Ticks are skipped while it
+// returns false, so a disconnect costs neither a failed publish per meter nor a warning per tick.
+// Passing nil disables the check.
 //
 // The loop stops when the provided context is cancelled.
-func (h *Handler) StartPeriodicPublish(ctx context.Context, heartbeat, minInterval time.Duration, mqttHandler *mqtt.Handler, isConnected func() bool) {
+func (h *Handler) RunPeriodicPublish(ctx context.Context, heartbeat, minInterval time.Duration, mqttHandler *mqtt.Handler, isConnected func() bool) {
 	tick := minInterval
 	if tick <= 0 || tick > heartbeat {
 		tick = heartbeat
 	}
 
 	ticker := time.NewTicker(tick)
+	defer ticker.Stop()
 
-	go func() {
-		defer ticker.Stop()
+	// Owned by this loop alone, so it needs no lock of its own.
+	state := make(map[string]publishState)
 
-		// Owned by this goroutine alone, so it needs no lock of its own.
-		state := make(map[string]publishState)
-
-		for {
-			select {
-			case <-ctx.Done():
-				slog.Info("Stopping periodic MQTT publishing")
-				return
-			case <-ticker.C:
-				if isConnected != nil && !isConnected() {
-					slog.Debug("Skipping MQTT publish, broker not connected")
-					continue
-				}
-				h.publishDue(mqttHandler, state, heartbeat)
+	for {
+		select {
+		case <-ctx.Done():
+			slog.Info("Stopping periodic MQTT publishing")
+			return
+		case <-ticker.C:
+			if isConnected != nil && !isConnected() {
+				slog.Debug("Skipping MQTT publish, broker not connected")
+				continue
 			}
+			h.publishDue(mqttHandler, state, heartbeat)
 		}
-	}()
+	}
 }
 
 // publishState records what was last delivered for one meter, so the loop can tell a new pulse
 // from the gauge merely decaying, and knows when the next heartbeat is due.
 type publishState struct {
-	counter float64
-	at      time.Time
+	pulses uint64
+	at     time.Time
 }
 
 // pendingMsg couples a serialized meter reading with the meter it came from, so publish errors
 // can still be reported per meter and the state updated after the lock has been released.
 type pendingMsg struct {
-	name    string
-	counter float64
-	msg     mqtt.Message
-}
-
-// PublishAllMetrics sends the current reading of every meter, regardless of change or heartbeat.
-func (h *Handler) PublishAllMetrics(mqttHandler *mqtt.Handler) {
-	if mqttHandler == nil {
-		return
-	}
-
-	publishPending(mqttHandler, h.collectPending(nil, 0, time.Now()))
+	name   string
+	pulses uint64
+	msg    mqtt.Message
 }
 
 // publishDue sends the meters that advanced or whose heartbeat is due, and records what went out.
@@ -90,25 +81,30 @@ func (h *Handler) publishDue(mqttHandler *mqtt.Handler, state map[string]publish
 
 	now := time.Now()
 	for _, p := range publishPending(mqttHandler, h.collectPending(state, heartbeat, now)) {
-		state[p.name] = publishState{counter: p.counter, at: now}
+		state[p.name] = publishState{pulses: p.pulses, at: now}
 	}
 }
 
 // collectPending serializes the meters that are due to be published.
 //
-// A nil state collects every meter; otherwise a meter is collected when its counter advanced since
-// the last message or when that message is older than heartbeat. Serialization happens under RLock
-// so that the caller can publish without holding it.
+// Meters without an MQTT topic are never collected. A nil state collects every other meter;
+// otherwise a meter is collected when a pulse was counted since the last message or when that
+// message is older than heartbeat. Serialization happens under RLock so that the caller can
+// publish without holding it.
 func (h *Handler) collectPending(state map[string]publishState, heartbeat time.Duration, now time.Time) []pendingMsg {
 	h.mux.RLock()
 	defer h.mux.RUnlock()
 
 	pending := make([]pendingMsg, 0, len(h.meters))
 	for name, meterInstance := range h.meters {
-		counter := calcCounter(meterInstance)
+		if meterInstance.Config.MqttTopic == "" {
+			continue
+		}
+
+		pulses := meterInstance.Meter.GetCounter().Pulses
 
 		if state != nil {
-			if prev, sent := state[name]; sent && counter == prev.counter && now.Sub(prev.at) < heartbeat {
+			if prev, sent := state[name]; sent && pulses == prev.pulses && now.Sub(prev.at) < heartbeat {
 				continue
 			}
 		}
@@ -120,8 +116,8 @@ func (h *Handler) collectPending(state map[string]publishState, heartbeat time.D
 		}
 
 		pending = append(pending, pendingMsg{
-			name:    name,
-			counter: counter,
+			name:   name,
+			pulses: pulses,
 			msg: mqtt.Message{
 				Topic:    meterInstance.Config.MqttTopic,
 				Payload:  b,
@@ -150,25 +146,11 @@ func publishPending(mqttHandler *mqtt.Handler, pending []pendingMsg) []pendingMs
 	return sent
 }
 
-// SerializeMetric — public, acquires own lock
-func (h *Handler) SerializeMetric(name string) ([]byte, error) {
-	h.mux.RLock()
-	defer h.mux.RUnlock()
-	return h.serializeMetricLocked(name)
-}
-
-// serializeMetricLocked — caller must hold RLock
+// serializeMetricLocked serializes the current reading of one meter; the caller must hold h.mux.
 func (h *Handler) serializeMetricLocked(name string) ([]byte, error) {
 	m, ok := h.meters[name]
 	if !ok {
 		return nil, fmt.Errorf("meter %s not registered", name)
 	}
-	payload := MeterData{
-		TimeStamp:   time.Now(),
-		Counter:     calcCounter(m),
-		CounterUnit: m.Config.CounterUnit,
-		Gauge:       calcGauge(m),
-		GaugeUnit:   m.Config.GaugeUnit,
-	}
-	return json.Marshal(payload)
+	return json.Marshal(reading(name, m, time.Now()))
 }

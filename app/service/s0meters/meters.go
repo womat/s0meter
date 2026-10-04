@@ -1,42 +1,24 @@
-// Package s0meters manages multiple S0 pulse meters and publishes their data via MQTT.
+// Package s0meters is the domain layer of s0meter: it turns the pulses of several S0 meters
+// into readings and publishes and persists them.
 //
-// It supports real and emulated GPIO meters, tracks counters, calculates gauge values,
-// and provides periodic data backup to YAML.
+// A Handler holds the registered meters. For each it derives the counter (pulses divided by
+// the meter constant) and the gauge (pulses per hour from the last interval, scaled), see
+// counterOf and gaugeAt. backup.go keeps the pulse counts in a YAML file, written
+// atomically; mqtt.go publishes a meter on every new pulse and on a heartbeat.
 //
-// Example:
+// Typical use, as wired up by package app:
 //
-//	config := meters.Config{
-//	    DataFile:               "meter_data.yaml",
-//	    BackupInterval:         300 * time.Second,
-//	    DataCollectionInterval: 60 * time.Second,
-//	    MqttRetained:           true,
-//	    MqttTopic:              "s0meters",
-//	}
-//
-//	handler := meters.New(config)
-//
-//	handler.AddMeter("power", meters.MeterConfig{
-//	    Gpio:            17,
-//	    DebounceTime:      100 * time.Milisecond,
-//	    counterPulsesPerUnit:    1000,
-//	    CounterUnit:     "kWh",
-//	    GaugeScale:     1.0,
-//	    CounterPrecision:       2,
-//	    GaugePrecision:       2,
-//	    GaugeUnit:       "kW",
-//	    MqttTopic:       "meters/power",
-//	})
-//
-//	handler.Connect("tcp://mqtt.example.com:1883")
-//	defer handler.Close()
+//	saved, err := s0meters.ReadMeterData(file)
+//	h := s0meters.New()
+//	err = h.RegisterMeter("wallbox", cfg, saved["wallbox"])
+//	go h.RunPeriodicBackup(ctx, time.Minute, file)
+//	go h.RunPeriodicPublish(ctx, time.Minute, 2*time.Second, mqttHandler, mqttHandler.IsConnectionOpen)
+//	defer h.Close()
 package s0meters
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"log/slog"
-
 	"math"
 	"sync"
 	"time"
@@ -44,10 +26,9 @@ import (
 	"github.com/womat/s0meter/pkg/pulsecounter"
 )
 
-// Handler manages all registered meters, MQTT, and data persistence.
+// Handler manages all registered meters. It is safe for concurrent use.
 type Handler struct {
 	mux    sync.RWMutex
-	logger *slog.Logger
 	meters map[string]*MeterInstance
 }
 
@@ -74,12 +55,18 @@ type MeterInstance struct {
 	Meter  *pulsecounter.Handler
 }
 
-// MeterData represents the calculated counter and gauge readings.
+// MeterData is one reading of a meter: the telegram published via MQTT and returned by the API.
+//
+// The keys follow the telegrams of ecoflowd (myhome/KONZEPT-ECOFLOW.md): camelCase, "timestamp"
+// as one word, the device named in every telegram. TimeStamp is the time of the reading in
+// local time with offset, whole seconds (RFC 3339, e.g. 2026-10-04T22:50:35+02:00). For an S0
+// meter that is also the measuring time, because every pulse is counted the moment it arrives.
 type MeterData struct {
-	TimeStamp   time.Time `json:"timeStamp"`   // Timestamp of reading
-	Counter     float64   `json:"counter"`     // Total meter value
+	Meter       string    `json:"meter"`       // Meter name from the config, like ecoflowd's "sn"
+	TimeStamp   time.Time `json:"timestamp"`   // Time of the reading, local time, whole seconds
+	Counter     float64   `json:"counter"`     // Total meter value in CounterUnit
 	CounterUnit string    `json:"counterUnit"` // Counter unit
-	Gauge       float64   `json:"gauge"`       // Flow rate
+	Gauge       float64   `json:"gauge"`       // Flow rate in GaugeUnit
 	GaugeUnit   string    `json:"gaugeUnit"`   // Gauge unit
 }
 
@@ -90,7 +77,7 @@ func New() *Handler {
 	}
 }
 
-// Close shuts down all meters, disconnects MQTT.
+// Close stops counting on all meters and releases their GPIO lines. The counters stay readable.
 func (h *Handler) Close() error {
 	h.mux.Lock()
 	defer h.mux.Unlock()
@@ -103,8 +90,9 @@ func (h *Handler) Close() error {
 }
 
 // RegisterMeter adds a new S0 meter and initializes its pulse handler.
-func (h *Handler) RegisterMeter(ctx context.Context, name string, cfg MeterConfig) error {
-	meter, err := pulsecounter.New(ctx, cfg.Gpio, cfg.DebounceTime)
+// Counting continues from pulses, the value restored by ReadMeterData.
+func (h *Handler) RegisterMeter(name string, cfg MeterConfig, pulses uint64) error {
+	meter, err := pulsecounter.New(cfg.Gpio, cfg.DebounceTime, pulses)
 	if err != nil {
 		return err
 	}
@@ -126,13 +114,7 @@ func (h *Handler) GetMeterAll() map[string]MeterData {
 	now := time.Now()
 	data := make(map[string]MeterData, len(h.meters))
 	for name, m := range h.meters {
-		data[name] = MeterData{
-			TimeStamp:   now,
-			Counter:     calcCounter(m),
-			CounterUnit: m.Config.CounterUnit,
-			Gauge:       calcGauge(m),
-			GaugeUnit:   m.Config.GaugeUnit,
-		}
+		data[name] = reading(name, m, now)
 	}
 	return data
 }
@@ -147,72 +129,108 @@ func (h *Handler) GetMeter(name string) (MeterData, error) {
 		return MeterData{}, fmt.Errorf("meter %s not found", name)
 	}
 
-	return MeterData{
-		TimeStamp:   time.Now(),
-		Counter:     calcCounter(m),
-		CounterUnit: m.Config.CounterUnit,
-		Gauge:       calcGauge(m),
-		GaugeUnit:   m.Config.GaugeUnit,
-	}, nil
+	return reading(name, m, time.Now()), nil
 }
 
-// IsReady returns true if all optional services are connected.
-// This can be used for Kubernetes-style Readiness checks (/ready endpoint).
-func (h *Handler) IsReady() bool {
-	return true
+// reading builds the MeterData of meter name at now. Counter and gauge come from the same
+// counter snapshot, so they always describe the same state of the meter.
+func reading(name string, m *MeterInstance, now time.Time) MeterData {
+	c := m.Meter.GetCounter()
+	return MeterData{
+		Meter:       name,
+		TimeStamp:   now.Truncate(time.Second),
+		Counter:     counterOf(c, m.Config),
+		CounterUnit: m.Config.CounterUnit,
+		Gauge:       gaugeAt(c, m.Config, now),
+		GaugeUnit:   m.Config.GaugeUnit,
+	}
 }
+
+// DroppedEvents returns, per meter, how many GPIO edge events were dropped since the
+// meters were registered because pulse processing fell behind. Each is a lost pulse.
+func (h *Handler) DroppedEvents() map[string]uint64 {
+	h.mux.RLock()
+	defer h.mux.RUnlock()
+
+	dropped := make(map[string]uint64, len(h.meters))
+	for name, m := range h.meters {
+		dropped[name] = m.Meter.DroppedEvents()
+	}
+	return dropped
+}
+
+// Range of the usable GPIOs (BCM numbering) on the 40-pin header. GPIO0 and GPIO1 are on the
+// header too, but reserved for the ID EEPROM of HAT boards.
+const (
+	minGpio = 2
+	maxGpio = 27
+)
+
+// maxPrecision is the most decimal places a float64 reading can meaningfully carry; beyond it
+// round's power of ten overflows to Inf, and the reading becomes NaN.
+const maxPrecision = 15
 
 // Validate checks the MeterConfig for invalid or missing values.
 func (c *MeterConfig) Validate() error {
-	if c.Gpio <= 0 {
-		return fmt.Errorf("gpio pin must be greater than 0, got %v", c.Gpio)
+	switch {
+	case c.Gpio == 0 || c.Gpio == 1:
+		return fmt.Errorf("gpio %d is reserved for the HAT ID EEPROM, use %d-%d (BCM numbering)", c.Gpio, minGpio, maxGpio)
+	case c.Gpio < minGpio || c.Gpio > maxGpio:
+		return fmt.Errorf("gpio %d is not on the 40-pin header, use %d-%d (BCM numbering)", c.Gpio, minGpio, maxGpio)
 	}
 	if c.DebounceTime < 0 {
 		return fmt.Errorf("debounceTime must be non-negative, got %v", c.DebounceTime)
 	}
-	if c.CounterPulsesPerUnit <= 0 {
-		return fmt.Errorf("counterPulsesPerUnit must be greater than 0, got %v", c.CounterPulsesPerUnit)
+	if !isPositiveFinite(c.CounterPulsesPerUnit) {
+		return fmt.Errorf("counterPulsesPerUnit must be a positive number, got %v", c.CounterPulsesPerUnit)
 	}
-	if c.CounterPrecision < 0 {
-		return fmt.Errorf("counter precision must be >= 0, got %d", c.CounterPrecision)
+	if c.CounterPrecision < 0 || c.CounterPrecision > maxPrecision {
+		return fmt.Errorf("counterPrecision must be 0-%d, got %d", maxPrecision, c.CounterPrecision)
 	}
-	if c.GaugeScale == 0 {
-		return fmt.Errorf("gaugeScale must not be 0")
+	if !isPositiveFinite(c.GaugeScale) {
+		return fmt.Errorf("gaugeScale must be a positive number, got %v", c.GaugeScale)
 	}
-	if c.GaugePrecision < 0 {
-		return fmt.Errorf("gauge precision must be >= 0, got %d", c.GaugePrecision)
+	if c.GaugePrecision < 0 || c.GaugePrecision > maxPrecision {
+		return fmt.Errorf("gaugePrecision must be 0-%d, got %d", maxPrecision, c.GaugePrecision)
 	}
 	return nil
 }
 
-// calcGauge computes the flow rate based on the last two pulses.
-func calcGauge(m *MeterInstance) float64 {
-	c := m.Meter.GetCounter()
+// isPositiveFinite reports whether f is greater than 0 and neither Inf nor NaN.
+func isPositiveFinite(f float64) bool {
+	return f > 0 && !math.IsInf(f, 0)
+}
 
+// gaugeAt computes the flow rate of a counter snapshot at now, from the last two pulses.
+//
+// The result is pulses per hour times GaugeScale; CounterPulsesPerUnit plays no part. The
+// interval is stretched to the time since the last pulse when that is longer, so the rate
+// decays toward 0 once pulses stop. An interval that is not positive yields 0 rather than
+// being replaced by that elapsed time, which right after a pulse is close to zero and would
+// turn into a huge spike - the case when the two timestamps come from clocks that disagree.
+func gaugeAt(c pulsecounter.Counter, cfg MeterConfig, now time.Time) float64 {
 	if c.LastTimeStamp.IsZero() || c.TimeStamp.IsZero() {
 		return 0
 	}
 
-	dt := c.TimeStamp.Sub(c.LastTimeStamp)
-	if elapsed := time.Since(c.TimeStamp); elapsed > dt {
-		dt = elapsed
-	}
-
-	if dt <= 0 {
+	interval := c.TimeStamp.Sub(c.LastTimeStamp)
+	if interval <= 0 {
 		return 0
 	}
 
-	val := 3600 / dt.Seconds() * m.Config.GaugeScale
-	return round(val, m.Config.GaugePrecision)
+	dt := max(interval, now.Sub(c.TimeStamp))
+
+	val := 3600 / dt.Seconds() * cfg.GaugeScale
+	return round(val, cfg.GaugePrecision)
 }
 
-// calcCounter computes the total meter value from pulses.
-func calcCounter(m *MeterInstance) float64 {
-	c := m.Meter.GetCounter()
-	if m.Config.CounterPulsesPerUnit == 0 {
+// counterOf computes the total meter value of a counter snapshot: pulses divided by the meter
+// constant, rounded to CounterPrecision.
+func counterOf(c pulsecounter.Counter, cfg MeterConfig) float64 {
+	if cfg.CounterPulsesPerUnit == 0 {
 		return 0
 	}
-	return round(float64(c.Pulses)/m.Config.CounterPulsesPerUnit, m.Config.CounterPrecision)
+	return round(float64(c.Pulses)/cfg.CounterPulsesPerUnit, cfg.CounterPrecision)
 }
 
 // round rounds a float to a given precision.
