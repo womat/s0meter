@@ -1,7 +1,7 @@
-// Package app provides HTTP handlers for application health and readiness checks.
-// Health returns runtime metrics; Ready is a Kubernetes readiness probe.
-
 package app
+
+// HTTP handlers for health and readiness: /health returns runtime metrics, /ready is a
+// readiness probe for monitoring.
 
 import (
 	"net/http"
@@ -30,21 +30,22 @@ func (app *App) HandleHealth() http.Handler {
 	)
 }
 
-// HandleReady is a Kubernetes readiness probe endpoint.
-// It returns 200 OK when all dependencies are initialized and ready to serve traffic,
-// or 503 Service Unavailable if any dependency (e.g. meters) is not yet ready.
+// HandleReady is a readiness probe for monitoring.
+// It returns 200 OK while the service can deliver readings, and 503 Service Unavailable
+// while an MQTT broker is configured but no connection to it is open, because readings
+// are then not delivered. Without a broker the service is always ready.
 //
 //	@Summary		Readiness check
-//	@Description	Returns 200 if all dependencies are ready, 503 otherwise. No authentication required.
+//	@Description	Returns 200 while the service delivers readings, 503 while a configured MQTT broker is not connected. No authentication required.
 //	@Tags			info
 //	@Produce		json
 //	@Success		200	{object}	map[string]string	"Application is ready"
-//	@Failure		503	{object}	map[string]string	"Service unavailable"
+//	@Failure		503	{object}	map[string]string	"MQTT broker not connected"
 //	@Router			/ready [get]
 func (app *App) HandleReady() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !app.meters.IsReady() {
-			web.Encode(w, http.StatusServiceUnavailable, map[string]string{"error": "meters not initialized"})
+		if app.mqtt != nil && !app.mqtt.IsConnectionOpen() {
+			web.Encode(w, http.StatusServiceUnavailable, map[string]string{"error": "mqtt broker not connected"})
 			return
 		}
 

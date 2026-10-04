@@ -128,7 +128,7 @@ const docTemplate = `{
         },
         "/ready": {
             "get": {
-                "description": "Returns 200 if all dependencies are ready, 503 otherwise. No authentication required.",
+                "description": "Returns 200 while the service delivers readings, 503 while a configured MQTT broker is not connected. No authentication required.",
                 "produces": [
                     "application/json"
                 ],
@@ -147,7 +147,7 @@ const docTemplate = `{
                         }
                     },
                     "503": {
-                        "description": "Service unavailable",
+                        "description": "MQTT broker not connected",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
