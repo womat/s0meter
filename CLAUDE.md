@@ -85,9 +85,10 @@ interval to the time since the last pulse, so the gauge decays continuously betw
 otherwise fire on every tick.
 
 Two invariants worth preserving: publishing happens **outside** the `RWMutex` (`golib/mqtt.Publish`
-blocks for up to 5 s per message when disconnected), and a failed publish is not recorded in
+waits up to 5 s for the broker's acknowledgement), and a failed publish is not recorded in
 `publishState`, so the meter is retried on the next tick. The loop also skips entirely while
-`App.mqttConnected` is false.
+`mqtt.Handler.IsConnectionOpen()` is false — that, not `IsConnected()`, is false during a
+reconnect, when the client would otherwise drop a QoS 0 message silently.
 
 ## Conventions
 
