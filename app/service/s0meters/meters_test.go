@@ -46,10 +46,10 @@ func TestGaugeAtScales(t *testing.T) {
 	}
 }
 
-func TestCalcCounter(t *testing.T) {
-	m := newMeter(t, MeterConfig{Gpio: 5, CounterPulsesPerUnit: 1000, CounterPrecision: 3}, 105459)
-	if got := calcCounter(m); got != 105.459 {
-		t.Errorf("calcCounter = %v, want 105.459", got)
+func TestCounterOf(t *testing.T) {
+	cfg := MeterConfig{CounterPulsesPerUnit: 1000, CounterPrecision: 3}
+	if got := counterOf(pulsecounter.Counter{Pulses: 105459}, cfg); got != 105.459 {
+		t.Errorf("counterOf = %v, want 105.459", got)
 	}
 }
 

@@ -26,7 +26,7 @@ make clean
 
 `ensure_dev_certs` (a prerequisite of every build target) generates `app/certs/dev_{cert,key}.pem` if missing; these are `//go:embed`-ed and gitignored, so a fresh clone must build via `make`, not bare `go build`.
 
-Tests use golib's in-memory GPIO emulator (`gpio/rpiemu`) through `pulsecounter.NewWithPin`, so they need no hardware — but they compile on Linux only, like everything here. Run them with `make test` (`go test -race ./...`), on macOS via `docker run --rm -v "$PWD":/src -w /src golang:1.27 make test`. Pure logic is kept testable on purpose: `gaugeAt` takes the time as a parameter, `calcGauge` only supplies `time.Now()`. `VERSION` (`app/app.go`), `buildDate` and `buildCommit` (`cmd/main.go`) are all `var`s injected via `-ldflags` — never edit them in source. The Makefile derives `VERSION` from `git describe --tags`; GoReleaser uses the tag itself.
+Tests use golib's in-memory GPIO emulator (`gpio/rpiemu`) through `pulsecounter.NewWithPin`, so they need no hardware — but they compile on Linux only, like everything here. Run them with `make test` (`go test -race ./...`), on macOS via `docker run --rm -v "$PWD":/src -w /src golang:1.27 make test`. Pure logic is kept testable on purpose: `gaugeAt` takes the time as a parameter, `reading` supplies `time.Now()`. `VERSION` (`app/app.go`), `buildDate` and `buildCommit` (`cmd/main.go`) are all `var`s injected via `-ldflags` — never edit them in source. The Makefile derives `VERSION` from `git describe --tags`; GoReleaser uses the tag itself.
 
 ### Releases
 
@@ -67,7 +67,7 @@ Layering is strict: `cmd` → `app` → `app/service/*` → `pkg/*`. Lower layer
 - **`app/config.go`** — YAML config decoded with `KnownFields(true)` (unknown keys are an error), `${VAR}` — and only that form, never bare `$` — expanded on the raw file, defaults from `NewConfig()`, a `Validate()` that `cmd` calls before `app.New` (GPIO 2–27, unique per meter, precision 0–15), and `Warnings()` for non-fatal findings such as a weak `apiKey`. Authentication is API key only; there is no JWT config.
 - **`app/routes.go` / `api_*.go`** — `http.ServeMux` with Go 1.22 method patterns. Middleware chain, outermost first: `WithLogging` → `WithIPFilter` → `WithCORS` → mux. Auth is per-route via `web.WithAuth` (`X-API-Key`, from `womat/golib/web`). `/version` and `/ready` are public (`/ready` is 503 while a configured MQTT broker is not connected); `/health` (including `droppedEvents` per meter), `/meters`, `/meters/{name}` are protected. CORS allows GET and OPTIONS only.
 - **`app/webservices.go`** — HTTPS only. Falls back to the embedded dev cert when `certFile` does not exist, but only with `env: dev`; with `env: prod` that is a start-up error, because the embedded key ships in every release.
-- **`app/service/s0meters`** — the domain layer. `Handler` holds `map[name]*MeterInstance` under an `RWMutex`; `meters.go` has the pure calculation helpers (`calcCounter`, `calcGauge`), `backup.go` the YAML persistence (atomic temp-file + rename; an empty or unparsable file is a start-up error, never "start at zero") and backup loop, `mqtt.go` the publish loop. Note the locking convention: `serializeMetricLocked` assumes the caller holds `h.mux` — `collectPending` calls it under `RLock`.
+- **`app/service/s0meters`** — the domain layer. `Handler` holds `map[name]*MeterInstance` under an `RWMutex`; `meters.go` has the pure calculation helpers (`counterOf`, `gaugeAt`, both on a counter snapshot) and `reading`, which builds the telegram, `backup.go` the YAML persistence (atomic temp-file + rename; an empty or unparsable file is a start-up error, never "start at zero") and backup loop, `mqtt.go` the publish loop. Note the locking convention: `serializeMetricLocked` assumes the caller holds `h.mux` — `collectPending` calls it under `RLock`.
 - **`pkg/pulsecounter`** — hardware-facing only. Watches a rising edge on one GPIO pin and keeps `{Pulses, TimeStamp, LastTimeStamp}`. It knows nothing of units or scaling; all unit conversion lives in `s0meters`.
 
 **External dependency `github.com/womat/golib`** supplies `gpio`/`gpio/rpi` (and `gpio/rpiemu` for the tests), `mqtt`, and `web` (auth, CORS, IP filter, `Encode`). Logging is plain `log/slog`, set up by `newLogger` in `cmd/main.go`. It is not vendored — read it in `$(go env GOMODCACHE)/github.com/womat/golib@<version>` when behavior is unclear.
@@ -78,12 +78,16 @@ Layering is strict: `cmd` → `app` → `app/service/*` → `pkg/*`. Lower layer
 
 The gauge is "pulses per hour × `gaugeScale`" and does **not** use `counterPulsesPerUnit`, so `gaugeScale` is the amount per pulse in the target unit per hour (1 pulse = 1 l → `l/h` 1, `l/s` 1/3600). Only `pulses` is restored from the data file; the timestamps are not, because after a reboot without RTC they can lie ahead of the clock and produce a spike, so the gauge restarts with the second pulse of a run.
 
+### Telegram contract
+
+`MeterData` is both the MQTT payload and the API response: `meter`, `timestamp`, `counter`, `counterUnit`, `gauge`, `gaugeUnit`. The keys follow ecoflowd's telegrams (myhome `KONZEPT-ECOFLOW.md`); `timestamp` is local time with offset in whole seconds (`now.Truncate(time.Second)` — a deliberate choice, ecoflowd uses UTC). `reading()` is the only place that builds it, and `TestTelegramContract` pins keys and format. The myhome Node-RED flows read `counter`, `gauge` and `counterUnit` — change the contract only together with them.
+
 ### MQTT publish model
 
 `RunPeriodicPublish` wakes every `minPublishInterval` and publishes a meter when its **pulse count**
 advanced or when the last message is older than `publishInterval` (the heartbeat); meters without
 `mqttTopic` are skipped. The trigger deliberately watches the raw pulses — not the gauge, which
-`calcGauge` lets decay continuously between pulses and would fire on every tick, and not the rounded
+`gaugeAt` lets decay continuously between pulses and would fire on every tick, and not the rounded
 counter, which a coarse `counterPrecision` would hold still across several pulses.
 
 Two invariants worth preserving: publishing happens **outside** the `RWMutex` (`golib/mqtt.Publish`

@@ -16,7 +16,7 @@ import (
 // A meter is published as soon as a new S0 pulse has been counted, and in any case once per
 // heartbeat. The trigger compares the raw pulse count, not the rounded counter, so a pulse is
 // published even when it does not change the counter at its configured precision. Between pulses
-// only the gauge decays (calcGauge stretches the interval to the time since the last pulse), which
+// only the gauge decays (gaugeAt stretches the interval to the time since the last pulse), which
 // is not worth a message of its own — the heartbeat carries it. Meters without an MQTT topic are
 // not published.
 //
@@ -152,12 +152,5 @@ func (h *Handler) serializeMetricLocked(name string) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("meter %s not registered", name)
 	}
-	payload := MeterData{
-		TimeStamp:   time.Now(),
-		Counter:     calcCounter(m),
-		CounterUnit: m.Config.CounterUnit,
-		Gauge:       calcGauge(m),
-		GaugeUnit:   m.Config.GaugeUnit,
-	}
-	return json.Marshal(payload)
+	return json.Marshal(reading(name, m, time.Now()))
 }

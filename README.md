@@ -309,6 +309,32 @@ Two worked examples:
 
 ## MQTT Publishing
 
+### Telegram
+
+Each meter is published as one JSON telegram on its `mqttTopic`; `/meters` and `/meters/{name}`
+return the same object:
+
+```
+myhome/wallbox/summary  {"meter":"wallbox","timestamp":"2026-10-04T22:50:35+02:00","counter":34341804,"counterUnit":"Wh","gauge":3.11,"gaugeUnit":"W"}
+```
+
+| Key           | Content                                                                              |
+|---------------|--------------------------------------------------------------------------------------|
+| `meter`       | Meter name from the configuration, so a telegram is identifiable without its topic    |
+| `timestamp`   | Time of the reading, RFC 3339 in local time with offset, whole seconds. For an S0 meter this is also the measuring time: every pulse is counted the moment it arrives |
+| `counter`     | Total, in `counterUnit`, rounded to `counterPrecision`                               |
+| `counterUnit` | Unit of `counter` from the configuration                                             |
+| `gauge`       | Flow rate, in `gaugeUnit`, rounded to `gaugePrecision` — see [Choosing gaugeScale](#choosing-gaugescale) |
+| `gaugeUnit`   | Unit of `gauge` from the configuration                                               |
+
+The keys follow the telegrams of ecoflowd: camelCase, `timestamp` as one word, the device named in
+every telegram. The units travel with the values because they are configured per meter.
+
+> **Changed in the release after 4.7.0:** `timeStamp` is now `timestamp`, in whole seconds instead of
+> nanoseconds, and `meter` is new. Consumers that read `timeStamp` have to be adapted.
+
+### When a meter is published
+
 A meter is published **as soon as a new pulse has been counted** — even when the pulse does not
 change the counter at its `counterPrecision` — and in any case once per `publishInterval` (the
 heartbeat). Between two pulses only the gauge decays, and that alone does not trigger a message.

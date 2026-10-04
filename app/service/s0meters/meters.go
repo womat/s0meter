@@ -3,7 +3,7 @@
 //
 // A Handler holds the registered meters. For each it derives the counter (pulses divided by
 // the meter constant) and the gauge (pulses per hour from the last interval, scaled), see
-// calcCounter and calcGauge. backup.go keeps the pulse counts in a YAML file, written
+// counterOf and gaugeAt. backup.go keeps the pulse counts in a YAML file, written
 // atomically; mqtt.go publishes a meter on every new pulse and on a heartbeat.
 //
 // Typical use, as wired up by package app:
@@ -55,12 +55,18 @@ type MeterInstance struct {
 	Meter  *pulsecounter.Handler
 }
 
-// MeterData represents the calculated counter and gauge readings.
+// MeterData is one reading of a meter: the telegram published via MQTT and returned by the API.
+//
+// The keys follow the telegrams of ecoflowd (myhome/KONZEPT-ECOFLOW.md): camelCase, "timestamp"
+// as one word, the device named in every telegram. TimeStamp is the time of the reading in
+// local time with offset, whole seconds (RFC 3339, e.g. 2026-10-04T22:50:35+02:00). For an S0
+// meter that is also the measuring time, because every pulse is counted the moment it arrives.
 type MeterData struct {
-	TimeStamp   time.Time `json:"timeStamp"`   // Timestamp of reading
-	Counter     float64   `json:"counter"`     // Total meter value
+	Meter       string    `json:"meter"`       // Meter name from the config, like ecoflowd's "sn"
+	TimeStamp   time.Time `json:"timestamp"`   // Time of the reading, local time, whole seconds
+	Counter     float64   `json:"counter"`     // Total meter value in CounterUnit
 	CounterUnit string    `json:"counterUnit"` // Counter unit
-	Gauge       float64   `json:"gauge"`       // Flow rate
+	Gauge       float64   `json:"gauge"`       // Flow rate in GaugeUnit
 	GaugeUnit   string    `json:"gaugeUnit"`   // Gauge unit
 }
 
@@ -108,13 +114,7 @@ func (h *Handler) GetMeterAll() map[string]MeterData {
 	now := time.Now()
 	data := make(map[string]MeterData, len(h.meters))
 	for name, m := range h.meters {
-		data[name] = MeterData{
-			TimeStamp:   now,
-			Counter:     calcCounter(m),
-			CounterUnit: m.Config.CounterUnit,
-			Gauge:       calcGauge(m),
-			GaugeUnit:   m.Config.GaugeUnit,
-		}
+		data[name] = reading(name, m, now)
 	}
 	return data
 }
@@ -129,13 +129,21 @@ func (h *Handler) GetMeter(name string) (MeterData, error) {
 		return MeterData{}, fmt.Errorf("meter %s not found", name)
 	}
 
+	return reading(name, m, time.Now()), nil
+}
+
+// reading builds the MeterData of meter name at now. Counter and gauge come from the same
+// counter snapshot, so they always describe the same state of the meter.
+func reading(name string, m *MeterInstance, now time.Time) MeterData {
+	c := m.Meter.GetCounter()
 	return MeterData{
-		TimeStamp:   time.Now(),
-		Counter:     calcCounter(m),
+		Meter:       name,
+		TimeStamp:   now.Truncate(time.Second),
+		Counter:     counterOf(c, m.Config),
 		CounterUnit: m.Config.CounterUnit,
-		Gauge:       calcGauge(m),
+		Gauge:       gaugeAt(c, m.Config, now),
 		GaugeUnit:   m.Config.GaugeUnit,
-	}, nil
+	}
 }
 
 // DroppedEvents returns, per meter, how many GPIO edge events were dropped since the
@@ -193,18 +201,13 @@ func isPositiveFinite(f float64) bool {
 	return f > 0 && !math.IsInf(f, 0)
 }
 
-// calcGauge computes the flow rate based on the last two pulses.
+// gaugeAt computes the flow rate of a counter snapshot at now, from the last two pulses.
 //
 // The result is pulses per hour times GaugeScale; CounterPulsesPerUnit plays no part. The
 // interval is stretched to the time since the last pulse when that is longer, so the rate
 // decays toward 0 once pulses stop. An interval that is not positive yields 0 rather than
 // being replaced by that elapsed time, which right after a pulse is close to zero and would
 // turn into a huge spike - the case when the two timestamps come from clocks that disagree.
-func calcGauge(m *MeterInstance) float64 {
-	return gaugeAt(m.Meter.GetCounter(), m.Config, time.Now())
-}
-
-// gaugeAt is calcGauge for a given counter snapshot and point in time.
 func gaugeAt(c pulsecounter.Counter, cfg MeterConfig, now time.Time) float64 {
 	if c.LastTimeStamp.IsZero() || c.TimeStamp.IsZero() {
 		return 0
@@ -221,13 +224,13 @@ func gaugeAt(c pulsecounter.Counter, cfg MeterConfig, now time.Time) float64 {
 	return round(val, cfg.GaugePrecision)
 }
 
-// calcCounter computes the total meter value from pulses.
-func calcCounter(m *MeterInstance) float64 {
-	c := m.Meter.GetCounter()
-	if m.Config.CounterPulsesPerUnit == 0 {
+// counterOf computes the total meter value of a counter snapshot: pulses divided by the meter
+// constant, rounded to CounterPrecision.
+func counterOf(c pulsecounter.Counter, cfg MeterConfig) float64 {
+	if cfg.CounterPulsesPerUnit == 0 {
 		return 0
 	}
-	return round(float64(c.Pulses)/m.Config.CounterPulsesPerUnit, m.Config.CounterPrecision)
+	return round(float64(c.Pulses)/cfg.CounterPulsesPerUnit, cfg.CounterPrecision)
 }
 
 // round rounds a float to a given precision.

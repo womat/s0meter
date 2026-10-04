@@ -245,7 +245,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "counter": {
-                    "description": "Total meter value",
+                    "description": "Total meter value in CounterUnit",
                     "type": "number"
                 },
                 "counterUnit": {
@@ -253,15 +253,19 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "gauge": {
-                    "description": "Flow rate",
+                    "description": "Flow rate in GaugeUnit",
                     "type": "number"
                 },
                 "gaugeUnit": {
                     "description": "Gauge unit",
                     "type": "string"
                 },
-                "timeStamp": {
-                    "description": "Timestamp of reading",
+                "meter": {
+                    "description": "Meter name from the config, like ecoflowd's \"sn\"",
+                    "type": "string"
+                },
+                "timestamp": {
+                    "description": "Time of the reading, local time, whole seconds",
                     "type": "string"
                 }
             }

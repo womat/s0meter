@@ -1,6 +1,10 @@
 package s0meters
 
 import (
+	"encoding/json"
+	"regexp"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -45,5 +49,62 @@ func TestCollectPendingTriggersOnPulsesNotRoundedCounter(t *testing.T) {
 
 	if got := h.collectPending(state, time.Minute, now.Add(time.Second)); len(got) != 1 {
 		t.Errorf("a new pulse should publish although the rounded counter did not change, got %+v", got)
+	}
+}
+
+// TestTelegramContract pins the payload keys and the timestamp format, which follow the
+// ecoflowd telegrams; consumers such as the myhome Node-RED flows rely on them.
+func TestTelegramContract(t *testing.T) {
+	h := handlerWith(map[string]*MeterInstance{
+		"wallbox": newMeter(t, MeterConfig{Gpio: 17, CounterPulsesPerUnit: 1, GaugeScale: 1, CounterUnit: "Wh", GaugeUnit: "W", MqttTopic: "home/wallbox"}, 34341804),
+	})
+
+	h.mux.RLock()
+	b, err := h.serializeMetricLocked("wallbox")
+	h.mux.RUnlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(b, &payload); err != nil {
+		t.Fatal(err)
+	}
+
+	keys := make([]string, 0, len(payload))
+	for k := range payload {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	want := []string{"counter", "counterUnit", "gauge", "gaugeUnit", "meter", "timestamp"}
+	if !slices.Equal(keys, want) {
+		t.Errorf("keys = %v, want %v", keys, want)
+	}
+
+	if payload["meter"] != "wallbox" || payload["counter"] != float64(34341804) || payload["counterUnit"] != "Wh" {
+		t.Errorf("payload = %s", b)
+	}
+
+	// RFC 3339 with offset, whole seconds - no fraction.
+	ts, _ := payload["timestamp"].(string)
+	if !regexp.MustCompile(`^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(Z|[+-]\d\d:\d\d)$`).MatchString(ts) {
+		t.Errorf("timestamp = %q, want RFC 3339 in whole seconds", ts)
+	}
+}
+
+func TestReadingUsesLocalTimeInWholeSeconds(t *testing.T) {
+	m := newMeter(t, MeterConfig{Gpio: 17, CounterPulsesPerUnit: 1, GaugeScale: 1}, 1)
+	vienna, err := time.LoadLocation("Europe/Vienna")
+	if err != nil {
+		t.Skip("no time zone data:", err)
+	}
+	now := time.Date(2026, 10, 4, 22, 50, 35, 649486212, vienna)
+
+	b, err := json.Marshal(reading("wallbox", m, now))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `"timestamp":"2026-10-04T22:50:35+02:00"`; !strings.Contains(string(b), want) {
+		t.Errorf("payload %s does not contain %s", b, want)
 	}
 }
