@@ -23,7 +23,8 @@ Zero and above).
 
 ## Where to start
 
-- Runtime, API, build, deploy, and Swagger usage: [`cmd/README.md`](cmd/README.md)
+- This README: API, configuration, MQTT, installation, build, deploy and troubleshooting
+- Command-line flags, as printed by `s0meter --help`: [`cmd/README.md`](cmd/README.md)
 - Example configuration: [`config/config.yaml`](config/config.yaml)
 - Swagger generation script: [`docs/generate.sh`](docs/generate.sh)
 
@@ -34,7 +35,7 @@ Zero and above).
 | Method | Path             | Auth    | Description                               |
 |--------|------------------|---------|-------------------------------------------|
 | GET    | `/version`       | —       | Application name and version              |
-| GET    | `/ready`         | —       | Readiness probe: 200 ready, 503 otherwise |
+| GET    | `/ready`         | —       | Readiness probe: 200, or 503 while the configured MQTT broker is not connected |
 | GET    | `/health`        | API Key | Runtime metrics, dropped events per meter |
 | GET    | `/meters`        | API Key | Current reading of all meters             |
 | GET    | `/meters/{name}` | API Key | Current reading of a single meter         |
@@ -509,7 +510,14 @@ make deploy
 
 # Deploy with the Swagger UI enabled
 make deploy_dev
+
+# Run the tests with the race detector (Linux; on macOS through Docker)
+make test
+docker run --rm -v "$PWD":/src -w /src golang:1.27 make test
 ```
+
+The tests need no hardware: `pkg/pulsecounter` is driven by golib's in-memory GPIO emulator. They
+still compile on Linux only, because the packages import the Linux GPIO backend.
 
 `PI_ARCH` selects the target architecture for every `deploy*` target and defaults to **`arm6`**,
 matching a Raspberry Pi Zero (1st gen). Get this wrong and the binary simply will not start on the

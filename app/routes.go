@@ -1,17 +1,8 @@
-// Package app sets up HTTP routes and middleware for the s0meter application.
-// It supports authentication, Swagger documentation (dev only), and monitoring endpoints.
-// Routes:
-// - Public routes without authentication (e.g., version)
-// - Protected routes requiring API key or JWT
-// - Swagger documentation (only in development) at /swagger/
-// - Health, Live, Ready, Monitoring, and S0 data endpoints
-//
-// Middleware applied:
-// - CORS
-// - IP filtering (allowed/blocked IPs)
-//
-// This must be called during app startup before starting the HTTP server.
 package app
+
+// HTTP routes and global middleware. /version and /ready are public; /health and the
+// meter readings require the API key (X-Api-Key). Swagger UI is registered only in
+// builds with the swagger tag. Middleware, outermost first: logging, IP filter, CORS.
 
 import (
 	"log/slog"

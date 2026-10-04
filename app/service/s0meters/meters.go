@@ -1,42 +1,24 @@
-// Package s0meters manages multiple S0 pulse meters and publishes their data via MQTT.
+// Package s0meters is the domain layer of s0meter: it turns the pulses of several S0 meters
+// into readings and publishes and persists them.
 //
-// It supports real and emulated GPIO meters, tracks counters, calculates gauge values,
-// and provides periodic data backup to YAML.
+// A Handler holds the registered meters. For each it derives the counter (pulses divided by
+// the meter constant) and the gauge (pulses per hour from the last interval, scaled), see
+// calcCounter and calcGauge. backup.go keeps the pulse counts in a YAML file, written
+// atomically; mqtt.go publishes a meter on every new pulse and on a heartbeat.
 //
-// Example:
+// Typical use, as wired up by package app:
 //
-//	config := meters.Config{
-//	    DataFile:               "meter_data.yaml",
-//	    BackupInterval:         300 * time.Second,
-//	    DataCollectionInterval: 60 * time.Second,
-//	    MqttRetained:           true,
-//	    MqttTopic:              "s0meters",
-//	}
-//
-//	handler := meters.New(config)
-//
-//	handler.AddMeter("power", meters.MeterConfig{
-//	    Gpio:            17,
-//	    DebounceTime:      100 * time.Milisecond,
-//	    counterPulsesPerUnit:    1000,
-//	    CounterUnit:     "kWh",
-//	    GaugeScale:     1.0,
-//	    CounterPrecision:       2,
-//	    GaugePrecision:       2,
-//	    GaugeUnit:       "kW",
-//	    MqttTopic:       "meters/power",
-//	})
-//
-//	handler.Connect("tcp://mqtt.example.com:1883")
-//	defer handler.Close()
+//	saved, err := s0meters.ReadMeterData(file)
+//	h := s0meters.New()
+//	err = h.RegisterMeter("wallbox", cfg, saved["wallbox"])
+//	go h.RunPeriodicBackup(ctx, time.Minute, file)
+//	go h.RunPeriodicPublish(ctx, time.Minute, 2*time.Second, mqttHandler, mqttHandler.IsConnectionOpen)
+//	defer h.Close()
 package s0meters
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"log/slog"
-
 	"math"
 	"sync"
 	"time"
@@ -44,10 +26,9 @@ import (
 	"github.com/womat/s0meter/pkg/pulsecounter"
 )
 
-// Handler manages all registered meters, MQTT, and data persistence.
+// Handler manages all registered meters. It is safe for concurrent use.
 type Handler struct {
 	mux    sync.RWMutex
-	logger *slog.Logger
 	meters map[string]*MeterInstance
 }
 
@@ -90,7 +71,7 @@ func New() *Handler {
 	}
 }
 
-// Close shuts down all meters, disconnects MQTT.
+// Close stops counting on all meters and releases their GPIO lines. The counters stay readable.
 func (h *Handler) Close() error {
 	h.mux.Lock()
 	defer h.mux.Unlock()
@@ -104,8 +85,8 @@ func (h *Handler) Close() error {
 
 // RegisterMeter adds a new S0 meter and initializes its pulse handler.
 // Counting continues from pulses, the value restored by ReadMeterData.
-func (h *Handler) RegisterMeter(ctx context.Context, name string, cfg MeterConfig, pulses uint64) error {
-	meter, err := pulsecounter.New(ctx, cfg.Gpio, cfg.DebounceTime, pulses)
+func (h *Handler) RegisterMeter(name string, cfg MeterConfig, pulses uint64) error {
+	meter, err := pulsecounter.New(cfg.Gpio, cfg.DebounceTime, pulses)
 	if err != nil {
 		return err
 	}
@@ -170,12 +151,6 @@ func (h *Handler) DroppedEvents() map[string]uint64 {
 	return dropped
 }
 
-// IsReady returns true if all optional services are connected.
-// This can be used for Kubernetes-style Readiness checks (/ready endpoint).
-func (h *Handler) IsReady() bool {
-	return true
-}
-
 // Range of the usable GPIOs (BCM numbering) on the 40-pin header. GPIO0 and GPIO1 are on the
 // header too, but reserved for the ID EEPROM of HAT boards.
 const (
@@ -226,8 +201,11 @@ func isPositiveFinite(f float64) bool {
 // being replaced by that elapsed time, which right after a pulse is close to zero and would
 // turn into a huge spike - the case when the two timestamps come from clocks that disagree.
 func calcGauge(m *MeterInstance) float64 {
-	c := m.Meter.GetCounter()
+	return gaugeAt(m.Meter.GetCounter(), m.Config, time.Now())
+}
 
+// gaugeAt is calcGauge for a given counter snapshot and point in time.
+func gaugeAt(c pulsecounter.Counter, cfg MeterConfig, now time.Time) float64 {
 	if c.LastTimeStamp.IsZero() || c.TimeStamp.IsZero() {
 		return 0
 	}
@@ -237,10 +215,10 @@ func calcGauge(m *MeterInstance) float64 {
 		return 0
 	}
 
-	dt := max(interval, time.Since(c.TimeStamp))
+	dt := max(interval, now.Sub(c.TimeStamp))
 
-	val := 3600 / dt.Seconds() * m.Config.GaugeScale
-	return round(val, m.Config.GaugePrecision)
+	val := 3600 / dt.Seconds() * cfg.GaugeScale
+	return round(val, cfg.GaugePrecision)
 }
 
 // calcCounter computes the total meter value from pulses.

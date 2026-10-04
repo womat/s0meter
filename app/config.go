@@ -121,11 +121,6 @@ func LoadConfig(fileName string) (*Config, error) {
 	return cfg, nil
 }
 
-// IsDevEnv returns true if the environment is development.
-func (c *Config) IsDevEnv() bool {
-	return c.Env == DevEnv
-}
-
 // Validate checks the Config for invalid or missing values.
 func (c *Config) Validate() error {
 

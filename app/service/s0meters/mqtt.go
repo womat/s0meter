@@ -73,15 +73,6 @@ type pendingMsg struct {
 	msg    mqtt.Message
 }
 
-// PublishAllMetrics sends the current reading of every meter, regardless of change or heartbeat.
-func (h *Handler) PublishAllMetrics(mqttHandler *mqtt.Handler) {
-	if mqttHandler == nil {
-		return
-	}
-
-	publishPending(mqttHandler, h.collectPending(nil, 0, time.Now()))
-}
-
 // publishDue sends the meters that advanced or whose heartbeat is due, and records what went out.
 func (h *Handler) publishDue(mqttHandler *mqtt.Handler, state map[string]publishState, heartbeat time.Duration) {
 	if mqttHandler == nil {
@@ -155,14 +146,7 @@ func publishPending(mqttHandler *mqtt.Handler, pending []pendingMsg) []pendingMs
 	return sent
 }
 
-// SerializeMetric — public, acquires own lock
-func (h *Handler) SerializeMetric(name string) ([]byte, error) {
-	h.mux.RLock()
-	defer h.mux.RUnlock()
-	return h.serializeMetricLocked(name)
-}
-
-// serializeMetricLocked — caller must hold RLock
+// serializeMetricLocked serializes the current reading of one meter; the caller must hold h.mux.
 func (h *Handler) serializeMetricLocked(name string) ([]byte, error) {
 	m, ok := h.meters[name]
 	if !ok {

@@ -1,22 +1,15 @@
-// Package pulsecounter provides counting of GPIO pulses (S0 signals) on a Raspberry Pi.
+// Package pulsecounter counts S0 pulses (DIN 43864) on one GPIO line.
 //
-// This package handles the low-level pulse detection from a GPIO pin, applies
-// debouncing to reduce noise, and maintains a counter with timestamps of the
-// last two pulses.
+// It watches the rising edge of a debounced input with pull-up and keeps the pulse count
+// together with the timestamps of the last two pulses. It knows nothing of units or
+// scaling; that is left to the caller.
 //
-// It's intended to be used as a building block for higher-level S0 energy meters,
-// which can manage multiple pulse counters or add metadata and business logic.
-//
-// Features:
-// - Counts S0 pulses from a GPIO pin
-// - Applies debouncing to filter out noise
-// - Maintains timestamps of the last and penultimate pulses
-// - Provides safe concurrent access with an internal mutex
-// - Supports real GPIO (`rpi/gpio`) and emulated GPIO (`rpi/gpioemu`)
+// New opens a Raspberry Pi GPIO line through golib's gpio/rpi. NewWithPin takes any
+// gpio.Pin instead, which is how the tests drive it with golib's in-memory gpio/rpiemu.
+// A Handler is safe for concurrent use.
 package pulsecounter
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -43,15 +36,12 @@ type Handler struct {
 	dropped uint64 // dropped events already reported by handlePulseEvent
 }
 
-// New initializes a GPIO pin for S0 pulses and returns a Handler.
+// New opens GPIO port as a debounced input with pull-up and counts its pulses.
 //
-// The returned Handler is fully initialized and ready to use.
-// The GPIO pin is configured as input, debounced, and events are watched.
 // Counting continues from pulses, which is set before watching starts, so no pulse
 // counted in the meantime can be overwritten by restoring a saved value later.
 // Returns an error if initialization fails.
-func New(ctx context.Context, port int, debounce time.Duration, pulses uint64) (*Handler, error) {
-
+func New(port int, debounce time.Duration, pulses uint64) (*Handler, error) {
 	p, err := rpi.NewPin(port,
 		rpi.WithMode(gpio.Input),
 		rpi.WithPullup(gpio.PullUp),
@@ -60,11 +50,21 @@ func New(ctx context.Context, port int, debounce time.Duration, pulses uint64) (
 		return nil, fmt.Errorf("create GPIO port %d: %w", port, err)
 	}
 
-	h := &Handler{pin: port, gpioPin: p, counter: Counter{Pulses: pulses}}
+	h, err := NewWithPin(p, pulses)
+	if err != nil {
+		_ = p.Close()
+		return nil, err
+	}
+	return h, nil
+}
 
-	if err = p.WatchFunc(gpio.RisingEdge, h.handlePulseEvent); err != nil {
-		p.Close()
-		return nil, fmt.Errorf("start watching events on GPIO port %d: %w", port, err)
+// NewWithPin counts the rising edges of an already configured pin, continuing from pulses.
+// The Handler takes ownership of the pin and closes it in Close.
+func NewWithPin(p gpio.Pin, pulses uint64) (*Handler, error) {
+	h := &Handler{pin: p.Number(), gpioPin: p, counter: Counter{Pulses: pulses}}
+
+	if err := p.WatchFunc(gpio.RisingEdge, h.handlePulseEvent); err != nil {
+		return nil, fmt.Errorf("start watching events on GPIO port %d: %w", h.pin, err)
 	}
 
 	return h, nil

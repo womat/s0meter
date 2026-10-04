@@ -1,14 +1,19 @@
 // Package app provides the main application wiring for s0meter.
 //
-// It initializes S0 meters, handles MQTT publishing, periodic backups,
-// web server startup, and OS signal handling for graceful shutdowns
-// or restarts.
+// It initializes the S0 meters, MQTT publishing, periodic backups, the HTTPS API and the
+// OS signal handling for graceful stops and configuration reloads. One App lives for one
+// configuration; cmd/main.go builds a new one on every reload.
 //
 // Usage:
 //
-//	config := LoadConfig()
-//	app := app.New(config, "/opt/s0meter")
-//	app.Run()
+//	cfg, err := app.LoadConfig(file)          // then cfg.Validate()
+//	signals := make(chan os.Signal, 1)
+//	signal.Notify(signals, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
+//	a, err := app.New(cfg, signals, checkReload).Run()
+//	select {
+//	case <-a.Restart():  // build the next App
+//	case <-a.Shutdown(): // exit
+//	}
 package app
 
 import (
@@ -45,7 +50,6 @@ const (
 // App is where the application is wired up.
 type App struct {
 	wg          sync.WaitGroup // tracks the web server, backup and MQTT publish goroutines
-	baseDir     string         // working directory
 	config      *Config        // app configuration
 	web         *http.Server   // HTTP server
 	meters      *s0meters.Handler
@@ -68,11 +72,10 @@ type App struct {
 // checkReload is called on SIGHUP before anything is torn down. If it reports an error, the
 // restart is refused and the App keeps running with its current configuration, so a broken
 // config file cannot stop the counting. Passing nil skips the check.
-func New(config *Config, baseDir string, signals <-chan os.Signal, checkReload func() error) *App {
+func New(config *Config, signals <-chan os.Signal, checkReload func() error) *App {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &App{
-		baseDir:     baseDir,
 		config:      config,
 		signals:     signals,
 		checkReload: checkReload,
@@ -174,7 +177,7 @@ func (app *App) Init() (err error) {
 	// register the meters and the GPIO pins
 	for name, config := range app.config.Meter {
 		slog.Info("Register meter", "name", name, "gpio", config.Gpio, "pulses", saved[name])
-		if err = app.meters.RegisterMeter(app.ctx, name, config, saved[name]); err != nil {
+		if err = app.meters.RegisterMeter(name, config, saved[name]); err != nil {
 			slog.Error("Failed to register meter", "name", name, "error", err)
 			return err
 		}

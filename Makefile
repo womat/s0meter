@@ -1,15 +1,7 @@
-# https://gist.github.com/thomaspoignant/5b72d579bd5f311904d973652180c705
-
-GOCMD=go
-GOTEST=$(GOCMD) test
-GOVET=$(GOCMD) vet
 BINARY_NAME=s0meter
 DEV_CERT_DIR=./app/certs
 DEV_CERT_FILE=$(DEV_CERT_DIR)/dev_cert.pem
 DEV_KEY_FILE=$(DEV_CERT_DIR)/dev_key.pem
-SERVICE_PORT?=3000
-DOCKER_REGISTRY?= #if set it should finished by /
-EXPORT_RESULT?=false # for CI please set EXPORT_RESULT to true
 
 # Branch policy: releases are always cut from RELEASE_BRANCH, and
 # DEVELOP_BRANCH has to be merged into it first. The release target enforces
@@ -71,7 +63,7 @@ LDFLAGS := -X 'main.buildDate=$(BUILD_DATE)' \
            -X 'main.buildCommit=$(BUILD_COMMIT)' \
            -X 'github.com/womat/s0meter/app.VERSION=$(VERSION)'
 
-.PHONY: all test build vendor copy release merge_to_main deploy_release build_dev build_arm6 build_arm6_dev build_arm7 build_arm7_dev build_arm64 build_arm64_dev build_windows386 build_windows64 build_linux386 build_linux64 build_mac_arm64 deploy deploy_dev clean help ensure_dev_certs
+.PHONY: all test release merge_to_main deploy_release deploy deploy_dev clean help ensure_dev_certs
 
 all: help
 
@@ -80,9 +72,13 @@ clean: ## Remove build related file
 	rm -fr ./bin/arm6
 	rm -fr ./bin/arm7
 	rm -fr ./bin/arm64
-	rm -fr ./bin/amd64
-	rm -fr ./bin/darwin
-	rm -fr ./bin/386
+	rm -fr ./dist
+
+# The tests use golib's GPIO emulator, but the packages import the Linux-only GPIO
+# backend, so they compile on Linux only. On macOS run them in a container:
+#   docker run --rm -v "$$PWD":/src -w /src golang:1.27 make test
+test: ensure_dev_certs ## run all tests with the race detector (Linux only, see comment for macOS)
+	GOOS=linux go test -race ./...
 
 ensure_dev_certs:
 	@mkdir -p $(DEV_CERT_DIR)
@@ -92,7 +88,7 @@ ensure_dev_certs:
 			-keyout "$(DEV_KEY_FILE)" \
 			-out "$(DEV_CERT_FILE)" \
 			-days 365 \
-			-subj "/C=AT/ST=Vienna/L=Vienna/O=modbusgateway/OU=Development/CN=localhost"; \
+			-subj "/C=AT/ST=Vienna/L=Vienna/O=s0meter/OU=Development/CN=localhost"; \
 	fi
 
 
@@ -122,49 +118,33 @@ ensure_dev_certs:
 # ==================================================================================================================
 
 
-build_arm64_dev: ensure_dev_certs ## ARMv8, 64-bit OS on Pi 3/4/5/Zero 2 W - with Swagger UI
-	GOOS=linux GOARCH=arm64 \
-	go build -tags swagger -ldflags "$(LDFLAGS)" -o ./bin/arm64/${BINARY_NAME} ./cmd/main.go
+# Go environment per target, see the table above. build_<arch> and build_<arch>_dev
+# (with Swagger UI) are generated from it by the static pattern rules below.
+GOENV_arm6  := GOOS=linux GOARCH=arm GOARM=6
+GOENV_arm7  := GOOS=linux GOARCH=arm GOARM=7
+GOENV_arm64 := GOOS=linux GOARCH=arm64
 
-build_arm6_dev: ensure_dev_certs ## ARMv6, runs on every Pi in 32-bit mode; required for Pi 1 / Zero - with Swagger UI
-	GOOS=linux GOARCH=arm GOARM=6 \
-	go build -tags swagger -ldflags "$(LDFLAGS)" -o ./bin/arm6/${BINARY_NAME} ./cmd/main.go
+BUILD_ARCHS       := arm6 arm7 arm64
+BUILD_TARGETS     := $(addprefix build_,$(BUILD_ARCHS))
+BUILD_DEV_TARGETS := $(addsuffix _dev,$(BUILD_TARGETS))
 
-build_arm7_dev: ensure_dev_certs ## ARMv7, 32-bit Pi 2 and newer - with Swagger UI
-	GOOS=linux GOARCH=arm GOARM=7 \
-	go build -tags swagger -ldflags "$(LDFLAGS)" -o ./bin/arm7/${BINARY_NAME} ./cmd/main.go
+# Declared here, not in the .PHONY list at the top: prerequisites of a rule are expanded
+# when read, and these variables are only defined at this point.
+.PHONY: $(BUILD_TARGETS) $(BUILD_DEV_TARGETS)
 
-build_arm6: ensure_dev_certs ## ARMv6, runs on every Pi in 32-bit mode; required for Pi 1 / Zero
-	GOOS=linux GOARCH=arm GOARM=6 \
-	go build -ldflags "$(LDFLAGS)" -o ./bin/arm6/${BINARY_NAME} ./cmd/main.go
+# Help texts for the generated targets; `make help` reads these comment lines too.
+## build_arm6:      ## ARMv6, runs on every Pi in 32-bit mode; required for Pi 1 / Zero
+## build_arm7:      ## ARMv7, 32-bit Pi 2 and newer
+## build_arm64:     ## ARMv8, 64-bit OS on Pi 3/4/5/Zero 2 W
+## build_<arch>_dev: ## the same with Swagger UI (dev only), e.g. build_arm6_dev
 
-build_arm7: ensure_dev_certs ## ARMv7, 32-bit Pi 2 and newer
-	GOOS=linux GOARCH=arm GOARM=7 \
-	go build -ldflags "$(LDFLAGS)" -o ./bin/arm7/${BINARY_NAME} ./cmd/main.go
+# Static pattern rules (explicit target lists) instead of plain build_% rules: they work
+# with .PHONY and resolve build_arm6_dev unambiguously, also in GNU Make 3.81 on macOS.
+$(BUILD_TARGETS): build_%: ensure_dev_certs
+	$(GOENV_$*) go build -ldflags "$(LDFLAGS)" -o ./bin/$*/${BINARY_NAME} ./cmd/main.go
 
-build_arm64: ensure_dev_certs ## ARMv8, 64-bit OS on Pi 3/4/5/Zero 2 W
-	GOOS=linux GOARCH=arm64 \
-	go build -ldflags "$(LDFLAGS)" -o ./bin/arm64/${BINARY_NAME} ./cmd/main.go
-
-build_windows386: ensure_dev_certs ## build binary for windows
-	GOOS=windows GOARCH=386 \
-	go build -ldflags "$(LDFLAGS)" -o ./bin/386/${BINARY_NAME}.exe ./cmd/main.go
-
-build_windows64: ensure_dev_certs ## build binary for windows 64bit
-	GOOS=windows GOARCH=amd64 \
-	go build -ldflags "$(LDFLAGS)" -o ./bin/amd64/${BINARY_NAME}.exe ./cmd/main.go
-
-build_linux386: ensure_dev_certs ## build binary for linux
-	GOOS=linux GOARCH=386 \
-	go build -ldflags "$(LDFLAGS)" -o ./bin/386/${BINARY_NAME} ./cmd/main.go
-
-build_linux64: ensure_dev_certs ## build binary for linux 64bit
-	GOOS=linux GOARCH=amd64 \
-	go build -ldflags "$(LDFLAGS)" -o ./bin/amd64/${BINARY_NAME} ./cmd/main.go
-
-build_mac_arm64: ensure_dev_certs ## build binary mac M1
-	GOOS=darwin GOARCH=arm64 \
-	go build -ldflags "$(LDFLAGS)" -o ./bin/darwin/${BINARY_NAME} ./cmd/main.go
+$(BUILD_DEV_TARGETS): build_%_dev: ensure_dev_certs
+	$(GOENV_$*) go build -tags swagger -ldflags "$(LDFLAGS)" -o ./bin/$*/${BINARY_NAME} ./cmd/main.go
 
 
 deploy: build_$(PI_ARCH) ## build for $(PI_ARCH) and copy to $(PI_USER)@$(PI_HOST) (override: make deploy PI_ARCH=arm64 PI_HOST=my-pi)
@@ -230,5 +210,5 @@ help: ## Show this help.
 	@echo '  ${YELLOW}make${RESET} ${GREEN}<target>${RESET}'
 	@echo ''
 	@echo 'Targets:'
-	@awk 'BEGIN {FS = ":.*?## "} /^[0-9a-zA-Z_-]+:.*?## / {printf "${YELLOW}%-16s${GREEN}%s${RESET}\n", $$1, $$2}' $(MAKEFILE_LIST) \
+	@awk 'BEGIN {FS = ":.*?## "} /^(## )?[0-9a-zA-Z_<>-]+:.*?## / {sub(/^## /, "", $$1); printf "${YELLOW}%-17s${GREEN}%s${RESET}\n", $$1, $$2}' $(MAKEFILE_LIST) \
 		| sed $(HELP_SED)
