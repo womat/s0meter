@@ -12,6 +12,8 @@ logLevel: info
 logDestination: stdout
 
 # environment: dev | prod
+# With prod, a missing webserver.certFile is an error; dev falls back to the embedded,
+# publicly known development certificate.
 env: dev
 
 
@@ -76,7 +78,7 @@ mqtt:
 # =============================================================================
 # S0 Meter configurations
 # =============================================================================
-# gpio                 - GPIO pin for S0 pulse input
+# gpio                 - GPIO for the S0 input, BCM numbering 2-27, one meter per GPIO
 # debounceTime         - Debounce time as Go duration string (e.g. 1ms) to suppress signal noise
 # counterPulsesPerUnit - Meter constant (Zählerkonstante): pulses per counterUnit
 #                        (see meter datasheet, e.g. 1000 imp/kWh)

@@ -117,8 +117,19 @@ func run(configFile string, debug bool) int {
 		slog.SetDefault(logger.Logger)
 		slog.Info("Logging initialized/reloaded", "logLevel", config.LogLevel)
 
+		for _, warning := range config.Warnings() {
+			slog.Warn("Configuration warning", "warning", warning)
+		}
+
+		// A SIGHUP restart only goes ahead when the config file still loads and validates;
+		// otherwise the running App keeps going with its current configuration.
+		checkReload := func() error {
+			_, err := loadConfig(configFile, debug)
+			return err
+		}
+
 		// Create and run the application
-		a, err := app.New(config, filepath.Join("/opt", app.MODULE), signals).Run()
+		a, err := app.New(config, filepath.Join("/opt", app.MODULE), signals, checkReload).Run()
 		if err != nil {
 			slog.Error("Critical error occurred, shutting down", "error", err)
 			return 1

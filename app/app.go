@@ -44,17 +44,18 @@ const (
 // App is the main application struct.
 // App is where the application is wired up.
 type App struct {
-	wg         sync.WaitGroup // tracks the web server, backup and MQTT publish goroutines
-	baseDir    string         // working directory
-	config     *Config        // app configuration
-	web        *http.Server   // HTTP server
-	meters     *s0meters.Handler
-	mqtt       *mqtt.Handler
-	signals    <-chan os.Signal // OS signals, subscribed once by the caller for all lifecycles
-	restart    chan struct{}    // signals application restart
-	shutdown   chan struct{}    // signals application shutdown
-	ctx        context.Context
-	cancelFunc context.CancelFunc
+	wg          sync.WaitGroup // tracks the web server, backup and MQTT publish goroutines
+	baseDir     string         // working directory
+	config      *Config        // app configuration
+	web         *http.Server   // HTTP server
+	meters      *s0meters.Handler
+	mqtt        *mqtt.Handler
+	signals     <-chan os.Signal // OS signals, subscribed once by the caller for all lifecycles
+	checkReload func() error     // loads and validates the config file before a SIGHUP restart
+	restart     chan struct{}    // signals application restart
+	shutdown    chan struct{}    // signals application shutdown
+	ctx         context.Context
+	cancelFunc  context.CancelFunc
 }
 
 // New initializes the App struct but does not start services.
@@ -63,13 +64,18 @@ type App struct {
 // subscribed across restarts: a signal arriving while one App is torn down and the next is
 // built then waits in the channel for the next App, instead of hitting the default action,
 // which would end the process without saving the counters.
-func New(config *Config, baseDir string, signals <-chan os.Signal) *App {
+//
+// checkReload is called on SIGHUP before anything is torn down. If it reports an error, the
+// restart is refused and the App keeps running with its current configuration, so a broken
+// config file cannot stop the counting. Passing nil skips the check.
+func New(config *Config, baseDir string, signals <-chan os.Signal, checkReload func() error) *App {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &App{
-		baseDir: baseDir,
-		config:  config,
-		signals: signals,
+		baseDir:     baseDir,
+		config:      config,
+		signals:     signals,
+		checkReload: checkReload,
 		web: &http.Server{
 			Addr: net.JoinHostPort(config.Webserver.ListenHost, strconv.Itoa(config.Webserver.ListenPort)),
 		},
@@ -217,22 +223,33 @@ func (app *App) HandleOSSignals() {
 		//   - a signal is received and handled, or
 		//   - the context is cancelled externally (e.g. from a concurrent shutdown).
 		// Without the second path the goroutine would outlive its App and take
-		// the next signal away from the App that replaced it.
-		select {
-		case receivedSignal := <-app.signals:
-			slog.Info("Received OS signal", "signal", receivedSignal)
-			switch receivedSignal {
-			case syscall.SIGHUP:
-				slog.Info("SIGHUP received, initiating restart")
-				app.shutdownProcedure(ModeRestart)
-			case syscall.SIGTERM, syscall.SIGINT:
-				slog.Info("SIGTERM/SIGINT received, stopping")
-				app.shutdownProcedure(ModeStop)
+		// the next signal away from the App that replaced it. The loop only
+		// continues after a SIGHUP whose config was rejected.
+		for {
+			select {
+			case receivedSignal := <-app.signals:
+				slog.Info("Received OS signal", "signal", receivedSignal)
+				switch receivedSignal {
+				case syscall.SIGHUP:
+					if app.checkReload != nil {
+						if err := app.checkReload(); err != nil {
+							slog.Error("Config reload rejected, keeping the running configuration", "error", err)
+							continue
+						}
+					}
+					slog.Info("SIGHUP received, initiating restart")
+					app.shutdownProcedure(ModeRestart)
+				case syscall.SIGTERM, syscall.SIGINT:
+					slog.Info("SIGTERM/SIGINT received, stopping")
+					app.shutdownProcedure(ModeStop)
+				}
+				return
+			case <-app.ctx.Done():
+				// Context was cancelled externally – exit without triggering
+				// a second shutdown procedure.
+				slog.Debug("Signal handler: context cancelled, exiting goroutine")
+				return
 			}
-		case <-app.ctx.Done():
-			// Context was cancelled externally – exit without triggering
-			// a second shutdown procedure.
-			slog.Debug("Signal handler: context cancelled, exiting goroutine")
 		}
 	}()
 }

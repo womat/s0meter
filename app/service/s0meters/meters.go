@@ -176,27 +176,46 @@ func (h *Handler) IsReady() bool {
 	return true
 }
 
+// Range of the usable GPIOs (BCM numbering) on the 40-pin header. GPIO0 and GPIO1 are on the
+// header too, but reserved for the ID EEPROM of HAT boards.
+const (
+	minGpio = 2
+	maxGpio = 27
+)
+
+// maxPrecision is the most decimal places a float64 reading can meaningfully carry; beyond it
+// round's power of ten overflows to Inf, and the reading becomes NaN.
+const maxPrecision = 15
+
 // Validate checks the MeterConfig for invalid or missing values.
 func (c *MeterConfig) Validate() error {
-	if c.Gpio <= 0 {
-		return fmt.Errorf("gpio pin must be greater than 0, got %v", c.Gpio)
+	switch {
+	case c.Gpio == 0 || c.Gpio == 1:
+		return fmt.Errorf("gpio %d is reserved for the HAT ID EEPROM, use %d-%d (BCM numbering)", c.Gpio, minGpio, maxGpio)
+	case c.Gpio < minGpio || c.Gpio > maxGpio:
+		return fmt.Errorf("gpio %d is not on the 40-pin header, use %d-%d (BCM numbering)", c.Gpio, minGpio, maxGpio)
 	}
 	if c.DebounceTime < 0 {
 		return fmt.Errorf("debounceTime must be non-negative, got %v", c.DebounceTime)
 	}
-	if c.CounterPulsesPerUnit <= 0 {
-		return fmt.Errorf("counterPulsesPerUnit must be greater than 0, got %v", c.CounterPulsesPerUnit)
+	if !isPositiveFinite(c.CounterPulsesPerUnit) {
+		return fmt.Errorf("counterPulsesPerUnit must be a positive number, got %v", c.CounterPulsesPerUnit)
 	}
-	if c.CounterPrecision < 0 {
-		return fmt.Errorf("counter precision must be >= 0, got %d", c.CounterPrecision)
+	if c.CounterPrecision < 0 || c.CounterPrecision > maxPrecision {
+		return fmt.Errorf("counterPrecision must be 0-%d, got %d", maxPrecision, c.CounterPrecision)
 	}
-	if c.GaugeScale == 0 {
-		return fmt.Errorf("gaugeScale must not be 0")
+	if !isPositiveFinite(c.GaugeScale) {
+		return fmt.Errorf("gaugeScale must be a positive number, got %v", c.GaugeScale)
 	}
-	if c.GaugePrecision < 0 {
-		return fmt.Errorf("gauge precision must be >= 0, got %d", c.GaugePrecision)
+	if c.GaugePrecision < 0 || c.GaugePrecision > maxPrecision {
+		return fmt.Errorf("gaugePrecision must be 0-%d, got %d", maxPrecision, c.GaugePrecision)
 	}
 	return nil
+}
+
+// isPositiveFinite reports whether f is greater than 0 and neither Inf nor NaN.
+func isPositiveFinite(f float64) bool {
+	return f > 0 && !math.IsInf(f, 0)
 }
 
 // calcGauge computes the flow rate based on the last two pulses.

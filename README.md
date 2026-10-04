@@ -85,7 +85,10 @@ CONFIG_FILE=/etc/s0meter/config.yaml s0meter
 ## Configuration
 
 Default location: `/opt/s0meter/etc/config.yaml`
-Environment variables are expanded inside the file, e.g. `apiKey: ${TADL_API_KEY}`.
+Environment variables are expanded inside the file in the `${VAR}` form only, e.g.
+`apiKey: ${S0METER_API_KEY}`; an unset variable becomes empty. Any other `$` is kept literally, so
+keys and passwords may contain it. Unknown keys are rejected, so a misspelled or renamed setting
+stops the start instead of silently keeping its default.
 
 ```yaml
 # =============================================================================
@@ -201,14 +204,14 @@ meter:
 
 | Field                  | Type   | Description                                                                      |
 |------------------------|--------|----------------------------------------------------------------------------------|
-| `gpio`                 | int    | GPIO pin number for S0 pulse input                                               |
+| `gpio`                 | int    | GPIO for the S0 input, BCM numbering, 2–27 (GPIO0/1 are reserved for HAT boards); one meter per GPIO |
 | `debounceTime`         | string | Debounce as Go duration string — see [Choosing a debounce time](#choosing-a-debounce-time) |
 | `counterUnit`          | string | Unit of the total counter (e.g. `kWh`, `m³`, `l`)                                |
 | `gaugeUnit`            | string | Unit of the flow rate (e.g. `kW`, `l/h`, `l/s`)                                  |
 | `counterPulsesPerUnit` | float  | Meter constant (Zählerkonstante): pulses per counterUnit                         |
 | `gaugeScale`           | float  | Amount per pulse in the gauge unit per hour — see [Choosing gaugeScale](#choosing-gaugescale) |
-| `counterPrecision`     | int    | Number of decimal places for the counter value                                   |
-| `gaugePrecision`       | int    | Number of decimal places for the gauge value                                     |
+| `counterPrecision`     | int    | Number of decimal places for the counter value (0–15)                            |
+| `gaugePrecision`       | int    | Number of decimal places for the gauge value (0–15)                              |
 | `mqttTopic`            | string | MQTT topic to publish to (empty = not published)                                 |
 | `mqttRetained`         | bool   | Broker keeps the last message of this topic (default: `false`)                   |
 
@@ -327,8 +330,9 @@ timeout, and resumes automatically once the client reconnects.
 
 ## TLS Certificate
 
-> **Warning — always configure a real certificate.** If `certFile` does not exist, the server falls
-> back to a self-signed certificate compiled into the binary and only logs a warning. That
+> **Warning — always configure a real certificate.** With `env: prod` a missing `certFile` stops
+> the start. With `env: dev` the server instead falls back to a self-signed certificate compiled
+> into the binary and only logs a warning. That
 > certificate's private key ships inside every published release archive, so it is public knowledge:
 > anyone can extract it and impersonate an instance running on the fallback. It exists solely so a
 > fresh checkout starts up during development. A machine reachable by anyone but you must never run
@@ -540,6 +544,11 @@ Send `SIGHUP` to reload the configuration without restarting the process. The GP
 and re-registered, so a changed `debounceTime` takes effect; counters are saved beforehand and
 restored afterwards.
 
+The new configuration is loaded and validated **before** anything is torn down. If it fails, the
+reload is refused with `Config reload rejected, keeping the running configuration` in the log and the
+service keeps counting with its current settings - fix the file and reload again. Warnings such as a
+short `apiKey` are logged after every start and reload.
+
 ```sh
 sudo systemctl reload s0meter          # requires ExecReload in the unit (see above)
 # or, independent of the unit file:
@@ -575,8 +584,8 @@ never sees. The count starts at 0 with every start or reload.
 **Service is `dead` immediately after start**
 A configuration error; the process exits with code 1 before the logger is even in place, so the
 reason is printed on stdout: `Failed to load config file` (YAML could not be parsed - durations such
-as `backupInterval` must be Go duration strings like `60s`, not plain numbers) or
-`config validation failed`. Once the logger is up, `Failed to load meter data` in the log means the
+as `backupInterval` must be Go duration strings like `60s`, not plain numbers; `field … not found`
+names a key that does not exist, often a misspelled or renamed one) or `config validation failed`. Once the logger is up, `Failed to load meter data` in the log means the
 `dataFile` is empty or damaged — see [Correcting a counter](#correcting-a-counter).
 
 ---
