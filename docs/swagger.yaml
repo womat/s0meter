@@ -7,15 +7,6 @@ definitions:
       appVersion:
         description: Current version of the application
         type: string
-      droppedEvents:
-        additionalProperties:
-          format: int64
-          type: integer
-        description: |-
-          DroppedEvents counts, per meter, the GPIO edge events lost since the last start or
-          reload, in the kernel or because pulse processing fell behind. They are added to the
-          counter with the next pulse, but the gauge skips that interval.
-        type: object
       goVersion:
         description: Go runtime version
         type: string
@@ -24,6 +15,18 @@ definitions:
         type: integer
       hostname:
         description: Machine name where the app runs
+        type: string
+      meters:
+        additionalProperties:
+          $ref: '#/definitions/s0meters.MeterStatus'
+        description: |-
+          Meters holds the diagnostic state per meter name: raw pulses, the last pulse and the
+          GPIO events lost since the last start or reload. Filled in by the caller.
+        type: object
+      mqtt:
+        description: |-
+          Mqtt is the state of the broker connection: connected, disconnected (also while
+          reconnecting) or disabled when no broker is configured. Filled in by the caller.
         type: string
       numGoroutines:
         description: Current number of active goroutines
@@ -40,6 +43,27 @@ definitions:
       uptimeSeconds:
         description: Application uptime in seconds
         type: number
+    type: object
+  s0meters.Display:
+    properties:
+      counter:
+        description: Counter in CounterUnit
+        type: number
+      counterPrecision:
+        description: Decimal places of Counter
+        type: integer
+      counterUnit:
+        description: DisplayUnit, or the configured counterUnit
+        type: string
+      gauge:
+        description: Gauge in GaugeUnit
+        type: number
+      gaugePrecision:
+        description: Decimal places of Gauge
+        type: integer
+      gaugeUnit:
+        description: DisplayGaugeUnit, or the configured gaugeUnit
+        type: string
     type: object
   s0meters.MeterData:
     properties:
@@ -62,14 +86,37 @@ definitions:
         description: Time of the reading, local time, whole seconds
         type: string
     type: object
+  s0meters.MeterStatus:
+    properties:
+      display:
+        allOf:
+        - $ref: '#/definitions/s0meters.Display'
+        description: Counter and gauge in the display units
+      droppedEvents:
+        description: GPIO events lost since start or reload, see pulsecounter
+        type: integer
+      gpio:
+        description: GPIO the meter is wired to (BCM numbering)
+        type: integer
+      lastPulse:
+        description: Time of the last pulse, local time, whole seconds
+        type: string
+      lastPulseAgeSeconds:
+        description: Seconds since the last pulse, one decimal place
+        type: number
+      pulses:
+        description: Raw pulse count, including restored pulses
+        type: integer
+    type: object
 info:
   contact: {}
 paths:
   /health:
     get:
       description: Retrieves memory usage, goroutine count, version, hostname, Go
-        runtime version, OS, and the GPIO events lost per meter (counted late, the
-        gauge skips the gap).
+        runtime version, OS, the MQTT connection state, and per meter the raw pulses,
+        the time and age of the last pulse, and the GPIO events lost (counted late,
+        the gauge skips the gap).
       produces:
       - application/json
       responses:

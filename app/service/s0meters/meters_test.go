@@ -46,6 +46,62 @@ func TestGaugeAtScales(t *testing.T) {
 	}
 }
 
+func TestStatusOf(t *testing.T) {
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.Local)
+	cfg := MeterConfig{Gpio: 17, CounterUnit: "l", CounterPulsesPerUnit: 1, GaugeUnit: "l/h", GaugeScale: 1}
+
+	s := statusOf(pulsecounter.Counter{Pulses: 42}, cfg, 3, now)
+	if s.LastPulse != nil || s.LastPulseAgeSeconds != nil {
+		t.Errorf("no pulse since start: lastPulse %v, age %v, want both nil", s.LastPulse, s.LastPulseAgeSeconds)
+	}
+	if s.Gpio != 17 || s.Pulses != 42 || s.DroppedEvents != 3 {
+		t.Errorf("statusOf = %+v, want config and counts passed through", s)
+	}
+	if want := (Display{Counter: 42, CounterUnit: "l", GaugeUnit: "l/h"}); s.Display != want {
+		t.Errorf("display without display units = %+v, want the configured units %+v", s.Display, want)
+	}
+
+	ts := now.Add(-12500 * time.Millisecond)
+	s = statusOf(pulsecounter.Counter{Pulses: 43, TimeStamp: ts}, cfg, 0, now)
+	if s.LastPulse == nil || !s.LastPulse.Equal(ts.Truncate(time.Second)) {
+		t.Errorf("lastPulse = %v, want %v", s.LastPulse, ts.Truncate(time.Second))
+	}
+	if s.LastPulseAgeSeconds == nil || *s.LastPulseAgeSeconds != 12.5 {
+		t.Errorf("age = %v, want 12.5", s.LastPulseAgeSeconds)
+	}
+
+	// Clock set back below the last pulse: no negative age.
+	s = statusOf(pulsecounter.Counter{TimeStamp: now.Add(time.Minute)}, cfg, 0, now)
+	if *s.LastPulseAgeSeconds != 0 {
+		t.Errorf("age of a pulse ahead of the clock = %v, want 0", *s.LastPulseAgeSeconds)
+	}
+}
+
+func TestDisplayOf(t *testing.T) {
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	// One pulse per Wh, the last two 1 s apart: 3600 W.
+	c := pulsecounter.Counter{Pulses: 34341881, LastTimeStamp: now.Add(-time.Second), TimeStamp: now}
+	cfg := MeterConfig{
+		CounterUnit: "Wh", CounterPulsesPerUnit: 1, CounterPrecision: 0,
+		GaugeUnit: "W", GaugeScale: 1, GaugePrecision: 2,
+		DisplayUnit: "kWh", DisplayGaugeUnit: "kW",
+	}
+
+	want := Display{
+		Counter: 34341.881, CounterUnit: "kWh", CounterPrecision: 3,
+		Gauge: 3.6, GaugeUnit: "kW", GaugePrecision: 5,
+	}
+	if got := displayOf(c, cfg, now); got != want {
+		t.Errorf("displayOf = %+v, want %+v", got, want)
+	}
+
+	// Water: 1 pulse = 1 l, shown in m³ like the register of a water meter.
+	water := MeterConfig{CounterUnit: "l", CounterPulsesPerUnit: 1, GaugeUnit: "l/h", GaugeScale: 1, DisplayUnit: "m³"}
+	if got := displayOf(pulsecounter.Counter{Pulses: 1024317}, water, now); got.Counter != 1024.317 || got.CounterPrecision != 3 {
+		t.Errorf("water display = %+v, want 1024.317 m³ with 3 places", got)
+	}
+}
+
 func TestCounterOf(t *testing.T) {
 	cfg := MeterConfig{CounterPulsesPerUnit: 1000, CounterPrecision: 3}
 	if got := counterOf(pulsecounter.Counter{Pulses: 105459}, cfg); got != 105.459 {

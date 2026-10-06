@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>s0meter</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563a8'/%3E%3Cpath d='M4 23h4.5V9h4.5v14h4.5V9h4.5v14H28' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<!--
+  Diagnostic page of s0meter, embedded in the binary and served at GET /.
+  It holds no data itself: it asks for the API key once, keeps it in localStorage and polls
+  /health with it, which carries every meter in its display units. Self-contained on purpose - no external fonts or scripts, the
+  Pi may have no internet access.
+-->
+<style>
+:root {
+  --bg: #f3f5f7;
+  --surface: #ffffff;
+  --line: #dde2e8;
+  --fg: #17202b;
+  --muted: #5d6b7a;
+  --accent: #2563a8;
+  --register-bg: #1b232d;
+  --register-fg: #f2f5f8;
+  --register-dec: #b3261e;
+  --ok: #1f7a4d;
+  --ok-soft: #e3f3ea;
+  --warn: #9a5b00;
+  --crit: #b3261e;
+  --crit-soft: #fbe6e4;
+  --off-soft: #e8ecf1;
+  --led-off: #c9cfd6;
+  --led-on: #e8231a;
+  --led-glow: rgba(232, 35, 26, .55);
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-num: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #11161c; --surface: #19212a; --line: #2a3541; --fg: #e6ebf0; --muted: #93a1b0;
+    --accent: #6ea8e6; --register-bg: #0b0f14; --register-fg: #eef2f6; --register-dec: #c8362c;
+    --ok: #5cc98f; --ok-soft: #173326; --warn: #e9b04c;
+    --crit: #f07a70; --crit-soft: #3d1c1a; --off-soft: #1d2630;
+    --led-off: #3a2422; --led-on: #ff4a3d; --led-glow: rgba(255, 74, 61, .7);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-ui);
+  font-size: 15px; line-height: 1.45; padding: 0 16px;
+}
+[hidden] { display: none !important; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-block: 20px 40px; }
+.stack { display: flex; flex-direction: column; gap: 20px; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px;
+  padding-bottom: 14px; border-bottom: 1px solid var(--line);
+}
+/* Brand: the S0 square wave as the mark; a red pulse runs along it whenever a meter counts. */
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand .mark { width: 44px; height: 30px; color: var(--accent); overflow: visible; flex: none; }
+.brand .mark .hot { stroke: var(--led-on); stroke-dasharray: 0 200; opacity: 0; }
+.brand .mark.fire .hot { animation: run .6s ease-out; }
+@keyframes run {
+  0% { stroke-dasharray: 0 200; opacity: 1; }
+  80% { stroke-dasharray: 110 200; opacity: 1; }
+  100% { stroke-dasharray: 110 200; opacity: 0; }
+}
+.brand .words { display: flex; flex-direction: column; line-height: 1.1; }
+.brand h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+.brand h1 b { color: var(--accent); }
+.brand .sub { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); }
+/* The host names the device the page belongs to, so it sits next to the brand. */
+.brand .device { min-width: 0; padding-left: 14px; margin-left: 2px; border-left: 1px solid var(--line); }
+.brand .host { font-size: 22px; font-weight: 600; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.signout {
+  font: inherit; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.signout:hover { color: var(--fg); border-color: var(--muted); }
+.signout svg { width: 14px; height: 14px; }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 13px; color: var(--muted); }
+.num { font-family: var(--font-num); color: var(--fg); }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+}
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.ok { color: var(--ok); background: var(--ok-soft); }
+.pill.crit { color: var(--crit); background: var(--crit-soft); }
+.pill.off { color: var(--muted); background: var(--off-soft); }
+
+.banner {
+  display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-radius: 8px;
+  background: var(--crit-soft); color: var(--crit); font-weight: 500;
+}
+
+/* auto-fill keeps the empty columns, so a single meter gets one column's width instead of the whole row. */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 16px; }
+.grid.stale { opacity: .45; filter: grayscale(.8); }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0;
+}
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.card-head h2 { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.card-head .right { display: inline-flex; align-items: center; gap: 8px; }
+.card-head .gpio { font-family: var(--font-num); font-size: 12px; color: var(--muted); white-space: nowrap; }
+/* Pulse LED, like the one on a real meter: one flash per counted pulse. */
+.led { width: 10px; height: 10px; border-radius: 50%; background: var(--led-off); transition: background .25s, box-shadow .25s; flex: none; }
+.led.on { background: var(--led-on); box-shadow: 0 0 9px 2px var(--led-glow); transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .led.on { box-shadow: none; }
+  .brand .mark.fire .hot { animation: none; }
+}
+.label { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+
+.register { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.digits { display: inline-flex; flex-wrap: wrap; gap: 2px; font-family: var(--font-num); font-size: 22px; font-weight: 600; }
+.digits span {
+  background: var(--register-bg); color: var(--register-fg); width: 1.15em; text-align: center;
+  padding: 3px 0; border-radius: 3px;
+}
+.digits span.dec { background: var(--register-dec); }
+.register .unit { font-size: 15px; color: var(--muted); padding-bottom: 4px; }
+
+.gauge { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.gauge .val { font-family: var(--font-num); font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.gauge .unit { color: var(--muted); }
+.gauge.zero .val { color: var(--muted); }
+
+dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; }
+dt { color: var(--muted); }
+dd { margin: 0; text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+dd.fresh { color: var(--ok); }
+dd.warn { color: var(--warn); font-weight: 600; }
+dd abbr { text-decoration: underline dotted; cursor: help; }
+
+.empty { color: var(--muted); }
+footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
+
+.keybox {
+  max-width: 380px; margin: 40px auto; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 10px; padding: 24px; display: flex; flex-direction: column; gap: 14px;
+}
+.keybox h2 { margin: 0; font-size: 18px; }
+.keybox p { margin: 0; font-size: 13px; color: var(--muted); }
+.keybox p.err { color: var(--crit); }
+.keybox input {
+  font: inherit; font-family: var(--font-num); padding: 9px 11px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); width: 100%;
+}
+.keybox button {
+  align-self: flex-end; font: inherit; font-weight: 600; color: var(--surface); background: var(--accent);
+  border: none; border-radius: 6px; padding: 8px 18px; cursor: pointer;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="login" hidden>
+    <form class="keybox" id="keyform">
+      <h2>s0meter</h2>
+      <p id="keyerr" class="err" hidden>The API key was rejected. Check webserver.apiKey in the config.</p>
+      <label for="apikey" class="label">API key</label>
+      <input id="apikey" type="password" autocomplete="current-password" placeholder="webserver.apiKey" required>
+      <p>Stored in this browser only and sent as X-API-Key.</p>
+      <button type="submit">Connect</button>
+    </form>
+  </section>
+
+  <section id="main" hidden>
+    <div class="stack">
+      <header>
+        <div class="brand">
+          <svg class="mark" id="wave" viewBox="0 0 44 30" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M2 24h7V6h6v18h7V6h6v18h7V6h6"/>
+            <path class="hot" d="M2 24h7V6h6v18h7V6h6v18h7V6h6" pathLength="100"/>
+          </svg>
+          <div class="words"><h1><b>s0</b>meter</h1><span class="sub">S0 pulse counter</span></div>
+          <div class="words device"><span class="host" id="host">–</span><span class="sub">host</span></div>
+        </div>
+        <div class="meta">
+          <span id="mqtt" class="pill off">MQTT …</span>
+          <button type="button" class="signout" id="signout">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6"/><path d="M10.5 11 13.5 8l-3-3"/><path d="M13.5 8H6"/></svg>Sign out
+          </button>
+        </div>
+      </header>
+      <div id="banner" class="banner" role="alert" hidden>
+        <span aria-hidden="true">⚠</span><span id="bannertext"></span>
+      </div>
+      <div id="grid" class="grid"></div>
+      <footer>
+        <span>Updated <span class="num" id="updated">–</span> · refreshes every 3 s</span>
+        <span>up <span class="num" id="uptime">–</span> · <span class="num" id="version">–</span></span>
+      </footer>
+    </div>
+  </section>
+</div>
+
+<script>
+"use strict";
+const POLL_MS = 3000;
+const KEY = "s0meter.apiKey";
+const $ = id => document.getElementById(id);
+
+let apiKey = load();
+let timer = null;
+let lastOk = null; // time of the last successful poll, for the stale banner
+let lastPulses = null; // pulses per meter at the previous poll, for the LED; null until the first one
+const MAX_FLASHES = 12; // per poll and meter, so a fast meter blinks instead of flickering
+
+function load() { try { return localStorage.getItem(KEY) || ""; } catch { return ""; } }
+function store(v) { try { v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY); } catch {} }
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+function hms(d) { return d.toTimeString().slice(0, 8); }
+
+// "2026-10-06T14:32:05+02:00" -> "2026-10-06 14:32:05 +02:00", in the Pi's own offset.
+function piTime(s) { return s.replace("T", " ").replace(/(Z|[+-]\d\d:\d\d)$/, " $1"); }
+
+function age(sec) {
+  if (sec < 60) return Math.floor(sec) + " s ago";
+  if (sec < 3600) return Math.floor(sec / 60) + " min ago";
+  if (sec < 86400) return Math.floor(sec / 3600) + " h " + Math.floor(sec % 3600 / 60) + " min ago";
+  return Math.floor(sec / 86400) + " d " + Math.floor(sec % 86400 / 3600) + " h ago";
+}
+
+// 1m, 3h 12m, 2d 4h: the two largest units, leading zero units left out.
+function uptime(sec) {
+  const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function register(value, prec) {
+  const [i, f = ""] = value.toFixed(prec).split(".");
+  return i.padStart(6, "0").split("").map(c => `<span>${c}</span>`).join("") +
+    f.split("").map(c => `<span class="dec">${c}</span>`).join("");
+}
+
+function card(name, s) {
+  const d = s.display;
+  let last = "<dd>no pulse since start</dd>";
+  if (s.lastPulse !== null) last = `<dd class="${s.lastPulseAgeSeconds < 10 ? "fresh" : ""}"><abbr title="${esc(piTime(s.lastPulse))}">${age(s.lastPulseAgeSeconds)}</abbr></dd>`;
+  return `<article class="card">
+    <div class="card-head"><h2>${esc(name)}</h2><span class="right"><span class="gpio">GPIO ${s.gpio}</span><span class="led" data-led="${esc(name)}" title="Pulse LED"></span></span></div>
+    <div>
+      <div class="label">Counter</div>
+      <div class="register"><span class="digits" aria-label="${d.counter.toFixed(d.counterPrecision)} ${esc(d.counterUnit)}">${register(d.counter, d.counterPrecision)}</span><span class="unit">${esc(d.counterUnit)}</span></div>
+    </div>
+    <div>
+      <div class="label">Gauge</div>
+      <div class="gauge ${d.gauge === 0 ? "zero" : ""}"><span class="val">${d.gauge.toFixed(d.gaugePrecision)}</span><span class="unit">${esc(d.gaugeUnit)}</span></div>
+    </div>
+    <dl>
+      <dt>Last pulse</dt>${last}
+      <dt>Pulses</dt><dd>${s.pulses.toLocaleString("en-US").replace(/,/g, " ")}</dd>
+      <dt>Dropped events</dt><dd class="${s.droppedEvents ? "warn" : ""}">${s.droppedEvents ? "⚠ " + s.droppedEvents : "0"}</dd>
+    </dl>
+  </article>`;
+}
+
+function render(health) {
+  const meters = health.meters || {};
+  const names = Object.keys(meters).sort();
+  $("grid").innerHTML = names.length
+    ? names.map(n => card(n, meters[n])).join("")
+    : `<p class="empty">No meters configured.</p>`;
+  blink(meters);
+
+  const mq = $("mqtt");
+  const state = { connected: ["ok", "MQTT connected"], disconnected: ["crit", "MQTT disconnected"], disabled: ["off", "MQTT not configured"] }[health.mqtt] || ["off", "MQTT unknown"];
+  mq.className = "pill " + state[0];
+  mq.textContent = state[1];
+  $("version").textContent = health.appVersion;
+  $("host").textContent = health.hostname;
+  document.title = `s0meter · ${health.hostname}`;
+  $("uptime").textContent = uptime(health.uptimeSeconds);
+}
+
+// The page learns only every POLL_MS how many pulses were added, not when. It spreads that many
+// flashes evenly over the next interval, so the LED blinks about as fast as the meter's own.
+function flash(name) {
+  const led = document.querySelector(`[data-led="${CSS.escape(name)}"]`);
+  if (!led) return;
+  led.classList.add("on");
+  setTimeout(() => led.classList.remove("on"), 110);
+}
+
+function fireWave() {
+  const w = $("wave");
+  w.classList.remove("fire");
+  void w.getBoundingClientRect(); // restart the animation
+  w.classList.add("fire");
+}
+
+function blink(meters) {
+  const now = {};
+  let any = false;
+  for (const [name, s] of Object.entries(meters)) {
+    now[name] = s.pulses;
+    const added = lastPulses && name in lastPulses ? s.pulses - lastPulses[name] : 0;
+    if (added <= 0) continue; // first poll, new meter, or a counter set back
+    any = true;
+    const n = Math.min(added, MAX_FLASHES);
+    for (let i = 0; i < n; i++) setTimeout(() => flash(name), (i + 0.5) * POLL_MS / n);
+  }
+  lastPulses = now;
+  if (any) fireWave();
+}
+
+function showLogin(rejected) {
+  stop();
+  $("main").hidden = true;
+  $("login").hidden = false;
+  $("keyerr").hidden = !rejected;
+  $("apikey").value = "";
+  $("apikey").focus();
+}
+
+function stale(reason) {
+  $("bannertext").textContent = reason + (lastOk ? ` Values below are stale since ${hms(lastOk)}.` : "");
+  $("banner").hidden = false;
+  $("grid").classList.add("stale");
+}
+
+async function get(path) {
+  const r = await fetch(path, { headers: { "X-API-Key": apiKey }, cache: "no-store" });
+  if (r.status === 401) throw Object.assign(new Error("unauthorized"), { auth: true });
+  if (!r.ok) throw new Error(`${path} answered ${r.status}`);
+  return r.json();
+}
+
+async function poll() {
+  try {
+    const health = await get("health");
+    lastOk = new Date();
+    render(health);
+    $("updated").textContent = hms(lastOk);
+    $("banner").hidden = true;
+    $("grid").classList.remove("stale");
+  } catch (e) {
+    if (e.auth) {
+      apiKey = "";
+      store("");
+      showLogin(true);
+      return;
+    }
+    stale(e instanceof TypeError ? "Cannot reach s0meter." : `s0meter returned an error: ${e.message}.`);
+  }
+}
+
+function start() {
+  stop();
+  $("login").hidden = true;
+  $("main").hidden = false;
+  lastPulses = null; // after a pause the difference spans the whole pause: no burst of flashes
+  poll();
+  timer = setInterval(poll, POLL_MS);
+}
+function stop() { clearInterval(timer); timer = null; }
+
+$("keyform").addEventListener("submit", e => {
+  e.preventDefault();
+  apiKey = $("apikey").value.trim();
+  if (!apiKey) return;
+  store(apiKey);
+  start();
+});
+$("signout").addEventListener("click", () => { apiKey = ""; store(""); showLogin(false); });
+
+// Polling a hidden tab only loads the Pi; resume at once when the tab is shown again.
+document.addEventListener("visibilitychange", () => {
+  if (!apiKey) return;
+  document.hidden ? stop() : start();
+});
+
+apiKey ? start() : showLogin(false);
+</script>
+</body>
+</html>

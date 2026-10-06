@@ -1,6 +1,6 @@
 package app
 
-// HTTP routes and global middleware. /version and /ready are public; /health and the
+// HTTP routes and global middleware. The diagnostic page at /, /version and /ready are public; /health and the
 // meter readings require the API key (X-Api-Key). Swagger UI is registered only in
 // builds with the swagger tag. Middleware, outermost first: logging, IP filter, CORS.
 
@@ -27,7 +27,8 @@ func (app *App) SetupRoutes() {
 	// Dev-only Swagger documentation (only registered with -tags swagger)
 	app.registerSwaggerRoute(mux)
 
-	// Public routes
+	// Public routes. {$} matches / only, so the page does not catch unknown paths.
+	mux.Handle("GET /{$}", app.HandleUI())
 	mux.Handle("GET /version", app.HandleVersion())
 	mux.Handle("GET /ready", app.HandleReady())
 

@@ -91,6 +91,11 @@ mqtt:
 # gaugePrecision       - Decimal places for rounding the gauge value
 # mqttTopic            - MQTT topic to publish meter data (empty = disabled)
 # mqttRetained         - Broker keeps the last message of this topic (default: false)
+# displayUnit          - Unit the web UI shows the counter in (empty = counterUnit), e.g. Wh -> kWh,
+#                        l -> m³. Display only, MQTT and the API keep counterUnit.
+#                        Known units: Wh kWh MWh | l m³ m3 | s min h
+# displayGaugeUnit     - Unit the web UI shows the gauge in (empty = gaugeUnit).
+#                        Known units: W kW MW | l/s l/min l/h m³/h m3/h
 # =============================================================================
 meter:
   wallbox:
@@ -104,6 +109,7 @@ meter:
     gaugePrecision: 2
     mqttTopic: test/wallbox/summary
     mqttRetained: true
+    displayUnit: "kWh"
 
   greywater:
     gpio: 27
@@ -115,6 +121,7 @@ meter:
     gaugeScale: 1
     gaugePrecision: 0
     mqttTopic: test/rawwater/summary
+    displayUnit: "m³"
 
   drinkingwater:
     gpio: 22
