@@ -33,7 +33,7 @@ type Handler struct {
 	counter Counter
 	gpioPin gpio.Pin
 	pin     int
-	dropped uint64 // dropped events already reported by handlePulseEvent
+	dropped uint64 // DroppedEvents of the pin at Close, reported once the pin is gone
 }
 
 // New opens GPIO port as a debounced input with pull-up and counts its pulses.
@@ -79,9 +79,11 @@ func (h *Handler) GetCounter() Counter {
 	return h.counter
 }
 
-// DroppedEvents returns how many edge events the GPIO layer dropped since the pin was
-// opened because pulse processing fell behind. Each one is a pulse missing from the counter.
-// The count starts at zero with every New, so it resets on a configuration reload.
+// DroppedEvents returns how many edge events were lost since the pin was opened, because
+// pulse processing fell behind or the kernel's event buffer overflowed. Each one is a pulse
+// that was counted late, with the next event that got through; only the gauge interval
+// across the gap is lost. The count starts at zero with every New, so it resets on a
+// configuration reload.
 func (h *Handler) DroppedEvents() uint64 {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -98,6 +100,9 @@ func (h *Handler) Close() error {
 	h.mu.Lock()
 	p := h.gpioPin
 	h.gpioPin = nil
+	if p != nil {
+		h.dropped = p.DroppedEvents()
+	}
 	h.mu.Unlock()
 
 	if p == nil {
@@ -112,6 +117,11 @@ func (h *Handler) Close() error {
 
 // handlePulseEvent is triggered on GPIO events.
 // Updates the counter and timestamps in a thread-safe manner.
+//
+// e.Missed counts the rising edges lost right before this one. The line is debounced in
+// the kernel and watched on the rising edge only, so each of them is a real pulse and is
+// added to the counter. The interval to the previous pulse then spans more than one pulse,
+// so LastTimeStamp is cleared and the gauge restarts with the next pulse.
 func (h *Handler) handlePulseEvent(e gpio.Event) {
 	h.mu.Lock()
 	if h.gpioPin == nil {
@@ -120,22 +130,19 @@ func (h *Handler) handlePulseEvent(e gpio.Event) {
 	}
 
 	h.counter.LastTimeStamp = h.counter.TimeStamp
+	if e.Missed > 0 {
+		h.counter.LastTimeStamp = time.Time{}
+	}
 	h.counter.TimeStamp = e.Time
-	h.counter.Pulses++
+	h.counter.Pulses += 1 + e.Missed
 	snapshot := h.counter
-
-	// Events dropped while the buffer was full surface here, with the next event
-	// that did get through.
-	dropped := h.gpioPin.DroppedEvents()
-	newlyDropped := dropped - h.dropped
-	h.dropped = dropped
 	h.mu.Unlock()
 
-	if newlyDropped > 0 {
-		slog.Warn("s0 pulses lost, GPIO events were dropped because pulse processing fell behind",
+	if e.Missed > 0 {
+		slog.Warn("s0 pulses lost before this one, counted late; the gauge skips this interval",
 			"gpio", h.pin,
-			"dropped", newlyDropped,
-			"droppedTotal", dropped,
+			"missed", e.Missed,
+			"pulses", snapshot.Pulses,
 		)
 	}
 

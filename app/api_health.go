@@ -13,7 +13,7 @@ import (
 // HandleHealth returns the current health data of the application.
 //
 //	@Summary		Get health data
-//	@Description	Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, and the GPIO events dropped per meter (each one a lost pulse).
+//	@Description	Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, and the GPIO events lost per meter (counted late, the gauge skips the gap).
 //	@Tags			info
 //	@Produce		json
 //	@Security		ApiKeyAuth

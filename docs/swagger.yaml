@@ -12,8 +12,9 @@ definitions:
           format: int64
           type: integer
         description: |-
-          DroppedEvents counts, per meter, the GPIO edge events dropped since the last start or
-          reload because pulse processing fell behind. Anything above 0 means lost pulses.
+          DroppedEvents counts, per meter, the GPIO edge events lost since the last start or
+          reload, in the kernel or because pulse processing fell behind. They are added to the
+          counter with the next pulse, but the gauge skips that interval.
         type: object
       goVersion:
         description: Go runtime version
@@ -67,8 +68,8 @@ paths:
   /health:
     get:
       description: Retrieves memory usage, goroutine count, version, hostname, Go
-        runtime version, OS, and the GPIO events dropped per meter (each one a lost
-        pulse).
+        runtime version, OS, and the GPIO events lost per meter (counted late, the
+        gauge skips the gap).
       produces:
       - application/json
       responses:

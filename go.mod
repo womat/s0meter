@@ -1,11 +1,11 @@
 module github.com/womat/s0meter
 
-go 1.27.1
+go 1.27
 
 require (
 	github.com/swaggo/http-swagger v1.3.4
 	github.com/swaggo/swag v1.16.6
-	github.com/womat/golib v1.1.0
+	github.com/womat/golib v1.2.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

@@ -146,8 +146,9 @@ func reading(name string, m *MeterInstance, now time.Time) MeterData {
 	}
 }
 
-// DroppedEvents returns, per meter, how many GPIO edge events were dropped since the
-// meters were registered because pulse processing fell behind. Each is a lost pulse.
+// DroppedEvents returns, per meter, how many GPIO edge events were lost since the meters
+// were registered, because pulse processing fell behind or the kernel's buffer overflowed.
+// Each one was added to the counter late, with the next pulse; see pulsecounter.
 func (h *Handler) DroppedEvents() map[string]uint64 {
 	h.mux.RLock()
 	defer h.mux.RUnlock()

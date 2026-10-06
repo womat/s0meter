@@ -22,7 +22,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, and the GPIO events dropped per meter (each one a lost pulse).",
+                "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, and the GPIO events lost per meter (counted late, the gauge skips the gap).",
                 "produces": [
                     "application/json"
                 ],
@@ -200,7 +200,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "droppedEvents": {
-                    "description": "DroppedEvents counts, per meter, the GPIO edge events dropped since the last start or\nreload because pulse processing fell behind. Anything above 0 means lost pulses.",
+                    "description": "DroppedEvents counts, per meter, the GPIO edge events lost since the last start or\nreload, in the kernel or because pulse processing fell behind. They are added to the\ncounter with the next pulse, but the gauge skips that interval.",
                     "type": "object",
                     "additionalProperties": {
                         "type": "integer",
