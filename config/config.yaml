@@ -103,7 +103,7 @@ meter:
     debounceTime: 1ms
     counterUnit: "Wh"
     counterPulsesPerUnit: 1
-    counterPrecision: 2
+    counterPrecision: 0
     gaugeUnit: "kW"
     gaugeScale: 0.001
     gaugePrecision: 2

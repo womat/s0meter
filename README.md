@@ -1,128 +1,166 @@
-# s0meter — S0 Pulse Energy Monitor
+# s0meter
 
-s0meter collects and exposes data from one or more **S0 pulse energy meters** compliant with **DIN 43864**,
-supporting electricity, water, and gas meters. It runs efficiently on **Raspberry Pi** hardware (tested on Raspberry Pi
-Zero and above).
+**Count the S0 pulses of electricity, water and gas meters on a Raspberry Pi — and see them live.**
 
----
+[![CI](https://github.com/womat/s0meter/actions/workflows/ci.yml/badge.svg)](https://github.com/womat/s0meter/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/womat/s0meter)](https://github.com/womat/s0meter/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
+[![Go](https://img.shields.io/github/go-mod/go-version/womat/s0meter)](go.mod)
+![Raspberry Pi](https://img.shields.io/badge/runs%20on-Raspberry%20Pi-C51A4A)
+
+🇩🇪 [Deutsche Kurzfassung](README.de.md)
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/web-ui-dark.png">
+    <img src="docs/screenshots/web-ui.png" width="640" alt="s0meter web page: three meters as cards with counter register, gauge, last pulse and a lit pulse LED">
+  </picture>
+  &nbsp;
+  <img src="docs/screenshots/web-ui-phone.png" width="180" alt="The same page on a phone">
+</p>
+
+> **Got a Pi and a meter with an S0 output?** The [Quick start](#quick-start) gets you from download to
+> the live page in about ten minutes.
+
+Almost every electricity meter, and many water and gas meters, has an **S0 pulse output**
+(DIN 43864): one short pulse per Wh or litre. Wire it to a GPIO pin of a Raspberry Pi — a Pi Zero
+is plenty — and s0meter turns those pulses into meter readings:
+
+- the **total** (`counter`) and the current **power or flow** (`gauge`) of every meter,
+- published via **MQTT** on every pulse, ready for Node-RED, Home Assistant, ioBroker or openHAB,
+- shown live on a **built-in web page**, with the counter as a meter register and a pulse LED that
+  flashes like the one on the meter,
+- saved regularly and on every shutdown, so a reboot keeps the reading.
+
+No cloud, no database, no runtime: a single binary, configured with one YAML file.
 
 ## Features
 
-- Counts **S0 pulses** from GPIO pins (Raspberry Pi)
-- Applies **debouncing** to filter signal noise
-- Calculates **total counters** and **flow rates** (gauge values)
-- **Persists counters** to a YAML file for recovery after restart
-- Publishes to an **MQTT broker** on every counted pulse (throttled), plus a periodic heartbeat
-- Exposes a secured **HTTPS REST API** (API key authentication)
-- Built-in **diagnostic web page** showing the live readings of every meter
-- **IP allowlist / blocklist** support
-- **Hot-reload** of configuration via `SIGHUP`
-- Embedded self-signed TLS certificate for development (no setup required)
-- Optional **Swagger UI** (build tag `swagger`, dev only)
+- **Live web page** per device: counter register, gauge, last pulse, pulse LED, MQTT state —
+  readable on a phone, light and dark mode
+- **Display units**: count in Wh or litres, read in kWh or m³ like on the meter
+- **MQTT** publishing on every counted pulse (throttled), plus a heartbeat
+- **Persistent counters**: saved every `backupInterval` and on shutdown, written atomically so a
+  power cut cannot corrupt the file (it costs at most the pulses since the last save)
+- **Lost pulses recovered**: pulses the GPIO layer dropped are counted late, not lost
+- **HTTPS REST API** with API key, IP allowlist / blocklist
+- **Hot reload** of the configuration via `SIGHUP`; a broken file is refused, counting goes on
+- Release builds for every Raspberry Pi architecture, from the **Pi Zero (ARMv6)** to 64-bit
+  systems; developed and run on a Pi Zero
 
 ---
 
-## Where to start
+## Quick start
 
-- This README: API, configuration, MQTT, installation, build, deploy and troubleshooting
-- Command-line flags, as printed by `s0meter --help`: [`cmd/README.md`](cmd/README.md)
-- Example configuration: [`config/config.yaml`](config/config.yaml)
-- Swagger generation script: [`docs/generate.sh`](docs/generate.sh)
+**1. Download** the archive for your Pi from the [latest release](https://github.com/womat/s0meter/releases/latest):
 
----
-
-## API Endpoints
-
-| Method | Path             | Auth    | Description                               |
-|--------|------------------|---------|-------------------------------------------|
-| GET    | `/`              | —       | Diagnostic web page, see [Web UI](#web-ui) |
-| GET    | `/version`       | —       | Application name and version              |
-| GET    | `/ready`         | —       | Readiness probe: 200, or 503 while the configured MQTT broker is not connected |
-| GET    | `/health`        | API Key | Runtime metrics, MQTT state, diagnostics per meter |
-| GET    | `/meters`        | API Key | Current reading of all meters             |
-| GET    | `/meters/{name}` | API Key | Current reading of a single meter         |
-
-Authentication via the `X-API-Key` header.
-
-### Examples
+| Archive        | Raspberry Pi model                           |
+|----------------|----------------------------------------------|
+| `linux_armv6`  | Pi 1 and Zero (1st gen)                      |
+| `linux_armv7`  | Pi 2 / 3 / 4 / 5 / Zero 2 W with a 32-bit OS |
+| `linux_arm64`  | Pi 3 / 4 / 5 / Zero 2 W with a 64-bit OS     |
 
 ```sh
-# List meters
-curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/meters
-
-# Get meter data
-curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/meters/{name}
-
-# Application version (no auth required)
-curl -k https://localhost:8443/version
-
-# Health check
-curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/health
+VERSION=5.0.0 ARCH=armv6        # see the release page for the latest version
+BASE=https://github.com/womat/s0meter/releases/download/v$VERSION
+curl -LO $BASE/s0meter_${VERSION}_linux_$ARCH.tar.gz -LO $BASE/checksums.txt
+sha256sum -c checksums.txt --ignore-missing
+tar xzf s0meter_${VERSION}_linux_$ARCH.tar.gz
 ```
 
-`/health` reports, besides the runtime metrics, the MQTT connection as `mqtt` (`connected`,
-`disconnected` - also while reconnecting - or `disabled` without a broker) and per meter:
+**2. Install** binary, example configuration and a certificate:
 
-```json
-"meters": {
-  "wallbox": {
-    "gpio": 17,
-    "pulses": 34341881,
-    "lastPulse": "2026-10-06T14:32:05+02:00",
-    "lastPulseAgeSeconds": 2.4,
-    "droppedEvents": 0,
-    "display": {
-      "counter": 34341.881,
-      "counterUnit": "kWh",
-      "counterPrecision": 3,
-      "gauge": 3.6,
-      "gaugeUnit": "kW",
-      "gaugePrecision": 5
-    }
-  }
-}
+```sh
+sudo groupadd -r -f s0meter
+sudo useradd -r -s /usr/sbin/nologin -g s0meter s0meter
+sudo usermod -aG gpio s0meter
+sudo mkdir -p /opt/s0meter/{bin,etc,data}
+
+sudo install -m 755 s0meter /opt/s0meter/bin/
+sudo install -m 640 config/config.yaml /opt/s0meter/etc/
+sudo openssl req -x509 -nodes -newkey rsa:2048 -days 825 \
+  -keyout /opt/s0meter/etc/key.pem -out /opt/s0meter/etc/cert.pem -subj "/CN=$(hostname)"
+sudo chown -R s0meter:s0meter /opt/s0meter
 ```
 
-`lastPulse` and `lastPulseAgeSeconds` are `null` until the first pulse after a start or reload,
-because only the pulse count is restored from the data file. The age is computed on the device, so
-it stays right even when the clock of the client differs from that of a Pi without RTC. `display`
-is the reading in the meter's [display units](#display-units), as the web UI shows it.
+**3. Configure** `/opt/s0meter/etc/config.yaml`: set `env: prod`, a random `apiKey`
+(`openssl rand -hex 24`), your MQTT broker (or `connection: ""`) and one entry per meter — see
+[Configuration](#configuration) and [Wiring](#wiring).
 
-### Web UI
+**4. Start** it as a service and open the firewall:
 
-`https://<host>:8443/` opens a diagnostic page with one card per meter: counter and gauge in the
-meter's [display units](#display-units), a pulse LED that flashes once per counted pulse (spread
-over the 3-second refresh, as the page only learns how many were added), the age of the last pulse, the raw pulse count and the dropped events, plus the MQTT state, version, host and
-uptime. It refreshes every 3 seconds while the tab is visible and marks the values as stale when
-the device stops answering.
+```sh
+sudo tee /etc/systemd/system/s0meter.service > /dev/null <<'EOF'
+[Unit]
+Description=s0meter — S0 Pulse Energy Monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=s0meter
+Group=s0meter
+Type=simple
+ExecStart=/opt/s0meter/bin/s0meter
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now s0meter
+sudo ufw allow 8443/tcp          # if ufw is active
+journalctl -u s0meter -n 20      # "Module started successfully"
+```
+
+**5. Open** `https://<your-pi>:8443/`, accept the self-signed certificate and enter the API key.
+
+Raspberry Pi OS often keeps the journal in RAM only, so the log of a crash is gone after the reboot.
+Check with `grep Storage /etc/systemd/journald.conf`; if it says `volatile` or is unset, make it
+persistent:
+
+```sh
+sudo mkdir -p /etc/systemd/journald.conf.d
+printf '[Journal]\nStorage=persistent\n' | sudo tee /etc/systemd/journald.conf.d/persistent.conf
+sudo systemctl restart systemd-journald
+```
+
+## Wiring
+
+An S0 output is a potential-free switch, usually an optocoupler, with the terminals **S0+** and
+**S0−**. Connect **S0+ to a GPIO pin** (BCM numbering, `gpio` in the configuration) and **S0− to
+GND**. s0meter enables the Pi's internal pull-up, so the line idles high, each pulse pulls it low,
+and the rising edge at the end of the pulse is counted. The reed contacts of water and gas meters
+are wired the same way.
+
+- Never connect S0+ to a voltage: the GPIO pins take **3.3 V at most**.
+- DIN 43864 allows the S0 circuit to run at up to 27 V, but most meters switch the Pi's 3.3 V fine.
+  If the meter's data sheet asks for a minimum current, add an external pull-up of a few kΩ from the
+  GPIO to 3.3 V.
+- Long cables pick up noise; a twisted pair and a sensible [debounce time](#choosing-a-debounce-time)
+  help.
+
+---
+
+## Web UI
+
+`https://<host>:8443/` opens a diagnostic page with one card per meter: the counter as a meter
+register and the gauge, both in the meter's [display units](#display-units), the age of the last
+pulse, the raw pulse count, the dropped events and a pulse LED. The LED flashes once per counted
+pulse, spread over the 3-second refresh because the page only learns how many pulses were added;
+the wave in the logo fires whenever any meter counts. The header names the host and shows the MQTT
+state, the footer the time of the last update, the uptime and the version. The browser tab reads
+`s0meter · <host>`, so several devices can be told apart.
+
+The page refreshes every 3 seconds while the tab is visible and marks the values as stale when the
+device stops answering.
 
 The page itself is public and contains no data. On the first visit it asks for the API key, keeps
 it in the browser's local storage and sends it as `X-API-Key` to `/health`; "Sign
 out" removes it, and a rejected key brings the prompt back. It is a single file embedded in the
 binary, with no external fonts or scripts, so it works without internet access.
-
----
-
-## Command-line Flags
-
-| Flag        | Default                        | Description                                                         |
-|-------------|--------------------------------|---------------------------------------------------------------------|
-| `--config`  | `/opt/s0meter/etc/config.yaml` | Path to the configuration file                                      |
-| `--debug`   | `false`                        | Enable debug logging to stdout (overrides log settings from config) |
-| `--version` | `false`                        | Print the application version and exit                              |
-| `--about`   | `false`                        | Print application details and exit                                  |
-| `--help`    | `false`                        | Print this help message and exit                                    |
-
-The config file path can also be set via the environment variable `CONFIG_FILE`.
-
-**Examples:**
-
-```bash
-s0meter --config /etc/s0meter/config.yaml
-s0meter --debug
-s0meter --version
-CONFIG_FILE=/etc/s0meter/config.yaml s0meter
-```
 
 ---
 
@@ -140,6 +178,7 @@ stops the start instead of silently keeping its default.
 # =============================================================================
 
 # logLevel defines the minimum log level.
+# Messages with at least this level are logged.
 # Allowed values: debug | info | warn | error
 logLevel: info
 
@@ -148,7 +187,10 @@ logLevel: info
 logDestination: stdout
 
 # environment: dev | prod
-env: prod
+# With prod, a missing webserver.certFile is an error; dev falls back to the embedded,
+# publicly known development certificate.
+env: dev
+
 
 # =============================================================================
 # Webserver configuration (HTTPS)
@@ -157,7 +199,7 @@ webserver:
   # Host address the HTTPS server listens on (0.0.0.0 = all interfaces)
   listenHost: 0.0.0.0
 
-  # Port the HTTPS server listens on (default: 8443)
+  # Port the HTTPS server listens on
   listenPort: 8443
 
   # Global API key for protected endpoints
@@ -170,11 +212,14 @@ webserver:
   certFile: /opt/s0meter/etc/cert.pem
 
   # Blocked IP addresses or networks (empty = none blocked)
+  # Examples: 192.168.0.1, 192.168.0.0/16, 10.0.0.0/8
   blockedIPs: [ ]
   #  - 192.168.0.1
   #  - 192.168.0.0/16
 
   # Allowed IP addresses or networks (empty = all allowed)
+  # Note: ::1 is the IPv6 loopback address
+  # Examples: 127.0.0.1, ::1, 192.168.0.0/16
   allowedIPs: [ ]
   #  - 127.0.0.1
   #  - ::1
@@ -208,18 +253,38 @@ mqtt:
 # =============================================================================
 # S0 Meter configurations
 # =============================================================================
+# gpio                 - GPIO for the S0 input, BCM numbering 2-27, one meter per GPIO
+# debounceTime         - Debounce time as Go duration string (e.g. 1ms) to suppress signal noise
+# counterPulsesPerUnit - Meter constant (Zählerkonstante): pulses per counterUnit
+#                        (see meter datasheet, e.g. 1000 imp/kWh)
+# counterUnit          - Unit of the total counter (e.g. kWh, m³, l)
+# counterPrecision     - Decimal places for rounding the counter value
+# gaugeUnit            - Unit of the flow rate (e.g. kW, W, l/h, l/s)
+# gaugeScale           - Amount per pulse in gaugeUnit per hour; the gauge is pulses per hour
+#                        times gaugeScale and ignores counterPulsesPerUnit.
+#                        1 pulse = 1 Wh: W 1, kW 0.001 - 1 pulse = 1 l: l/h 1, l/s 0.000277778
+# gaugePrecision       - Decimal places for rounding the gauge value
+# mqttTopic            - MQTT topic to publish meter data (empty = disabled)
+# mqttRetained         - Broker keeps the last message of this topic (default: false)
+# displayUnit          - Unit the web UI shows the counter in (empty = counterUnit), e.g. Wh -> kWh,
+#                        l -> m³. Display only, MQTT and the API keep counterUnit.
+#                        Known units: Wh kWh MWh | l m³ m3 | s min h
+# displayGaugeUnit     - Unit the web UI shows the gauge in (empty = gaugeUnit).
+#                        Known units: W kW MW | l/s l/min l/h m³/h m3/h
+# =============================================================================
 meter:
   wallbox:
     gpio: 17
     debounceTime: 1ms
-    counterUnit: "kWh"
-    counterPulsesPerUnit: 1000
-    counterPrecision: 2
+    counterUnit: "Wh"
+    counterPulsesPerUnit: 1
+    counterPrecision: 0
     gaugeUnit: "kW"
     gaugeScale: 0.001
     gaugePrecision: 2
     mqttTopic: test/wallbox/summary
     mqttRetained: true
+    displayUnit: "kWh"
 
   greywater:
     gpio: 27
@@ -231,6 +296,7 @@ meter:
     gaugeScale: 1
     gaugePrecision: 0
     mqttTopic: test/rawwater/summary
+    displayUnit: "m³"
 
   drinkingwater:
     gpio: 22
@@ -403,7 +469,7 @@ myhome/wallbox/summary  {"meter":"wallbox","timestamp":"2026-10-04T22:50:35+02:0
 The keys follow the telegrams of ecoflowd: camelCase, `timestamp` as one word, the device named in
 every telegram. The units travel with the values because they are configured per meter.
 
-> **Changed in the release after 4.7.0:** `timeStamp` is now `timestamp`, in whole seconds instead of
+> **Changed in 4.8.0:** `timeStamp` is now `timestamp`, in whole seconds instead of
 > nanoseconds, and `meter` is new. Consumers that read `timeStamp` have to be adapted.
 
 ### When a meter is published
@@ -425,6 +491,92 @@ timeout, and resumes automatically once the client reconnects.
 > When pulses stop, the last published gauge stands until the next heartbeat. A long
 > `publishInterval` therefore delays the "flow stopped" signal by up to that interval — lower it if
 > consumers need to see a stop quickly.
+
+---
+
+## REST API
+
+| Method | Path             | Auth    | Description                               |
+|--------|------------------|---------|-------------------------------------------|
+| GET    | `/`              | —       | Diagnostic web page, see [Web UI](#web-ui) |
+| GET    | `/version`       | —       | Application name and version              |
+| GET    | `/ready`         | —       | Readiness probe: 200, or 503 while the configured MQTT broker is not connected |
+| GET    | `/health`        | API Key | Runtime metrics, MQTT state, diagnostics per meter |
+| GET    | `/meters`        | API Key | Current reading of all meters             |
+| GET    | `/meters/{name}` | API Key | Current reading of a single meter         |
+
+Authentication via the `X-API-Key` header.
+
+### Examples
+
+```sh
+# List meters
+curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/meters
+
+# Get meter data
+curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/meters/{name}
+
+# Application version (no auth required)
+curl -k https://localhost:8443/version
+
+# Health check
+curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/health
+```
+
+`/health` reports, besides the runtime metrics, the MQTT connection as `mqtt` (`connected`,
+`disconnected` - also while reconnecting - or `disabled` without a broker) and per meter:
+
+```json
+"meters": {
+  "wallbox": {
+    "gpio": 17,
+    "pulses": 34341881,
+    "lastPulse": "2026-10-06T14:32:05+02:00",
+    "lastPulseAgeSeconds": 2.4,
+    "droppedEvents": 0,
+    "display": {
+      "counter": 34341.881,
+      "counterUnit": "kWh",
+      "counterPrecision": 3,
+      "gauge": 3.6,
+      "gaugeUnit": "kW",
+      "gaugePrecision": 5
+    }
+  }
+}
+```
+
+`lastPulse` and `lastPulseAgeSeconds` are `null` until the first pulse after a start or reload,
+because only the pulse count is restored from the data file. The age is computed on the device, so
+it stays right even when the clock of the client differs from that of a Pi without RTC. `display`
+is the reading in the meter's [display units](#display-units), as the web UI shows it.
+
+> **Changed in 5.0.0:** `droppedEvents` moved from the top level of `/health` into
+> `meters.<name>.droppedEvents`; `mqtt` and `meters` are new. Monitoring that reads
+> `droppedEvents` has to be adapted. The telegram (MQTT, `/meters`) is unchanged.
+
+---
+
+## Command-line Flags
+
+| Flag        | Default                        | Description                                                         |
+|-------------|--------------------------------|---------------------------------------------------------------------|
+| `--config`  | `/opt/s0meter/etc/config.yaml` | Path to the configuration file                                      |
+| `--debug`   | `false`                        | Enable debug logging to stdout (overrides log settings from config) |
+| `--version` | `false`                        | Print the application version and exit                              |
+| `--about`   | `false`                        | Print application details and exit                                  |
+| `--help`    | `false`                        | Print this help message and exit                                    |
+
+The config file path can also be set via the environment variable `CONFIG_FILE`.
+
+**Examples:**
+
+```bash
+s0meter --config /etc/s0meter/config.yaml
+s0meter --debug
+s0meter --version
+CONFIG_FILE=/etc/s0meter/config.yaml s0meter
+```
 
 ---
 
@@ -464,187 +616,6 @@ openssl req -x509 -nodes -newkey rsa:2048 \
 
 ---
 
-## Installation
-
-### 1. Create system user and directories
-
-```sh
-sudo groupadd -r -f s0meter
-sudo useradd -r -s /usr/sbin/nologin -g s0meter s0meter
-sudo usermod -aG gpio s0meter
-
-sudo mkdir -p /opt/s0meter/{bin,etc,data}
-sudo chown -R s0meter:s0meter /opt/s0meter
-```
-
-### 2. Copy files
-
-```sh
-sudo cp s0meter /opt/s0meter/bin/
-sudo cp config.yaml /opt/s0meter/etc/
-sudo cp cert.pem key.pem /opt/s0meter/etc/
-sudo chown -R s0meter:s0meter /opt/s0meter
-```
-
-### 3. Create systemd service
-
-```sh
-sudo tee /etc/systemd/system/s0meter.service > /dev/null <<'EOF'
-[Unit]
-Description=s0meter — S0 Pulse Energy Monitor
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-User=s0meter
-Group=s0meter
-Type=simple
-ExecStart=/opt/s0meter/bin/s0meter
-ExecReload=/bin/kill -HUP $MAINPID
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable s0meter
-sudo systemctl start s0meter
-sudo systemctl status s0meter
-```
-
-### 4. View logs
-
-```sh
-journalctl -u s0meter -n 50 -f
-```
-
-Raspberry Pi OS often keeps the journal in RAM only, which means everything is lost on reboot -
-exactly when a post-mortem would be needed. Check with `grep Storage /etc/systemd/journald.conf`;
-if it says `volatile` or is unset, make it persistent:
-
-```sh
-sudo mkdir -p /etc/systemd/journald.conf.d
-printf '[Journal]\nStorage=persistent\n' | sudo tee /etc/systemd/journald.conf.d/persistent.conf
-sudo systemctl restart systemd-journald
-```
-
-Verify with `journalctl --list-boots` - it should list more than the current boot.
-
----
-
-## Releases
-
-Versioning follows [semantic versioning](https://semver.org/) and the Git tag is the single source
-of truth: the version is injected at build time via `-ldflags`, never maintained in the sources. A
-binary therefore always reports the tag it was cut from (`s0meter --version`); builds from an
-untagged or modified working copy report a descriptive fallback such as `4.7.0-5-g0c13781-dirty`.
-
-Releases are always cut from `main`, and `develop` has to be merged into it first — `develop` is
-where work happens, `main` is what is released and what GitHub Pages serves. Two steps:
-
-```sh
-make merge_to_main            # merge develop into main and push
-make release TAG=v4.7.0       # tag main and push the tag
-```
-
-Pushing the tag triggers a GitHub Actions workflow that builds all Raspberry Pi architectures and
-publishes them as a GitHub release with checksums and a generated changelog. Both steps are
-guarded: `make release` refuses to tag anything but an up-to-date `main` that contains `develop`,
-and the workflow rejects a tag whose commit is not on `main`.
-
-Prebuilt archives are attached to every release at
-<https://github.com/womat/s0meter/releases>:
-
-| Archive        | Raspberry Pi model                           |
-|----------------|----------------------------------------------|
-| `linux_arm64`  | Pi 3 / 4 / 5 / Zero 2 W with a 64-bit OS     |
-| `linux_armv7`  | Pi 2 / 3 / 4 / 5 / Zero 2 W with a 32-bit OS |
-| `linux_armv6`  | Pi 1 and Zero (1st gen)                      |
-
-Each archive contains the binary, `config/config.yaml`, `README.md` and `LICENSE`. Verify a download
-against `checksums.txt`:
-
-```sh
-sha256sum -c checksums.txt --ignore-missing
-```
-
-To put a published release straight onto a Pi — downloaded, checksum-verified and copied in one
-step, so the device provably runs the released binary rather than a local build:
-
-```sh
-make deploy_release TAG=v4.7.0
-
-# same host overrides as the other deploy targets
-make deploy_release TAG=v4.7.0 PI_HOST=my-pi PI_USER=pi
-```
-
-This needs the [GitHub CLI](https://cli.github.com). It fetches the archive matching `PI_ARCH`,
-which defaults to `arm6`; the binary lands in `$PI_PATH` and still has to be installed (see below).
-
----
-
-## Build
-
-Building from source is the development loop: build, `scp`, test. For a normal install take a
-published release instead (`make deploy_release`, above) — a locally built binary reports a version
-like `4.7.0-5-g0c13781-dirty`, which is exactly how you can tell the two apart on a device.
-
-```sh
-# Raspberry Pi 1 / Zero (32-bit OS)
-make build_arm6
-
-# Raspberry Pi 2/3/4/Zero 2 W (32-bit OS)
-make build_arm7
-
-# Raspberry Pi 3/4/5/Zero 2 W (64-bit OS)
-make build_arm64
-
-# Build with Swagger UI (dev only)
-make build_arm6_dev
-
-# Build and deploy to the Pi via SCP
-make deploy
-
-# Deploy with the Swagger UI enabled
-make deploy_dev
-
-# Run the tests with the race detector (Linux; on macOS through Docker)
-make test
-docker run --rm -v "$PWD":/src -w /src golang:1.27 make test
-```
-
-The tests need no hardware: `pkg/pulsecounter` is driven by golib's in-memory GPIO emulator. They
-still compile on Linux only, because the packages import the Linux GPIO backend.
-
-`PI_ARCH` selects the target architecture for every `deploy*` target and defaults to **`arm6`**,
-matching a Raspberry Pi Zero (1st gen). Get this wrong and the binary simply will not start on the
-device — an arm64 build on an ARMv6 Pi fails with `Exec format error`. Use `arm7` for a 32-bit
-Pi 2/3/4/Zero 2 W and `arm64` for a 64-bit OS:
-
-```sh
-make deploy PI_ARCH=arm64 PI_HOST=my-pi PI_USER=pi
-```
-
-`PI_USER`, `PI_HOST` and `PI_PATH` can be overridden the same way. Their defaults are
-placeholders, so rather than repeating your device on every call, put it in `Makefile.local` -
-untracked, and included automatically:
-
-```make
-PI_USER := myuser
-PI_HOST := mypi
-```
-
-`PI_PATH` defaults to the login directory and rarely needs setting. Command-line values still win
-over the file. The binary is copied to `$PI_PATH` and still has to be installed:
-
-```sh
-sudo install -o s0meter -g s0meter -m 755 ~/s0meter /opt/s0meter/bin/s0meter
-```
-
----
-
 ## Hot-Reload
 
 Send `SIGHUP` to reload the configuration without restarting the process. The GPIO lines are closed
@@ -657,7 +628,7 @@ service keeps counting with its current settings - fix the file and reload again
 short `apiKey` are logged after every start and reload.
 
 ```sh
-sudo systemctl reload s0meter          # requires ExecReload in the unit (see above)
+sudo systemctl reload s0meter          # requires ExecReload in the unit, see Quick start
 # or, independent of the unit file:
 sudo systemctl kill -s HUP s0meter
 ```
@@ -676,15 +647,16 @@ a host name resolving to several addresses can send the client to the wrong one.
 **Counter does not advance, `gauge` is 0, but the service is healthy**
 No pulses are reaching the GPIO pin. This is wiring or the meter itself, not the software: the
 service keeps publishing the last known value on the heartbeat. `--debug` logs every counted pulse,
-so a run without `s0 pulse` entries confirms the input is silent.
+so a run without `s0 pulse` entries confirms the input is silent. On the [Web UI](#web-ui) the
+meter's pulse LED then stays grey and "last pulse" keeps growing (or reads "no pulse since start").
 
 **Counter drifts away from the physical meter**
 Running ahead points to a debounce that is too short for a bouncing contact, running behind to one
 longer than the pulse - see [Choosing a debounce time](#choosing-a-debounce-time). Correct the value
 as described under [Correcting a counter](#correcting-a-counter).
 
-`droppedEvents` in `/health` (per meter, also shown on the [Web UI](#web-ui)) and `s0 pulses lost` in the log are not a cause of drift. They count
-pulses the GPIO layer lost - because pulse processing fell behind and its 32-event buffer per meter
+`droppedEvents` in `/health` (per meter, also shown on the [Web UI](#web-ui)) and `s0 pulses lost`
+in the log are not a cause of drift. They count pulses the GPIO layer lost - because pulse processing fell behind and its 32-event buffer per meter
 was full, or because the kernel's own event buffer overflowed. The next pulse that gets through
 reports how many were lost before it, and they are added to the counter then, so the counter stays
 right; only the gauge skips that interval and restarts with the following pulse. A pulse lost right
@@ -695,18 +667,9 @@ start or reload, and anything above 0 means the device is struggling to keep up.
 A configuration error; the process exits with code 1 before the logger is even in place, so the
 reason is printed on stdout: `Failed to load config file` (YAML could not be parsed - durations such
 as `backupInterval` must be Go duration strings like `60s`, not plain numbers; `field … not found`
-names a key that does not exist, often a misspelled or renamed one) or `config validation failed`. Once the logger is up, `Failed to load meter data` in the log means the
-`dataFile` is empty or damaged — see [Correcting a counter](#correcting-a-counter).
-
----
-
-## Firewall
-
-```sh
-# Allow the configured port (default 8443)
-sudo ufw allow 8443/tcp
-sudo ufw status
-```
+names a key that does not exist, often a misspelled or renamed one) or `config validation failed`,
+for example for a `displayUnit` that cannot be converted. Once the logger is up, `Failed to load
+meter data` in the log means the `dataFile` is empty or damaged — see [Correcting a counter](#correcting-a-counter).
 
 ---
 
@@ -721,6 +684,20 @@ sudo tar xzf /tmp/s0meter-backup.tar.gz -C /
 sudo chown -R s0meter:s0meter /opt/s0meter
 sudo systemctl restart s0meter
 ```
+
+---
+
+## Releases
+
+Every release on the [releases page](https://github.com/womat/s0meter/releases) carries archives for
+all Raspberry Pi architectures with the binary, `config/config.yaml`, `README.md` and `LICENSE`,
+plus a `checksums.txt` and a changelog. Versions follow [semantic versioning](https://semver.org/);
+a breaking change of the API, the telegram or the configuration raises the major version.
+
+`s0meter --version` reports the release a binary was built from. A local build reports something
+like `5.0.0-3-g0c13781-dirty` instead, which is how the two are told apart on a device.
+
+Building from source needs Go and `make`: clone the repository and run `make help` for the targets.
 
 ---
 
