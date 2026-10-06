@@ -14,6 +14,7 @@ Zero and above).
 - **Persists counters** to a YAML file for recovery after restart
 - Publishes to an **MQTT broker** on every counted pulse (throttled), plus a periodic heartbeat
 - Exposes a secured **HTTPS REST API** (API key authentication)
+- Built-in **diagnostic web page** showing the live readings of every meter
 - **IP allowlist / blocklist** support
 - **Hot-reload** of configuration via `SIGHUP`
 - Embedded self-signed TLS certificate for development (no setup required)
@@ -34,9 +35,10 @@ Zero and above).
 
 | Method | Path             | Auth    | Description                               |
 |--------|------------------|---------|-------------------------------------------|
+| GET    | `/`              | —       | Diagnostic web page, see [Web UI](#web-ui) |
 | GET    | `/version`       | —       | Application name and version              |
 | GET    | `/ready`         | —       | Readiness probe: 200, or 503 while the configured MQTT broker is not connected |
-| GET    | `/health`        | API Key | Runtime metrics, dropped events per meter |
+| GET    | `/health`        | API Key | Runtime metrics, MQTT state, diagnostics per meter |
 | GET    | `/meters`        | API Key | Current reading of all meters             |
 | GET    | `/meters/{name}` | API Key | Current reading of a single meter         |
 
@@ -57,6 +59,47 @@ curl -k https://localhost:8443/version
 # Health check
 curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/health
 ```
+
+`/health` reports, besides the runtime metrics, the MQTT connection as `mqtt` (`connected`,
+`disconnected` - also while reconnecting - or `disabled` without a broker) and per meter:
+
+```json
+"meters": {
+  "wallbox": {
+    "gpio": 17,
+    "pulses": 34341881,
+    "lastPulse": "2026-10-06T14:32:05+02:00",
+    "lastPulseAgeSeconds": 2.4,
+    "droppedEvents": 0,
+    "display": {
+      "counter": 34341.881,
+      "counterUnit": "kWh",
+      "counterPrecision": 3,
+      "gauge": 3.6,
+      "gaugeUnit": "kW",
+      "gaugePrecision": 5
+    }
+  }
+}
+```
+
+`lastPulse` and `lastPulseAgeSeconds` are `null` until the first pulse after a start or reload,
+because only the pulse count is restored from the data file. The age is computed on the device, so
+it stays right even when the clock of the client differs from that of a Pi without RTC. `display`
+is the reading in the meter's [display units](#display-units), as the web UI shows it.
+
+### Web UI
+
+`https://<host>:8443/` opens a diagnostic page with one card per meter: counter and gauge in the
+meter's [display units](#display-units), a pulse LED that flashes once per counted pulse (spread
+over the 3-second refresh, as the page only learns how many were added), the age of the last pulse, the raw pulse count and the dropped events, plus the MQTT state, version, host and
+uptime. It refreshes every 3 seconds while the tab is visible and marks the values as stale when
+the device stops answering.
+
+The page itself is public and contains no data. On the first visit it asks for the API key, keeps
+it in the browser's local storage and sends it as `X-API-Key` to `/health`; "Sign
+out" removes it, and a rejected key brings the prompt back. It is a single file embedded in the
+binary, with no external fonts or scripts, so it works without internet access.
 
 ---
 
@@ -215,6 +258,36 @@ meter:
 | `gaugePrecision`       | int    | Number of decimal places for the gauge value (0–15)                              |
 | `mqttTopic`            | string | MQTT topic to publish to (empty = not published)                                 |
 | `mqttRetained`         | bool   | Broker keeps the last message of this topic (default: `false`)                   |
+| `displayUnit`          | string | Unit the web UI shows the counter in (empty = `counterUnit`) — see [Display units](#display-units) |
+| `displayGaugeUnit`     | string | Unit the web UI shows the gauge in (empty = `gaugeUnit`)                         |
+
+### Display units
+
+A meter counts in the unit its pulses come in, and the telegram (MQTT, `/meters`) keeps that unit.
+The web UI can show it in another one, the way the physical meter reads: a 1-pulse-per-Wh meter in
+kWh, a 1-pulse-per-litre water meter in m³, with the litres as decimal places.
+
+```yaml
+  wallbox:
+    counterUnit: "Wh"
+    gaugeUnit: "W"
+    displayUnit: "kWh"
+    displayGaugeUnit: "kW"
+```
+
+The decimal places follow the unit, so the resolution stays the same: Wh with 0 places is shown as
+kWh with 3, W with 2 as kW with 5. A conversion works only between units of one row below, and
+`counterUnit`/`gaugeUnit` must be in that row as well; anything else (`Wh` to `m³`, an unknown
+unit, a different spelling such as `kwh`) stops the start with a configuration error.
+
+| Quantity | Counter units (`displayUnit`) | Gauge units (`displayGaugeUnit`) |
+|----------|-------------------------------|----------------------------------|
+| Energy / power | `Wh`, `kWh`, `MWh`      | `W`, `kW`, `MW`                  |
+| Volume / flow  | `l`, `m³` (or `m3`)     | `l/s`, `l/min`, `l/h`, `m³/h` (or `m3/h`) |
+| Time           | `s`, `min`, `h`         | —                                |
+
+Time is for devices that emit a pulse per run time, such as an operating hours output: 1 pulse per
+minute is `counterUnit: min`, shown as `displayUnit: h`.
 
 ### Choosing gaugeScale
 
@@ -610,7 +683,7 @@ Running ahead points to a debounce that is too short for a bouncing contact, run
 longer than the pulse - see [Choosing a debounce time](#choosing-a-debounce-time). Correct the value
 as described under [Correcting a counter](#correcting-a-counter).
 
-`droppedEvents` in `/health` and `s0 pulses lost` in the log are not a cause of drift. They count
+`droppedEvents` in `/health` (per meter, also shown on the [Web UI](#web-ui)) and `s0 pulses lost` in the log are not a cause of drift. They count
 pulses the GPIO layer lost - because pulse processing fell behind and its 32-event buffer per meter
 was full, or because the kernel's own event buffer overflowed. The next pulse that gets through
 reports how many were lost before it, and they are added to the counter then, so the counter stays

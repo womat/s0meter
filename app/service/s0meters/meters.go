@@ -47,6 +47,11 @@ type MeterConfig struct {
 
 	MqttTopic    string `yaml:"mqttTopic"`    // MQTT topic for this meter
 	MqttRetained bool   `yaml:"mqttRetained"` // broker keeps the last message of this topic (default: false)
+
+	// Units the web UI shows counter and gauge in (empty = CounterUnit/GaugeUnit). Display only,
+	// the telegram keeps the configured units; see units.go for the known conversions.
+	DisplayUnit      string `yaml:"displayUnit"`
+	DisplayGaugeUnit string `yaml:"displayGaugeUnit"`
 }
 
 // MeterInstance holds a registered meter and its pulse handler.
@@ -146,18 +151,94 @@ func reading(name string, m *MeterInstance, now time.Time) MeterData {
 	}
 }
 
-// DroppedEvents returns, per meter, how many GPIO edge events were lost since the meters
-// were registered, because pulse processing fell behind or the kernel's buffer overflowed.
-// Each one was added to the counter late, with the next pulse; see pulsecounter.
-func (h *Handler) DroppedEvents() map[string]uint64 {
+// MeterStatus is the diagnostic state of one meter, reported by /health. It is not part of
+// the telegram: MQTT and /meters carry MeterData only.
+//
+// LastPulse and LastPulseAgeSeconds are null until the first pulse after a start or reload,
+// because the pulse timestamps are not restored from the data file. The age is computed here
+// rather than by the client, whose clock may disagree with that of a Pi without RTC.
+type MeterStatus struct {
+	Gpio                int        `json:"gpio"`                // GPIO the meter is wired to (BCM numbering)
+	Pulses              uint64     `json:"pulses"`              // Raw pulse count, including restored pulses
+	LastPulse           *time.Time `json:"lastPulse"`           // Time of the last pulse, local time, whole seconds
+	LastPulseAgeSeconds *float64   `json:"lastPulseAgeSeconds"` // Seconds since the last pulse, one decimal place
+	DroppedEvents       uint64     `json:"droppedEvents"`       // GPIO events lost since start or reload, see pulsecounter
+	Display             Display    `json:"display"`             // Counter and gauge in the display units
+}
+
+// Display is a reading converted to the display units of a meter (DisplayUnit,
+// DisplayGaugeUnit), for the web UI. Without display units it equals the telegram's values.
+// The precisions are raised or lowered with the unit, so the resolution stays the same.
+type Display struct {
+	Counter          float64 `json:"counter"`          // Counter in CounterUnit
+	CounterUnit      string  `json:"counterUnit"`      // DisplayUnit, or the configured counterUnit
+	CounterPrecision int     `json:"counterPrecision"` // Decimal places of Counter
+	Gauge            float64 `json:"gauge"`            // Gauge in GaugeUnit
+	GaugeUnit        string  `json:"gaugeUnit"`        // DisplayGaugeUnit, or the configured gaugeUnit
+	GaugePrecision   int     `json:"gaugePrecision"`   // Decimal places of Gauge
+}
+
+// Status returns the diagnostic state of all meters at now.
+func (h *Handler) Status(now time.Time) map[string]MeterStatus {
 	h.mux.RLock()
 	defer h.mux.RUnlock()
 
-	dropped := make(map[string]uint64, len(h.meters))
+	status := make(map[string]MeterStatus, len(h.meters))
 	for name, m := range h.meters {
-		dropped[name] = m.Meter.DroppedEvents()
+		status[name] = statusOf(m.Meter.GetCounter(), m.Config, m.Meter.DroppedEvents(), now)
 	}
-	return dropped
+	return status
+}
+
+// statusOf builds the MeterStatus of a counter snapshot at now. A last pulse that lies ahead of
+// now, as when the clock is set back, is reported with age 0.
+func statusOf(c pulsecounter.Counter, cfg MeterConfig, dropped uint64, now time.Time) MeterStatus {
+	s := MeterStatus{
+		Gpio:          cfg.Gpio,
+		Pulses:        c.Pulses,
+		DroppedEvents: dropped,
+		Display:       displayOf(c, cfg, now),
+	}
+	if c.TimeStamp.IsZero() {
+		return s
+	}
+
+	last := c.TimeStamp.Truncate(time.Second)
+	age := round(max(now.Sub(c.TimeStamp), 0).Seconds(), 1)
+	s.LastPulse, s.LastPulseAgeSeconds = &last, &age
+	return s
+}
+
+// displayOf converts a counter snapshot at now to the display units of cfg. Both values are
+// converted before rounding, so no precision is lost to the rounding of the configured unit.
+// Validate has checked the conversions; should one fail anyway, the configured unit is kept.
+func displayOf(c pulsecounter.Counter, cfg MeterConfig, now time.Time) Display {
+	d := Display{
+		CounterUnit:      cfg.CounterUnit,
+		CounterPrecision: cfg.CounterPrecision,
+		GaugeUnit:        cfg.GaugeUnit,
+		GaugePrecision:   cfg.GaugePrecision,
+	}
+
+	counterFactor, gaugeFactor := 1.0, 1.0
+	if cfg.DisplayUnit != "" {
+		if f, err := convert(cfg.CounterUnit, cfg.DisplayUnit, counterUnits); err == nil {
+			counterFactor, d.CounterUnit = f, cfg.DisplayUnit
+			d.CounterPrecision = displayPrecision(cfg.CounterPrecision, f)
+		}
+	}
+	if cfg.DisplayGaugeUnit != "" {
+		if f, err := convert(cfg.GaugeUnit, cfg.DisplayGaugeUnit, gaugeUnits); err == nil {
+			gaugeFactor, d.GaugeUnit = f, cfg.DisplayGaugeUnit
+			d.GaugePrecision = displayPrecision(cfg.GaugePrecision, f)
+		}
+	}
+
+	if cfg.CounterPulsesPerUnit != 0 {
+		d.Counter = round(float64(c.Pulses)/cfg.CounterPulsesPerUnit*counterFactor, d.CounterPrecision)
+	}
+	d.Gauge = round(rateAt(c, cfg, now)*gaugeFactor, d.GaugePrecision)
+	return d
 }
 
 // Range of the usable GPIOs (BCM numbering) on the 40-pin header. GPIO0 and GPIO1 are on the
@@ -194,6 +275,16 @@ func (c *MeterConfig) Validate() error {
 	if c.GaugePrecision < 0 || c.GaugePrecision > maxPrecision {
 		return fmt.Errorf("gaugePrecision must be 0-%d, got %d", maxPrecision, c.GaugePrecision)
 	}
+	if c.DisplayUnit != "" {
+		if _, err := convert(c.CounterUnit, c.DisplayUnit, counterUnits); err != nil {
+			return fmt.Errorf("displayUnit: %w", err)
+		}
+	}
+	if c.DisplayGaugeUnit != "" {
+		if _, err := convert(c.GaugeUnit, c.DisplayGaugeUnit, gaugeUnits); err != nil {
+			return fmt.Errorf("displayGaugeUnit: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -210,6 +301,11 @@ func isPositiveFinite(f float64) bool {
 // being replaced by that elapsed time, which right after a pulse is close to zero and would
 // turn into a huge spike - the case when the two timestamps come from clocks that disagree.
 func gaugeAt(c pulsecounter.Counter, cfg MeterConfig, now time.Time) float64 {
+	return round(rateAt(c, cfg, now), cfg.GaugePrecision)
+}
+
+// rateAt is gaugeAt without the rounding, for conversions to a display unit.
+func rateAt(c pulsecounter.Counter, cfg MeterConfig, now time.Time) float64 {
 	if c.LastTimeStamp.IsZero() || c.TimeStamp.IsZero() {
 		return 0
 	}
@@ -221,8 +317,7 @@ func gaugeAt(c pulsecounter.Counter, cfg MeterConfig, now time.Time) float64 {
 
 	dt := max(interval, now.Sub(c.TimeStamp))
 
-	val := 3600 / dt.Seconds() * cfg.GaugeScale
-	return round(val, cfg.GaugePrecision)
+	return 3600 / dt.Seconds() * cfg.GaugeScale
 }
 
 // counterOf computes the total meter value of a counter snapshot: pulses divided by the meter

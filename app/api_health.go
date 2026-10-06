@@ -5,6 +5,7 @@ package app
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/womat/golib/web"
 	"github.com/womat/s0meter/app/service/health"
@@ -13,7 +14,7 @@ import (
 // HandleHealth returns the current health data of the application.
 //
 //	@Summary		Get health data
-//	@Description	Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, and the GPIO events lost per meter (counted late, the gauge skips the gap).
+//	@Description	Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, the MQTT connection state, and per meter the raw pulses, the time and age of the last pulse, and the GPIO events lost (counted late, the gauge skips the gap).
 //	@Tags			info
 //	@Produce		json
 //	@Security		ApiKeyAuth
@@ -24,10 +25,24 @@ func (app *App) HandleHealth() http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			resp := health.GetCurrentHealth(MODULE, VERSION)
-			resp.DroppedEvents = app.meters.DroppedEvents()
+			resp.Mqtt = app.mqttState()
+			resp.Meters = app.meters.Status(time.Now())
 			web.Encode(w, http.StatusOK, resp)
 		},
 	)
+}
+
+// mqttState reports the broker connection for /health. Like /ready it looks at
+// IsConnectionOpen, which is false during a reconnect as well.
+func (app *App) mqttState() string {
+	switch {
+	case app.mqtt == nil:
+		return health.MqttDisabled
+	case app.mqtt.IsConnectionOpen():
+		return health.MqttConnected
+	default:
+		return health.MqttDisconnected
+	}
 }
 
 // HandleReady is a readiness probe for monitoring.

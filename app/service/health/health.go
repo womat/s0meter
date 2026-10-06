@@ -9,6 +9,8 @@ import (
 	"os"
 	"runtime"
 	"time"
+
+	"github.com/womat/s0meter/app/service/s0meters"
 )
 
 // Model holds the main system and runtime health information.
@@ -24,11 +26,21 @@ type Model struct {
 	SysMemoryBytes uint64  `json:"sysMemoryBytes"` // Total memory obtained from the OS
 	Timestamp      string  `json:"timestamp"`      // UTC timestamp when health info was collected (RFC3339)
 
-	// DroppedEvents counts, per meter, the GPIO edge events lost since the last start or
-	// reload, in the kernel or because pulse processing fell behind. They are added to the
-	// counter with the next pulse, but the gauge skips that interval.
-	DroppedEvents map[string]uint64 `json:"droppedEvents"`
+	// Mqtt is the state of the broker connection: connected, disconnected (also while
+	// reconnecting) or disabled when no broker is configured. Filled in by the caller.
+	Mqtt string `json:"mqtt"`
+
+	// Meters holds the diagnostic state per meter name: raw pulses, the last pulse and the
+	// GPIO events lost since the last start or reload. Filled in by the caller.
+	Meters map[string]s0meters.MeterStatus `json:"meters"`
 }
+
+// States of Model.Mqtt.
+const (
+	MqttConnected    = "connected"
+	MqttDisconnected = "disconnected"
+	MqttDisabled     = "disabled"
+)
 
 var startTime = time.Now() // Tracks application start time
 

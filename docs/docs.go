@@ -22,7 +22,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, and the GPIO events lost per meter (counted late, the gauge skips the gap).",
+                "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, the MQTT connection state, and per meter the raw pulses, the time and age of the last pulse, and the GPIO events lost (counted late, the gauge skips the gap).",
                 "produces": [
                     "application/json"
                 ],
@@ -199,14 +199,6 @@ const docTemplate = `{
                     "description": "Current version of the application",
                     "type": "string"
                 },
-                "droppedEvents": {
-                    "description": "DroppedEvents counts, per meter, the GPIO edge events lost since the last start or\nreload, in the kernel or because pulse processing fell behind. They are added to the\ncounter with the next pulse, but the gauge skips that interval.",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer",
-                        "format": "int64"
-                    }
-                },
                 "goVersion": {
                     "description": "Go runtime version",
                     "type": "string"
@@ -217,6 +209,17 @@ const docTemplate = `{
                 },
                 "hostname": {
                     "description": "Machine name where the app runs",
+                    "type": "string"
+                },
+                "meters": {
+                    "description": "Meters holds the diagnostic state per meter name: raw pulses, the last pulse and the\nGPIO events lost since the last start or reload. Filled in by the caller.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/s0meters.MeterStatus"
+                    }
+                },
+                "mqtt": {
+                    "description": "Mqtt is the state of the broker connection: connected, disconnected (also while\nreconnecting) or disabled when no broker is configured. Filled in by the caller.",
                     "type": "string"
                 },
                 "numGoroutines": {
@@ -238,6 +241,35 @@ const docTemplate = `{
                 "uptimeSeconds": {
                     "description": "Application uptime in seconds",
                     "type": "number"
+                }
+            }
+        },
+        "s0meters.Display": {
+            "type": "object",
+            "properties": {
+                "counter": {
+                    "description": "Counter in CounterUnit",
+                    "type": "number"
+                },
+                "counterPrecision": {
+                    "description": "Decimal places of Counter",
+                    "type": "integer"
+                },
+                "counterUnit": {
+                    "description": "DisplayUnit, or the configured counterUnit",
+                    "type": "string"
+                },
+                "gauge": {
+                    "description": "Gauge in GaugeUnit",
+                    "type": "number"
+                },
+                "gaugePrecision": {
+                    "description": "Decimal places of Gauge",
+                    "type": "integer"
+                },
+                "gaugeUnit": {
+                    "description": "DisplayGaugeUnit, or the configured gaugeUnit",
+                    "type": "string"
                 }
             }
         },
@@ -267,6 +299,39 @@ const docTemplate = `{
                 "timestamp": {
                     "description": "Time of the reading, local time, whole seconds",
                     "type": "string"
+                }
+            }
+        },
+        "s0meters.MeterStatus": {
+            "type": "object",
+            "properties": {
+                "display": {
+                    "description": "Counter and gauge in the display units",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/s0meters.Display"
+                        }
+                    ]
+                },
+                "droppedEvents": {
+                    "description": "GPIO events lost since start or reload, see pulsecounter",
+                    "type": "integer"
+                },
+                "gpio": {
+                    "description": "GPIO the meter is wired to (BCM numbering)",
+                    "type": "integer"
+                },
+                "lastPulse": {
+                    "description": "Time of the last pulse, local time, whole seconds",
+                    "type": "string"
+                },
+                "lastPulseAgeSeconds": {
+                    "description": "Seconds since the last pulse, one decimal place",
+                    "type": "number"
+                },
+                "pulses": {
+                    "description": "Raw pulse count, including restored pulses",
+                    "type": "integer"
                 }
             }
         }

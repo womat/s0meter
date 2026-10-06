@@ -109,6 +109,16 @@ func TestValidate(t *testing.T) {
 		"unknown env":    func(c *Config) { c.Env = "staging" },
 		"invalid meter":  func(c *Config) { c.Meter["a"] = meterOn(1) },
 		"duplicate gpio": func(c *Config) { c.Meter["a"] = meterOn(17); c.Meter["b"] = meterOn(17) },
+		"display unit of another quantity": func(c *Config) {
+			m := meterOn(2)
+			m.CounterUnit, m.DisplayUnit = "Wh", "m³"
+			c.Meter["a"] = m
+		},
+		"unknown display gauge unit": func(c *Config) {
+			m := meterOn(2)
+			m.GaugeUnit, m.DisplayGaugeUnit = "W", "PS"
+			c.Meter["a"] = m
+		},
 	}
 	for name, mutate := range invalid {
 		t.Run(name, func(t *testing.T) {
