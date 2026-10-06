@@ -1,7 +1,7 @@
 # s0meter
 
 **s0meter** reads impulses from S0 interfaces compliant with DIN 43864 standards, calculates energy counters and flow
-rates, and publishes the results via MQTT.
+rates, publishes the results via MQTT and shows them on a built-in web page (`https://<host>:<listenPort>/`).
 
 ----
 

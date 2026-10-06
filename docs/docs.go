@@ -22,7 +22,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, the MQTT connection state, and per meter the raw pulses, the time and age of the last pulse, and the GPIO events lost (counted late, the gauge skips the gap).",
+                "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, the MQTT connection state, and per meter the raw pulses, the time and age of the last pulse, the GPIO events lost (counted late, the gauge skips the gap) and the reading in the display units of the web UI.",
                 "produces": [
                     "application/json"
                 ],
