@@ -135,6 +135,10 @@ GND**. s0meter enables the Pi's internal pull-up, so the line idles high, each p
 and the rising edge at the end of the pulse is counted. The reed contacts of water and gas meters
 are wired the same way.
 
+<p align="center">
+  <img src="docs/wiring-direct.svg" width="720" alt="Direct connection: S0+ of the meter to a GPIO pin, S0− to GND; the Pi's internal pull-up holds the GPIO high">
+</p>
+
 - Never connect S0+ to a voltage: the GPIO pins take **3.3 V at most**.
 - DIN 43864 allows the S0 circuit to run at up to 27 V, but most meters switch the Pi's 3.3 V fine.
   If the meter's data sheet asks for a minimum current, add an external pull-up of a few kΩ from the
@@ -151,21 +155,42 @@ to the Pi, but an **optocoupler** between them is the safer choice when
 - the meter sits in a distribution board with mains wiring, or another circuit's ground is involved,
 - the S0 circuit is to run at its specified voltage (12–24 V) instead of the Pi's 3.3 V.
 
-Then the meter switches the optocoupler's LED, powered by its own supply, and the optocoupler's
-transistor takes the meter's place on the Pi:
+A **PC817** (also sold as LTV-817 or EL817, same pinout) does the job: cheap, available everywhere
+and far faster than S0 needs. The meter switches the optocoupler's LED, powered by its own supply,
+and the optocoupler's transistor takes the meter's place on the Pi:
 
-```
- meter side (own 12–24 V supply)            Pi side
- +12–24 V ── R ──►|── S0+  meter  S0− ── 0 V
-              LED of the optocoupler       collector ── GPIO (internal pull-up)
-                                           emitter   ── GND
-```
+<p align="center">
+  <img src="docs/wiring-optocoupler.svg" width="720" alt="PC817 optocoupler U1: a 12–24 V supply drives the LED (pin 1 anode, pin 2 cathode) through the reverse-polarity diode D1, R1 and the meter's S0 output; the transistor (pin 4 collector, pin 3 emitter) connects GPIO17 (header pin 11), pulled up to 3V3 (pin 1) by the optional 10 kΩ R2, to GND (pin 9); a dashed line marks the galvanic isolation">
+</p>
 
-Size the series resistor `R` for the LED current from the optocoupler's data sheet (typically
-5–10 mA: about 2.2 kΩ at 24 V, 1 kΩ at 12 V) and keep it within the meter's S0 limits (DIN 43864:
-at most 27 mA). A pulse switches the transistor on and pulls the GPIO low, exactly like the direct
-connection, so the configuration does not change. Ready-made S0 input modules with an optocoupler
-work the same way.
+| Ref | Part | Value | Notes |
+|-----|------|-------|-------|
+| U1 | Optocoupler | PC817 (LTV-817, EL817) | pin 1 anode, 2 cathode, 3 emitter, 4 collector |
+| R1 | Resistor, LED side | 2.2 kΩ ½ W at 24 V · 1 kΩ ¼ W at 12 V | about 10 mA (24 V) or 9 mA (12 V) LED current, within the S0 limit of 27 mA (DIN 43864); at 24 V it dissipates about 0.2 W |
+| R2 | Resistor, pull-up | 10 kΩ ¼ W, GPIO to 3V3 | **optional**: s0meter enables the internal pull-up (about 50 kΩ) anyway; R2 gives a firmer level and cleaner edges, worth it on longer cables |
+| D1 | Diode | 1N4148, in series with R1, anode to the supply's + | **recommended**: blocks the current of a swapped supply and so protects both the PC817's LED (6 V in reverse at most) and the meter's S0 output, which is polarized and often an optocoupler itself |
+
+`R1 = (supply − 1.2 V LED − 0.7 V D1 − about 1 V across the S0 output) / 10 mA`, rounded to the next standard
+value. A pulse switches the transistor on and pulls the GPIO low, exactly like the direct
+connection, so the configuration does not change. Any GPIO works; GPIO17 is only the example.
+Ready-made S0 input modules with an optocoupler work the same way.
+
+### Maximum pulse rate
+
+Four limits apply; the lowest one counts:
+
+| Limit | Maximum | Notes |
+|-------|---------|-------|
+| S0 interface (DIN 43864) | about **16 Hz** | pulse at least 30 ms, pause at least 30 ms |
+| s0meter's debounce | **1 / (2 × `debounceTime`)** | pulse and pause must each outlast the debounce: 10 ms → 50 Hz, 20 ms → 25 Hz |
+| PC817 with 10 kΩ pull-up | a few **kHz** | switching times of a few to some tens of µs; irrelevant for S0 |
+| Raspberry Pi, even a Zero | far above any S0 rate | edges are timestamped by the kernel and buffered; a burst that overruns the buffers is counted late, not lost — see `droppedEvents` |
+
+In practice the meter is the limit, and the debounce has to stay below its pulse and pause length.
+At 1000 imp/kWh, 22 kW is about 6 pulses per second. A meter with 10 000 imp/kWh, however, reaches
+the S0 limit of 16 Hz at only about 5.8 kW; check whether such a meter uses shorter pulses than
+S0's 30 ms, and keep the debounce below them. Check the meter's data sheet for its pulse length and maximum frequency, and see
+[Choosing a debounce time](#choosing-a-debounce-time).
 
 ---
 
