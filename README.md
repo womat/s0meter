@@ -142,6 +142,31 @@ are wired the same way.
 - Long cables pick up noise; a twisted pair and a sensible [debounce time](#choosing-a-debounce-time)
   help.
 
+### With an optocoupler (galvanic isolation)
+
+The direct connection ties the meter's S0 circuit to the Pi's ground. That is fine for a meter next
+to the Pi, but an **optocoupler** between them is the safer choice when
+
+- the cable is long or leaves the cabinet, e.g. to a water meter in the basement,
+- the meter sits in a distribution board with mains wiring, or another circuit's ground is involved,
+- the S0 circuit is to run at its specified voltage (12–24 V) instead of the Pi's 3.3 V.
+
+Then the meter switches the optocoupler's LED, powered by its own supply, and the optocoupler's
+transistor takes the meter's place on the Pi:
+
+```
+ meter side (own 12–24 V supply)            Pi side
+ +12–24 V ── R ──►|── S0+  meter  S0− ── 0 V
+              LED of the optocoupler       collector ── GPIO (internal pull-up)
+                                           emitter   ── GND
+```
+
+Size the series resistor `R` for the LED current from the optocoupler's data sheet (typically
+5–10 mA: about 2.2 kΩ at 24 V, 1 kΩ at 12 V) and keep it within the meter's S0 limits (DIN 43864:
+at most 27 mA). A pulse switches the transistor on and pulls the GPIO low, exactly like the direct
+connection, so the configuration does not change. Ready-made S0 input modules with an optocoupler
+work the same way.
+
 ---
 
 ## Web UI
