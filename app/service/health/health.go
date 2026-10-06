@@ -24,8 +24,9 @@ type Model struct {
 	SysMemoryBytes uint64  `json:"sysMemoryBytes"` // Total memory obtained from the OS
 	Timestamp      string  `json:"timestamp"`      // UTC timestamp when health info was collected (RFC3339)
 
-	// DroppedEvents counts, per meter, the GPIO edge events dropped since the last start or
-	// reload because pulse processing fell behind. Anything above 0 means lost pulses.
+	// DroppedEvents counts, per meter, the GPIO edge events lost since the last start or
+	// reload, in the kernel or because pulse processing fell behind. They are added to the
+	// counter with the next pulse, but the gauge skips that interval.
 	DroppedEvents map[string]uint64 `json:"droppedEvents"`
 }
 

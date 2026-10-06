@@ -94,3 +94,56 @@ func TestStopsCountingAfterClose(t *testing.T) {
 		t.Errorf("pulses after Close = %d, want 1", got)
 	}
 }
+
+func TestMissedPulsesAreCountedAndSkipTheGaugeInterval(t *testing.T) {
+	h, _ := newEmulated(t, 10)
+	t0 := time.Now()
+
+	h.handlePulseEvent(gpio.Event{Time: t0, Edge: gpio.RisingEdge})
+	h.handlePulseEvent(gpio.Event{Time: t0.Add(time.Second), Edge: gpio.RisingEdge, Missed: 3})
+
+	c := h.GetCounter()
+	if c.Pulses != 15 {
+		t.Errorf("pulses = %d, want 15 (10 + 1 + 3 missed + 1)", c.Pulses)
+	}
+	if !c.LastTimeStamp.IsZero() {
+		t.Errorf("LastTimeStamp = %v after a gap, want zero", c.LastTimeStamp)
+	}
+
+	h.handlePulseEvent(gpio.Event{Time: t0.Add(2 * time.Second), Edge: gpio.RisingEdge})
+	c = h.GetCounter()
+	if c.Pulses != 16 {
+		t.Errorf("pulses = %d, want 16", c.Pulses)
+	}
+	if got := c.TimeStamp.Sub(c.LastTimeStamp); got != time.Second {
+		t.Errorf("interval after the gap = %v, want 1s", got)
+	}
+}
+
+// TestRecountsPulsesDroppedWhileProcessingFellBehind overflows the GPIO event buffer by
+// stalling the handler, and checks that the dropped pulses still end up in the counter.
+func TestRecountsPulsesDroppedWhileProcessingFellBehind(t *testing.T) {
+	h, pin := newEmulated(t, 0)
+
+	// The first event reaches handlePulseEvent and waits for the lock, the next ones fill
+	// the buffer, and the rest are dropped.
+	const driven = 100
+	h.mu.Lock()
+	for range driven {
+		pulse(t, pin)
+	}
+	h.mu.Unlock()
+
+	dropped := h.DroppedEvents()
+	if dropped == 0 {
+		t.Fatal("no event was dropped; the test did not overflow the buffer")
+	}
+	// Let the buffer drain, so the next pulse is delivered and reports the gap.
+	waitForPulses(t, h, driven-dropped)
+
+	pulse(t, pin)
+	c := waitForPulses(t, h, driven+1)
+	if !c.LastTimeStamp.IsZero() {
+		t.Errorf("LastTimeStamp = %v after a gap, want zero", c.LastTimeStamp)
+	}
+}

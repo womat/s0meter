@@ -610,10 +610,13 @@ Running ahead points to a debounce that is too short for a bouncing contact, run
 longer than the pulse - see [Choosing a debounce time](#choosing-a-debounce-time). Correct the value
 as described under [Correcting a counter](#correcting-a-counter).
 
-If the counter runs behind, also check `droppedEvents` in `/health` and the log for
-`s0 pulses lost`. The GPIO layer buffers 32 edge events per meter; when pulse processing falls
-behind and the buffer is full, further events are dropped and each one is a pulse the counter
-never sees. The count starts at 0 with every start or reload.
+`droppedEvents` in `/health` and `s0 pulses lost` in the log are not a cause of drift. They count
+pulses the GPIO layer lost - because pulse processing fell behind and its 32-event buffer per meter
+was full, or because the kernel's own event buffer overflowed. The next pulse that gets through
+reports how many were lost before it, and they are added to the counter then, so the counter stays
+right; only the gauge skips that interval and restarts with the following pulse. A pulse lost right
+before a stop or reload, with no pulse after it, is not recovered. The count starts at 0 with every
+start or reload, and anything above 0 means the device is struggling to keep up.
 
 **Service is `dead` immediately after start**
 A configuration error; the process exits with code 1 before the logger is even in place, so the
