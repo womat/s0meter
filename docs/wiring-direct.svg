@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 34 780 178" width="780" height="178" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">S0 meter connected directly to the Raspberry Pi</title>
+  <desc id="d">S0 plus of the meter goes to a GPIO pin of the Raspberry Pi, S0 minus to GND. The Pi's internal pull-up holds the GPIO at 3.3 volt until a pulse closes the meter's switch and pulls it low.</desc>
+  <style>
+    .wire { stroke: #17202b; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .box { fill: #ffffff; stroke: #c3cbd4; stroke-width: 1.5; }
+    .opto { fill: #f3f5f7; stroke: #8a97a5; stroke-width: 1.5; }
+    .iso { stroke: #b3261e; stroke-width: 1.5; stroke-dasharray: 6 5; }
+    .led { fill: #e8231a; stroke: #b3261e; stroke-width: 1.5; }
+    .ray { stroke: #e8231a; stroke-width: 1.6; fill: none; }
+    .rayhead { fill: #e8231a; }
+    .term { fill: #ffffff; stroke: #17202b; stroke-width: 2; }
+    .dot { fill: #17202b; }
+    .t { fill: #17202b; font-size: 14px; }
+    .tb { fill: #17202b; font-size: 15px; font-weight: 600; }
+    .tm { fill: #5d6b7a; font-size: 12.5px; }
+    .tz { fill: #5d6b7a; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; }
+    .tiso { fill: #b3261e; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; }
+    .pi { fill: #e8f0fa; stroke: #2563a8; stroke-width: 1.5; }
+    .tpi { fill: #2563a8; font-size: 15px; font-weight: 600; }
+    @media (prefers-color-scheme: dark) {
+      .wire { stroke: #e6ebf0; }
+      .box { fill: #19212a; stroke: #3a4756; }
+      .opto { fill: #11161c; stroke: #6b7a8a; }
+      .term { fill: #19212a; stroke: #e6ebf0; }
+      .dot { fill: #e6ebf0; }
+      .t, .tb { fill: #e6ebf0; }
+      .tm, .tz { fill: #93a1b0; }
+      .pi { fill: #142233; stroke: #6ea8e6; }
+      .tpi { fill: #6ea8e6; }
+      .iso { stroke: #f07a70; }
+      .tiso { fill: #f07a70; }
+    }
+  </style>
+
+
+  <!-- meter with its S0 switch -->
+  <rect class="box" x="40" y="44" width="140" height="140" rx="10"/>
+  <text class="tb" x="56" y="70">Meter</text>
+  <text class="tm" x="56" y="88">S0 output</text>
+  <path class="wire" d="M180 104 H140 V114 M140 150 V160 H180"/>
+  <path class="wire" d="M140 114 L156 144"/>
+  <circle class="dot" cx="140" cy="114" r="2.6"/>
+  <circle class="dot" cx="140" cy="150" r="2.6"/>
+
+  <!-- wires -->
+  <path class="wire" d="M185 104 H635"/>
+  <path class="wire" d="M185 160 H635"/>
+  <circle class="term" cx="180" cy="104" r="5"/>
+  <circle class="term" cx="180" cy="160" r="5"/>
+  <text class="t" x="192" y="96">S0+</text>
+  <text class="t" x="192" y="152">S0−</text>
+  <text class="tm" x="410" y="96" text-anchor="middle">twisted pair, keep it short</text>
+  <text class="tm" x="410" y="186" text-anchor="middle">a pulse closes the switch and pulls the GPIO low;</text>
+  <text class="tm" x="410" y="202" text-anchor="middle">its rising edge at the end is counted</text>
+
+  <!-- Raspberry Pi with the internal pull-up -->
+  <rect class="pi" x="640" y="44" width="110" height="140" rx="10"/>
+  <circle class="term" cx="640" cy="104" r="5"/>
+  <circle class="term" cx="640" cy="160" r="5"/>
+  <text class="t" x="654" y="109">GPIO</text>
+  <text class="tm" x="654" y="126">pull-up on</text>
+  <text class="t" x="654" y="165">GND</text>
+  <text class="tpi" x="695" y="70" text-anchor="middle">Raspberry Pi</text>
+</svg>

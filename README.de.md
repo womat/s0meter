@@ -32,7 +32,8 @@ Keine Cloud, keine Datenbank: ein einzelnes Programm und eine YAML-Datei.
 4. **Anschließen:** S0+ an einen GPIO-Pin, S0− an GND. Nie eine Spannung an S0+ legen, die GPIOs
    vertragen höchstens 3,3 V. Bei langen Leitungen, Zählern im Verteiler oder einem S0-Kreis mit
    12–24 V besser über einen **Optokoppler** für galvanische Trennung, siehe
-   [Wiring](README.md#with-an-optocoupler-galvanic-isolation).
+   [Wiring](README.md#with-an-optocoupler-galvanic-isolation) – mit Schaltplan für den PC817 und
+   den Grenzen der Impulsfrequenz.
 5. **Starten:** als systemd-Dienst, dann `https://<dein-pi>:8443/` im Browser öffnen.
 
 Die genauen Befehle stehen im [Quick start](README.md#quick-start), alle Einstellungen unter
