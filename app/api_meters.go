@@ -14,7 +14,7 @@ import (
 //	@Produce		json
 //	@Security		ApiKeyAuth
 //	@Success		200	{object}	map[string]s0meters.MeterData	"Meter readings successfully retrieved"
-//	@Failure		401	{string}	string							"Unauthorized"
+//	@Failure		401	{object}	web.ApiError					"Unauthorized"
 //	@Router			/meters [get]
 func (app *App) HandleMeterAll() http.Handler {
 	return http.HandlerFunc(
@@ -33,8 +33,8 @@ func (app *App) HandleMeterAll() http.Handler {
 //	@Security		ApiKeyAuth
 //	@Param			name	path		string				true	"Meter name"
 //	@Success		200		{object}	s0meters.MeterData	"Meter reading successfully retrieved"
-//	@Failure		401		{string}	string				"Unauthorized"
-//	@Failure		404		{string}	string				"Meter not found"
+//	@Failure		401		{object}	web.ApiError		"Unauthorized"
+//	@Failure		404		{object}	web.ApiError		"Meter not found"
 //	@Router			/meters/{name} [get]
 func (app *App) HandleMeterOne() http.Handler {
 	return http.HandlerFunc(
@@ -43,7 +43,7 @@ func (app *App) HandleMeterOne() http.Handler {
 
 			res, err := app.meters.GetMeter(name)
 			if err != nil {
-				web.Encode(w, http.StatusNotFound, err.Error())
+				web.WriteError(w, r, http.StatusNotFound, err)
 				return
 			}
 			web.Encode(w, http.StatusOK, res)

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/womat/golib/web"
 	"github.com/womat/s0meter/app/service/health"
 	"github.com/womat/s0meter/app/service/s0meters"
 )
@@ -75,5 +76,31 @@ func TestHealthReportsMeterStatusAndMqtt(t *testing.T) {
 	}
 	if _, ok := got["droppedEvents"]; ok {
 		t.Error("droppedEvents is still reported at the top level; it moved into meters")
+	}
+}
+
+func TestErrorsAreJSON(t *testing.T) {
+	app := newTestApp(t)
+
+	for _, tc := range []struct {
+		path, key string
+		code      int
+		msg       string
+	}{
+		{"/meters", "", http.StatusUnauthorized, "not authorized"},
+		{"/meters/nope", "test-key", http.StatusNotFound, "meter nope not found"},
+	} {
+		rec := serve(app, tc.path, tc.key)
+		if rec.Code != tc.code {
+			t.Errorf("GET %s = %d, want %d", tc.path, rec.Code, tc.code)
+		}
+		var got web.ApiError
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || got.Error != tc.msg {
+			t.Errorf("GET %s body = %s, want {\"error\":%q}", tc.path, rec.Body, tc.msg)
+		}
+	}
+
+	if rec := serve(app, "/ready", ""); rec.Code != http.StatusOK {
+		t.Errorf("GET /ready without a broker = %d, want 200", rec.Code)
 	}
 }
