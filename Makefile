@@ -3,12 +3,11 @@ DEV_CERT_DIR=./app/certs
 DEV_CERT_FILE=$(DEV_CERT_DIR)/dev_cert.pem
 DEV_KEY_FILE=$(DEV_CERT_DIR)/dev_key.pem
 
-# Branch policy: releases are always cut from RELEASE_BRANCH, and
-# DEVELOP_BRANCH has to be merged into it first. The release target enforces
-# both, because a tag on an unmerged commit produces artifacts that no longer
-# match what main publishes (GitHub Pages serves main as well).
+# Branch policy: there is one branch, RELEASE_BRANCH; work is committed to it and
+# releases are tags on it. The release target only tags a clean RELEASE_BRANCH that
+# matches origin, because a tag on a commit that never reached it produces
+# artifacts that no longer match what the repository publishes (GitHub Pages serves main as well).
 RELEASE_BRANCH ?= main
-DEVELOP_BRANCH ?= develop
 
 # Raspberry Pi Login / IP. These are placeholders - the real host name stays out
 # of this public repository. Set your device as environment variables instead,
@@ -66,7 +65,7 @@ LDFLAGS := -X 'main.buildDate=$(BUILD_DATE)' \
            -X 'main.buildCommit=$(BUILD_COMMIT)' \
            -X 'github.com/womat/s0meter/app.VERSION=$(VERSION)'
 
-.PHONY: all test release merge_to_main deploy_release deploy deploy_dev clean help ensure_dev_certs
+.PHONY: all test release deploy_release deploy deploy_dev clean help ensure_dev_certs
 
 all: help
 
@@ -174,26 +173,15 @@ deploy_release: ## download a published $(PI_REL_ARCH) release, verify it and co
 	scp ./bin/release/${BINARY_NAME} $(PI_USER)@$(PI_HOST):$(PI_PATH)
 
 
-merge_to_main: ## merge $(DEVELOP_BRANCH) into $(RELEASE_BRANCH) and push - the step that has to precede a release
-	@git diff --quiet HEAD || { echo "working tree is dirty, commit first"; exit 1; }
-	git fetch origin
-	git checkout $(RELEASE_BRANCH)
-	git merge --ff-only origin/$(RELEASE_BRANCH)
-	git merge --no-ff origin/$(DEVELOP_BRANCH) -m "Merge branch '$(DEVELOP_BRANCH)'"
-	git push origin $(RELEASE_BRANCH)
-	@echo "$(DEVELOP_BRANCH) is now in $(RELEASE_BRANCH); release with: make release TAG=vX.Y.Z"
-
 release: ## tag $(RELEASE_BRANCH) and push it, triggering the GitHub release workflow (make release TAG=v4.7.0)
 	@test -n "$(TAG)" || { echo "usage: make release TAG=v4.7.0"; exit 1; }
 	@echo "$(TAG)" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$$' || { echo "TAG must be semver with a v prefix, e.g. v4.7.0"; exit 1; }
 	@git diff --quiet HEAD || { echo "working tree is dirty, commit first"; exit 1; }
 	@test "$$(git rev-parse --abbrev-ref HEAD)" = "$(RELEASE_BRANCH)" || \
-		{ echo "releases are cut from $(RELEASE_BRANCH), but you are on $$(git rev-parse --abbrev-ref HEAD) - run: make merge_to_main"; exit 1; }
+		{ echo "releases are cut from $(RELEASE_BRANCH), but you are on $$(git rev-parse --abbrev-ref HEAD) - run: git checkout $(RELEASE_BRANCH)"; exit 1; }
 	@git fetch origin --quiet
 	@test "$$(git rev-parse HEAD)" = "$$(git rev-parse origin/$(RELEASE_BRANCH))" || \
 		{ echo "$(RELEASE_BRANCH) and origin/$(RELEASE_BRANCH) differ - pull or push first"; exit 1; }
-	@git merge-base --is-ancestor origin/$(DEVELOP_BRANCH) HEAD || \
-		{ echo "origin/$(DEVELOP_BRANCH) is not merged into $(RELEASE_BRANCH) - run: make merge_to_main"; exit 1; }
 	git tag -a $(TAG) -m "release $(TAG)"
 	git push origin $(TAG)
 	@echo "Tag pushed. Watch the release build with: gh run watch"
