@@ -4,12 +4,16 @@ package app
 // readiness probe for monitoring.
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/womat/golib/web"
 	"github.com/womat/s0meter/app/service/health"
 )
+
+// errMqttNotConnected is the reason /ready reports while a configured broker is not connected.
+var errMqttNotConnected = errors.New("mqtt broker not connected")
 
 // HandleHealth returns the current health data of the application.
 //
@@ -19,7 +23,7 @@ import (
 //	@Produce		json
 //	@Security		ApiKeyAuth
 //	@Success		200	{object}	health.Model	"Health data successfully retrieved"
-//	@Failure		401	{string}	string			"Unauthorized"
+//	@Failure		401	{object}	web.ApiError	"Unauthorized"
 //	@Router			/health [get]
 func (app *App) HandleHealth() http.Handler {
 	return http.HandlerFunc(
@@ -55,12 +59,14 @@ func (app *App) mqttState() string {
 //	@Tags			info
 //	@Produce		json
 //	@Success		200	{object}	map[string]string	"Application is ready"
-//	@Failure		503	{object}	map[string]string	"MQTT broker not connected"
+//	@Failure		503	{object}	web.ApiError		"MQTT broker not connected"
 //	@Router			/ready [get]
 func (app *App) HandleReady() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if app.mqtt != nil && !app.mqtt.IsConnectionOpen() {
-			web.Encode(w, http.StatusServiceUnavailable, map[string]string{"error": "mqtt broker not connected"})
+			// Not WriteError: from 500 on it replaces the message with "internal server error",
+			// but a readiness probe should say why the service is not ready.
+			web.Encode(w, http.StatusServiceUnavailable, web.NewApiError(errMqttNotConnected))
 			return
 		}
 

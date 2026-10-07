@@ -12,4 +12,5 @@ swag init \
   --generalInfo  main.go \
   --dir          ./cmd,./app \
   --output       ./docs \
-  --parseInternal
+  --parseInternal \
+  --parseDependency

@@ -108,6 +108,11 @@ definitions:
         description: Raw pulse count, including restored pulses
         type: integer
     type: object
+  web.ApiError:
+    properties:
+      error:
+        type: string
+    type: object
 info:
   contact: {}
 paths:
@@ -127,7 +132,7 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            type: string
+            $ref: '#/definitions/web.ApiError'
       security:
       - ApiKeyAuth: []
       summary: Get health data
@@ -149,7 +154,7 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            type: string
+            $ref: '#/definitions/web.ApiError'
       security:
       - ApiKeyAuth: []
       summary: Get all meter readings
@@ -175,11 +180,11 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            type: string
+            $ref: '#/definitions/web.ApiError'
         "404":
           description: Meter not found
           schema:
-            type: string
+            $ref: '#/definitions/web.ApiError'
       security:
       - ApiKeyAuth: []
       summary: Get single meter reading
@@ -201,9 +206,7 @@ paths:
         "503":
           description: MQTT broker not connected
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/web.ApiError'
       summary: Readiness check
       tags:
       - info

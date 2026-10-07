@@ -555,7 +555,8 @@ timeout, and resumes automatically once the client reconnects.
 | GET    | `/meters`        | API Key | Current reading of all meters             |
 | GET    | `/meters/{name}` | API Key | Current reading of a single meter         |
 
-Authentication via the `X-API-Key` header.
+Authentication via the `X-API-Key` header. Errors are returned as `{"error": "..."}` with the HTTP status
+(401, 404 for an unknown meter, 503 from `/ready`).
 
 ### Examples
 

@@ -40,7 +40,7 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/web.ApiError"
                         }
                     }
                 }
@@ -74,7 +74,7 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/web.ApiError"
                         }
                     }
                 }
@@ -114,13 +114,13 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/web.ApiError"
                         }
                     },
                     "404": {
                         "description": "Meter not found",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/web.ApiError"
                         }
                     }
                 }
@@ -149,10 +149,7 @@ const docTemplate = `{
                     "503": {
                         "description": "MQTT broker not connected",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/web.ApiError"
                         }
                     }
                 }
@@ -332,6 +329,14 @@ const docTemplate = `{
                 "pulses": {
                     "description": "Raw pulse count, including restored pulses",
                     "type": "integer"
+                }
+            }
+        },
+        "web.ApiError": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
                 }
             }
         }
