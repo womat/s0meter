@@ -56,6 +56,7 @@ type App struct {
 	mqtt        *mqtt.Handler
 	signals     <-chan os.Signal // OS signals, subscribed once by the caller for all lifecycles
 	checkReload func() error     // loads and validates the config file before a SIGHUP restart
+	serverErr   chan error       // reports a web server that stopped on its own
 	restart     chan struct{}    // signals application restart
 	shutdown    chan struct{}    // signals application shutdown
 	ctx         context.Context
@@ -85,6 +86,7 @@ func New(config *Config, signals <-chan os.Signal, checkReload func() error) *Ap
 
 		meters: s0meters.New(),
 
+		serverErr:  make(chan error, 1),
 		restart:    make(chan struct{}),
 		shutdown:   make(chan struct{}),
 		ctx:        ctx,
@@ -212,10 +214,12 @@ func (app *App) Shutdown() <-chan struct{} {
 	return app.shutdown
 }
 
-// HandleOSSignals handles SIGHUP (restart), SIGTERM and SIGINT (stop) from app.signals.
+// HandleOSSignals handles SIGHUP (restart), SIGTERM and SIGINT (stop) from app.signals, and
+// restarts the App when the web server stopped on its own.
 //
 // The subscription itself belongs to the caller and outlives this App, so nothing here
-// stops or resets it; one goroutine per App consumes at most one signal.
+// stops or resets it; one goroutine per App consumes at most one signal. Being the only
+// caller of shutdownProcedure, it also rules out two shutdowns running at once.
 func (app *App) HandleOSSignals() {
 
 	go func() {
@@ -223,7 +227,7 @@ func (app *App) HandleOSSignals() {
 
 		// Use select instead of a plain channel receive so the goroutine has
 		// two exit paths and always terminates cleanly:
-		//   - a signal is received and handled, or
+		//   - a signal or a server error is received and handled, or
 		//   - the context is cancelled externally (e.g. from a concurrent shutdown).
 		// Without the second path the goroutine would outlive its App and take
 		// the next signal away from the App that replaced it. The loop only
@@ -246,6 +250,10 @@ func (app *App) HandleOSSignals() {
 					slog.Info("SIGTERM/SIGINT received, stopping")
 					app.shutdownProcedure(ModeStop)
 				}
+				return
+			case err := <-app.serverErr:
+				slog.Error("Web server stopped unexpectedly, initiating restart", "error", err)
+				app.shutdownProcedure(ModeRestart)
 				return
 			case <-app.ctx.Done():
 				// Context was cancelled externally – exit without triggering
