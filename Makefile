@@ -11,12 +11,15 @@ RELEASE_BRANCH ?= main
 DEVELOP_BRANCH ?= develop
 
 # Raspberry Pi Login / IP. These are placeholders - the real host name stays out
-# of this public repository. Put your device in Makefile.local instead (it is
-# gitignored and included below), so plain `make deploy` works without repeating
-# the address:
+# of this public repository. Set your device as environment variables instead,
+# so plain `make deploy` works without repeating the address (fish: set -Ux,
+# bash/zsh: export in the shell profile):
 #
-#   PI_USER := myuser
-#   PI_HOST := mypi
+#   PI_USER=myuser
+#   PI_HOST=mypi
+#
+# A project-specific device can go into Makefile.local (gitignored, included
+# below) with the same names; command-line values override both.
 #
 # PI_PATH defaults to the login directory, which is correct for any user name;
 # override it only to land the binary somewhere else.

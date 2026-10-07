@@ -38,7 +38,7 @@ Two things to keep in mind when touching `.goreleaser.yaml`: its `before` hook m
 
 `.github/workflows/ci.yml` runs on every push/PR against `develop`: a `test` job (native, `make test`) and a `build` matrix over armv6/armv7/arm64 that vets, builds (also `-tags swagger`) and runs govulncheck. `release.yml` repeats test, vet and govulncheck on the tagged commit before GoReleaser publishes. All actions are pinned to a commit SHA with the release in a comment, and `govulncheck` to a version; `.github/dependabot.yml` updates actions and Go modules weekly, but not the `go install` pins — raise those by hand.
 
-`PI_USER`/`PI_HOST`/`PI_PATH` default to placeholders (the real host name is deliberately not in this public repo — see `f83d16e`). `Makefile.local`, gitignored and pulled in via `-include`, carries the actual device; command-line values still override it. `PI_PATH` defaults to `.`, the login directory, so it is correct for any user name.
+`PI_USER`/`PI_HOST`/`PI_PATH` default to placeholders (the real host name is deliberately not in this public repo — see `f83d16e`). The actual device comes from environment variables (set once for all projects; they win over the `?=` defaults) or, project-specific, from `Makefile.local` (gitignored, pulled in via `-include`); command-line values override both. `PI_PATH` defaults to `.`, the login directory, so it is correct for any user name.
 
 Two ways onto a Pi, deliberately kept apart: `make deploy` builds locally and is the development loop (its binary reports a `-dirty` version, which is how you tell it apart on the device); `make deploy_release TAG=vX.Y.Z` downloads the published archive via `gh`, verifies the checksum and copies that.
 
