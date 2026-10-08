@@ -220,7 +220,8 @@ Default location: `/opt/s0meter/etc/config.yaml`
 Environment variables are expanded inside the file in the `${VAR}` form only, e.g.
 `apiKey: ${S0METER_API_KEY}`; an unset variable becomes empty. Any other `$` is kept literally, so
 keys and passwords may contain it. Unknown keys are rejected, so a misspelled or renamed setting
-stops the start instead of silently keeping its default.
+stops the start instead of silently keeping its default. Durations need a unit (`10ms`, `2s`, `1m`):
+a bare number, `0` included, is rejected.
 
 ```yaml
 # =============================================================================
@@ -304,7 +305,7 @@ mqtt:
 # S0 Meter configurations
 # =============================================================================
 # gpio                 - GPIO for the S0 input, BCM numbering 2-27, one meter per GPIO
-# debounceTime         - Debounce time as Go duration string (e.g. 10ms) to suppress contact bounce and noise; 0 or unset = none
+# debounceTime         - Debounce time as Go duration string (e.g. 10ms) to suppress contact bounce and noise; 0s or unset = none
 # counterPulsesPerUnit - Meter constant (Zählerkonstante): pulses per counterUnit
 #                        (see meter datasheet, e.g. 1000 imp/kWh)
 # counterUnit          - Unit of the total counter (e.g. kWh, m³, l)
@@ -365,7 +366,7 @@ meter:
 | Field                  | Type   | Description                                                                      |
 |------------------------|--------|----------------------------------------------------------------------------------|
 | `gpio`                 | int    | GPIO for the S0 input, BCM numbering, 2–27 (GPIO0/1 are reserved for HAT boards); one meter per GPIO |
-| `debounceTime`         | string | Debounce as Go duration string, `0` or unset = none — see [Choosing a debounce time](#choosing-a-debounce-time) |
+| `debounceTime`         | string | Debounce as Go duration string, `0s` or unset = none — see [Choosing a debounce time](#choosing-a-debounce-time) |
 | `counterUnit`          | string | Unit of the total counter (e.g. `kWh`, `m³`, `l`)                                |
 | `gaugeUnit`            | string | Unit of the flow rate (e.g. `kW`, `l/h`, `l/s`)                                  |
 | `counterPulsesPerUnit` | float  | Meter constant (Zählerkonstante): pulses per counterUnit                         |

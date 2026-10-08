@@ -79,7 +79,7 @@ mqtt:
 # S0 Meter configurations
 # =============================================================================
 # gpio                 - GPIO for the S0 input, BCM numbering 2-27, one meter per GPIO
-# debounceTime         - Debounce time as Go duration string (e.g. 10ms) to suppress contact bounce and noise; 0 or unset = none
+# debounceTime         - Debounce time as Go duration string (e.g. 10ms) to suppress contact bounce and noise; 0s or unset = none
 # counterPulsesPerUnit - Meter constant (Zählerkonstante): pulses per counterUnit
 #                        (see meter datasheet, e.g. 1000 imp/kWh)
 # counterUnit          - Unit of the total counter (e.g. kWh, m³, l)
