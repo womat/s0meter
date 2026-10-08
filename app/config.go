@@ -161,7 +161,7 @@ func (c *Config) Validate() error {
 	}
 
 	if c.MQTT.PublishInterval < time.Second {
-		return fmt.Errorf("publishInterval must be greater than 1s, got %v", c.MQTT.PublishInterval)
+		return fmt.Errorf("publishInterval must be at least 1s, got %v", c.MQTT.PublishInterval)
 	}
 
 	if c.MQTT.MinPublishInterval < 0 {
@@ -174,7 +174,7 @@ func (c *Config) Validate() error {
 	}
 
 	if c.BackupInterval < time.Second {
-		return fmt.Errorf("backupInterval must be greater than 1s, got %v", c.BackupInterval)
+		return fmt.Errorf("backupInterval must be at least 1s, got %v", c.BackupInterval)
 	}
 
 	return nil

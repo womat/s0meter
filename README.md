@@ -304,7 +304,7 @@ mqtt:
 # S0 Meter configurations
 # =============================================================================
 # gpio                 - GPIO for the S0 input, BCM numbering 2-27, one meter per GPIO
-# debounceTime         - Debounce time as Go duration string (e.g. 1ms) to suppress signal noise
+# debounceTime         - Debounce time as Go duration string (e.g. 10ms) to suppress contact bounce and noise; 0 or unset = none
 # counterPulsesPerUnit - Meter constant (Zählerkonstante): pulses per counterUnit
 #                        (see meter datasheet, e.g. 1000 imp/kWh)
 # counterUnit          - Unit of the total counter (e.g. kWh, m³, l)
@@ -325,7 +325,7 @@ mqtt:
 meter:
   wallbox:
     gpio: 17
-    debounceTime: 1ms
+    debounceTime: 10ms
     counterUnit: "Wh"
     counterPulsesPerUnit: 1
     counterPrecision: 0
@@ -338,7 +338,7 @@ meter:
 
   greywater:
     gpio: 27
-    debounceTime: 1ms
+    debounceTime: 20ms
     counterUnit: "l"
     counterPulsesPerUnit: 1
     counterPrecision: 0
@@ -350,7 +350,7 @@ meter:
 
   drinkingwater:
     gpio: 22
-    debounceTime: 1ms
+    debounceTime: 20ms
     counterUnit: "m³"
     counterPulsesPerUnit: 1000
     counterPrecision: 3
@@ -365,7 +365,7 @@ meter:
 | Field                  | Type   | Description                                                                      |
 |------------------------|--------|----------------------------------------------------------------------------------|
 | `gpio`                 | int    | GPIO for the S0 input, BCM numbering, 2–27 (GPIO0/1 are reserved for HAT boards); one meter per GPIO |
-| `debounceTime`         | string | Debounce as Go duration string — see [Choosing a debounce time](#choosing-a-debounce-time) |
+| `debounceTime`         | string | Debounce as Go duration string, `0` or unset = none — see [Choosing a debounce time](#choosing-a-debounce-time) |
 | `counterUnit`          | string | Unit of the total counter (e.g. `kWh`, `m³`, `l`)                                |
 | `gaugeUnit`            | string | Unit of the flow rate (e.g. `kW`, `l/h`, `l/s`)                                  |
 | `counterPulsesPerUnit` | float  | Meter constant (Zählerkonstante): pulses per counterUnit                         |
@@ -675,8 +675,11 @@ restored afterwards.
 
 The new configuration is loaded and validated **before** anything is torn down. If it fails, the
 reload is refused with `Config reload rejected, keeping the running configuration` in the log and the
-service keeps counting with its current settings - fix the file and reload again. Warnings such as a
-short `apiKey` are logged after every start and reload.
+service keeps counting with its current settings - fix the file and reload again. Some problems only
+show when the service starts with the new settings: a missing TLS certificate, a port or GPIO line in
+use. Then `Start with the new configuration failed, continuing with the previous one` is logged and
+the service starts again with the settings it ran with before. Warnings such as a short `apiKey` are
+logged after every start and reload.
 
 ```sh
 sudo systemctl reload s0meter          # requires ExecReload in the unit, see Quick start

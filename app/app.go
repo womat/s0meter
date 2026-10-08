@@ -22,6 +22,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"sync"
@@ -49,18 +50,21 @@ const (
 // App is the main application struct.
 // App is where the application is wired up.
 type App struct {
-	wg          sync.WaitGroup // tracks the web server, backup and MQTT publish goroutines
-	config      *Config        // app configuration
-	web         *http.Server   // HTTP server
-	meters      *s0meters.Handler
-	mqtt        *mqtt.Handler
-	signals     <-chan os.Signal // OS signals, subscribed once by the caller for all lifecycles
-	checkReload func() error     // loads and validates the config file before a SIGHUP restart
-	serverErr   chan error       // reports a web server that stopped on its own
-	restart     chan struct{}    // signals application restart
-	shutdown    chan struct{}    // signals application shutdown
-	ctx         context.Context
-	cancelFunc  context.CancelFunc
+	wg sync.WaitGroup // tracks the web server, backup and MQTT publish goroutines
+	// metersLoaded is set once Init registered every meter with its saved counter; only then
+	// may Cleanup write the data file.
+	metersLoaded bool
+	config       *Config      // app configuration
+	web          *http.Server // HTTP server
+	meters       *s0meters.Handler
+	mqtt         *mqtt.Handler
+	signals      <-chan os.Signal // OS signals, subscribed once by the caller for all lifecycles
+	checkReload  func() error     // loads and validates the config file before a SIGHUP restart
+	serverErr    chan error       // reports a web server that stopped on its own
+	restart      chan struct{}    // signals application restart
+	shutdown     chan struct{}    // signals application shutdown
+	ctx          context.Context
+	cancelFunc   context.CancelFunc
 }
 
 // New initializes the App struct but does not start services.
@@ -100,12 +104,17 @@ func (app *App) Run() (*App, error) {
 	slog.Debug("Initializing application")
 
 	if err := app.Init(); err != nil {
-		return app, err
+		return app, app.abort(err)
 	}
 
 	if broker := app.config.MQTT.Connection; broker != "" {
-		slog.Debug("Connecting to MQTT broker", "broker", broker)
-		hostname, _ := os.Hostname()
+		// The broker URL may carry credentials (tcp://user:password@host); never log them.
+		logBroker := redactURL(broker)
+		slog.Debug("Connecting to MQTT broker", "broker", logBroker)
+		hostname, err := os.Hostname()
+		if err != nil {
+			slog.Warn("Cannot read the host name, the MQTT client ID is not unique", "error", err)
+		}
 		clientID := MODULE + hostname
 
 		// The callbacks only log. The publish loop asks IsConnectionOpen instead, which is
@@ -114,14 +123,14 @@ func (app *App) Run() (*App, error) {
 		mqttHandler, err := mqtt.New(broker, clientID,
 			mqtt.WithLogger(slog.Default()),
 			mqtt.WithOnConnected(func() {
-				slog.Info("MQTT connected", "broker", broker)
+				slog.Info("MQTT connected", "broker", logBroker)
 			}),
 			mqtt.WithOnConnectionLost(func(err error) {
 				slog.Warn("MQTT connection lost", "error", err)
 			}))
 		if err != nil {
-			slog.Error("Failed to connect to MQTT broker", "broker", broker, "error", err)
-			return app, err
+			slog.Error("Failed to connect to MQTT broker", "broker", logBroker, "error", err)
+			return app, app.abort(err)
 		}
 
 		app.mqtt = mqttHandler
@@ -129,7 +138,7 @@ func (app *App) Run() (*App, error) {
 		slog.Info("Starting periodic MQTT publishing",
 			"heartbeat", app.config.MQTT.PublishInterval,
 			"minInterval", app.config.MQTT.MinPublishInterval,
-			"broker", broker)
+			"broker", logBroker)
 		app.wg.Go(func() {
 			app.meters.RunPeriodicPublish(app.ctx, app.config.MQTT.PublishInterval, app.config.MQTT.MinPublishInterval,
 				app.mqtt, app.mqtt.IsConnectionOpen)
@@ -148,7 +157,7 @@ func (app *App) Run() (*App, error) {
 	err := app.StartWebServer()
 	if err != nil {
 		slog.Error("Web server failed to start", "url", app.web.Addr, "error", err)
-		return app, err
+		return app, app.abort(err)
 	}
 
 	slog.Info("Module started successfully",
@@ -184,6 +193,10 @@ func (app *App) Init() (err error) {
 			return err
 		}
 	}
+
+	// From here on the meters hold every counter, so Cleanup may save them. Saving after a
+	// failed registration would drop the counters of the meters not registered yet.
+	app.metersLoaded = true
 
 	for name, pulses := range saved {
 		if _, ok := app.config.Meter[name]; !ok {
@@ -301,7 +314,7 @@ func (app *App) shutdownProcedure(mode int) {
 func (app *App) Cleanup() error {
 	var errs error
 
-	if app.meters != nil {
+	if app.meters != nil && app.metersLoaded {
 		// Close first, so no pulse can be counted after the values have been saved.
 		// The counters stay readable after Close.
 		slog.Info("Closing all meters")
@@ -311,10 +324,36 @@ func (app *App) Cleanup() error {
 		errs = errors.Join(errs, app.meters.SaveMeterData(app.config.DataFile))
 	}
 
+	if app.meters != nil && !app.metersLoaded {
+		// Init failed half way: release the GPIO lines, but keep the data file as it is.
+		errs = errors.Join(errs, app.meters.Close())
+	}
+
 	if app.mqtt != nil {
 		slog.Info("Disconnecting from MQTT broker")
 		app.mqtt.Disconnect()
 	}
 
 	return errs
+}
+
+// abort undoes a Run that failed half way: it stops the goroutines already started and
+// releases what Init acquired, so the caller can start another App with the same GPIO lines,
+// port and data file. It returns err.
+func (app *App) abort(err error) error {
+	app.cancelFunc()
+	app.wg.Wait()
+	if cerr := app.Cleanup(); cerr != nil {
+		slog.Error("Cleanup failed", "error", cerr)
+	}
+	return err
+}
+
+// redactURL returns broker with a password replaced by "xxxxx", for logging.
+func redactURL(broker string) string {
+	u, err := url.Parse(broker)
+	if err != nil {
+		return "<unparsable broker URL>"
+	}
+	return u.Redacted()
 }

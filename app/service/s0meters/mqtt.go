@@ -39,6 +39,7 @@ func (h *Handler) RunPeriodicPublish(ctx context.Context, heartbeat, minInterval
 
 	ticker := time.NewTicker(tick)
 	defer ticker.Stop()
+	due := heartbeatDue(heartbeat, tick)
 
 	// Owned by this loop alone, so it needs no lock of its own.
 	state := make(map[string]publishState)
@@ -53,9 +54,20 @@ func (h *Handler) RunPeriodicPublish(ctx context.Context, heartbeat, minInterval
 				slog.Debug("Skipping MQTT publish, broker not connected")
 				continue
 			}
-			h.publishDue(mqttHandler, state, heartbeat)
+			h.publishDue(mqttHandler, state, due)
 		}
 	}
+}
+
+// heartbeatDue returns the age at which a meter's last message counts as due for the heartbeat.
+//
+// The loop wakes every tick, and every wake-up is a little late by a varying amount. Comparing
+// the age with heartbeat itself would skip a tick whenever this wake-up was less late than the
+// one that sent the last message, so the heartbeat would come one tick later, a full heartbeat
+// later when tick equals heartbeat. Half a tick of slack absorbs that jitter, while a message is
+// still never repeated before heartbeat minus half a tick.
+func heartbeatDue(heartbeat, tick time.Duration) time.Duration {
+	return heartbeat - tick/2
 }
 
 // publishState records what was last delivered for one meter, so the loop can tell a new pulse

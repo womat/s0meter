@@ -93,25 +93,34 @@ func run(configFile string, debug bool) int {
 	signal.Notify(signals, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
 	defer signal.Stop(signals)
 
-	for {
-		// Reload configuration on every restart
-		config, err := loadConfig(configFile, debug)
-		if err != nil {
-			fmt.Printf("Failed to load config file %s: %s\n", configFile, err.Error())
-			return 1
-		}
+	config, err := loadConfig(configFile, debug)
+	if err != nil {
+		fmt.Printf("Failed to load config file %s: %s\n", configFile, err.Error())
+		return 1
+	}
 
+	// lastGood is the configuration the last App ran with. A restart whose new configuration
+	// passes the check but still fails to start (TLS certificate missing, port or GPIO line
+	// busy, data file not writable) falls back to it, so a reload never ends the counting.
+	var lastGood *app.Config
+
+	for {
 		// Switch to the new logger before closing the previous log file, so no line written
-		// in between goes to a file that is already closed.
+		// in between goes to a file that is already closed. A log destination that cannot be
+		// opened on a reload keeps the current logger.
 		logger, closeNew, err := newLogger(config.LogDestination, config.LogLevel)
-		if err != nil {
+		switch {
+		case err != nil && lastGood == nil:
 			fmt.Printf("Failed to initialize logger: %s\n", err.Error())
 			return 1
+		case err != nil:
+			slog.Error("Failed to initialize logger, keeping the current one", "error", err)
+		default:
+			slog.SetDefault(logger)
+			_ = closeLog()
+			closeLog = closeNew
+			slog.Info("Logging initialized/reloaded", "logLevel", config.LogLevel)
 		}
-		slog.SetDefault(logger)
-		_ = closeLog()
-		closeLog = closeNew
-		slog.Info("Logging initialized/reloaded", "logLevel", config.LogLevel)
 
 		for _, warning := range config.Warnings() {
 			slog.Warn("Configuration warning", "warning", warning)
@@ -124,18 +133,29 @@ func run(configFile string, debug bool) int {
 			return err
 		}
 
-		// Create and run the application
+		// Create and run the application. A failed Run has released everything it acquired.
 		a, err := app.New(config, signals, checkReload).Run()
 		if err != nil {
-			slog.Error("Critical error occurred, shutting down", "error", err)
-			return 1
+			if lastGood == nil || config == lastGood {
+				slog.Error("Critical error occurred, shutting down", "error", err)
+				return 1
+			}
+			slog.Error("Start with the new configuration failed, continuing with the previous one", "error", err)
+			config = lastGood
+			continue
 		}
+		lastGood = config
 
 		// Wait for restart or shutdown signals
 		select {
 		case <-a.Restart():
 			slog.Info("Reloading configuration", "configFile", configFile)
 			time.Sleep(time.Second) // prevent tight restart loops
+			// The file was checked before the restart, but it may have changed since.
+			if config, err = loadConfig(configFile, debug); err != nil {
+				slog.Error("Config reload failed, continuing with the previous configuration", "error", err)
+				config = lastGood
+			}
 		case <-a.Shutdown():
 			slog.Info("Shutdown requested")
 			return 0

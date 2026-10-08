@@ -39,6 +39,26 @@ func TestCollectPending(t *testing.T) {
 	}
 }
 
+// A tick that wakes up a little earlier than the one that sent the last message must still send
+// the heartbeat, otherwise it slips by a whole tick.
+func TestHeartbeatToleratesTickJitter(t *testing.T) {
+	now := time.Now()
+	h := handlerWith(map[string]*MeterInstance{
+		"wallbox": newMeter(t, MeterConfig{Gpio: 17, CounterPulsesPerUnit: 1, GaugeScale: 1, MqttTopic: "home/wallbox"}, 10),
+	})
+	state := map[string]publishState{"wallbox": {pulses: 10, at: now}}
+
+	for _, tick := range []time.Duration{2 * time.Second, time.Minute} {
+		due := heartbeatDue(time.Minute, tick)
+		if got := h.collectPending(state, due, now.Add(time.Minute-time.Millisecond)); len(got) != 1 {
+			t.Errorf("tick %v: heartbeat 1ms early was skipped", tick)
+		}
+		if got := h.collectPending(state, due, now.Add(time.Minute-tick)); len(got) != 0 {
+			t.Errorf("tick %v: heartbeat one tick early was sent", tick)
+		}
+	}
+}
+
 func TestCollectPendingTriggersOnPulsesNotRoundedCounter(t *testing.T) {
 	now := time.Now()
 	// 1000 pulses per unit at precision 0: pulse 11 leaves the rounded counter at 0.
