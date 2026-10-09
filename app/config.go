@@ -28,7 +28,7 @@ type Config struct {
 	LogLevel       string                          `yaml:"logLevel"`       // Log level: debug | info | warning | error
 	LogDestination string                          `yaml:"logDestination"` // Log output: stdout | stderr | /path/to/logfile
 	Webserver      WebserverConfig                 `yaml:"webserver"`      // Webserver configuration
-	MQTT           MQTTConfig                      `yaml:"mqtt"`           // MQTT client configuration
+	MQTT           *MQTTConfig                     `yaml:"mqtt"`           // MQTT client configuration; nil = no MQTT
 	DataFile       string                          `yaml:"dataFile"`       // Path to meter data YAML file
 	BackupInterval time.Duration                   `yaml:"backupInterval"` // Backup interval as Go duration string (e.g. 60s)
 	Meter          map[string]s0meters.MeterConfig `yaml:"meter"`          // Map of S0 meter configurations
@@ -45,16 +45,30 @@ type WebserverConfig struct {
 	AllowedIPs []string `yaml:"allowedIPs"` // Allowed IP addresses or networks
 }
 
-// MQTTConfig holds MQTT client settings.
+// MQTTConfig holds MQTT client settings. MQTT is on when the mqtt block is present.
 type MQTTConfig struct {
-	Connection      string        `yaml:"connection"`      // Broker connection string
-	PublishInterval time.Duration `yaml:"publishInterval"` // heartbeat interval as Go duration string (e.g. 60s)
+	Connection      string        `yaml:"connection"`      // Broker connection string, required
+	PublishInterval time.Duration `yaml:"publishInterval"` // heartbeat interval as Go duration string (default 60s)
 
 	// MinPublishInterval is how often the publish loop checks for new pulses, and therefore the
 	// shortest possible spacing between two messages of the same meter. It keeps a fast pulsing
-	// meter from flooding the broker. Zero disables the change trigger: meters are then published
-	// on the heartbeat only.
-	MinPublishInterval time.Duration `yaml:"minPublishInterval"`
+	// meter from flooding the broker. nil = 2s; 0 disables the change trigger: meters are then
+	// published on the heartbeat only.
+	MinPublishInterval *time.Duration `yaml:"minPublishInterval"`
+}
+
+// Default MQTT intervals, applied by Validate to a present mqtt block.
+const (
+	defaultPublishInterval    = 60 * time.Second
+	defaultMinPublishInterval = 2 * time.Second
+)
+
+// MinInterval returns MinPublishInterval, or its default when it is not set.
+func (m *MQTTConfig) MinInterval() time.Duration {
+	if m.MinPublishInterval == nil {
+		return defaultMinPublishInterval
+	}
+	return *m.MinPublishInterval
 }
 
 // NewConfig returns a Config with sane defaults
@@ -71,11 +85,6 @@ func NewConfig() *Config {
 			ListenPort: 8443,
 			BlockedIPs: []string{},
 			AllowedIPs: []string{},
-		},
-		MQTT: MQTTConfig{
-			Connection:         "", // e.g. "tcp://mqtt.example.com:1883", empty means MQTT is disabled
-			PublishInterval:    60 * time.Second,
-			MinPublishInterval: 2 * time.Second,
 		},
 	}
 }
@@ -160,21 +169,42 @@ func (c *Config) Validate() error {
 		gpioUsedBy[meter.Gpio] = name
 	}
 
-	if c.MQTT.PublishInterval < time.Second {
-		return fmt.Errorf("publishInterval must be at least 1s, got %v", c.MQTT.PublishInterval)
-	}
-
-	if c.MQTT.MinPublishInterval < 0 {
-		return fmt.Errorf("minPublishInterval must not be negative, got %v", c.MQTT.MinPublishInterval)
-	}
-
-	if c.MQTT.MinPublishInterval > c.MQTT.PublishInterval {
-		return fmt.Errorf("minPublishInterval (%v) must not exceed publishInterval (%v)",
-			c.MQTT.MinPublishInterval, c.MQTT.PublishInterval)
+	if err := c.MQTT.validate(); err != nil {
+		return err
 	}
 
 	if c.BackupInterval < time.Second {
 		return fmt.Errorf("backupInterval must be at least 1s, got %v", c.BackupInterval)
+	}
+
+	return nil
+}
+
+// validate applies the defaults of a present mqtt block and checks it; a nil block (no MQTT)
+// is valid.
+func (m *MQTTConfig) validate() error {
+	if m == nil {
+		return nil
+	}
+
+	if m.Connection == "" {
+		return errors.New("mqtt.connection is required; delete the mqtt block to run without MQTT")
+	}
+
+	if m.PublishInterval == 0 {
+		m.PublishInterval = defaultPublishInterval
+	}
+	if m.PublishInterval < time.Second {
+		return fmt.Errorf("publishInterval must be at least 1s, got %v", m.PublishInterval)
+	}
+
+	if m.MinInterval() < 0 {
+		return fmt.Errorf("minPublishInterval must not be negative, got %v", m.MinInterval())
+	}
+
+	if m.MinInterval() > m.PublishInterval {
+		return fmt.Errorf("minPublishInterval (%v) must not exceed publishInterval (%v)",
+			m.MinInterval(), m.PublishInterval)
 	}
 
 	return nil

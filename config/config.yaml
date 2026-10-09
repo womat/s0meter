@@ -61,18 +61,20 @@ dataFile: /opt/s0meter/data/s0meter.yaml
 backupInterval: 60s
 
 # =============================================================================
-# MQTT configuration (disabled when connection is empty)
+# MQTT configuration (on when this block is present; delete or comment it out to run
+# without MQTT)
 # =============================================================================
 mqtt:
-  # Broker connection string (empty = MQTT disabled)
+  # Broker connection string, required
   connection: "tcp://mqtt.example.com:1883"
 
   # Heartbeat: every meter is published at least this often, as a Go duration string
+  # (default 60s)
   publishInterval: 60s
 
   # How often the publish loop checks for new pulses. A meter is published as soon as a new
   # pulse is counted, but never more than once per minPublishInterval - this throttles a
-  # fast pulsing meter. Set to 0 to publish on the heartbeat only.
+  # fast pulsing meter. Default 2s; set to 0s to publish on the heartbeat only.
   minPublishInterval: 2s
 
 # =============================================================================

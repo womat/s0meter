@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/womat/s0meter/app/service/s0meters"
 )
@@ -128,6 +129,50 @@ func TestValidate(t *testing.T) {
 				t.Error("expected an error")
 			}
 		})
+	}
+}
+
+func TestMQTTBlockPresenceAndDefaults(t *testing.T) {
+	base := "webserver:\n  apiKey: 0123456789abcdef\n"
+	load := func(t *testing.T, content string) (*Config, error) {
+		t.Helper()
+		cfg, err := LoadConfig(writeConfig(t, base+content))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg, cfg.Validate()
+	}
+
+	cfg, err := load(t, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.MQTT != nil {
+		t.Errorf("mqtt = %+v without an mqtt block, want nil (no MQTT)", cfg.MQTT)
+	}
+
+	cfg, err = load(t, "mqtt:\n  connection: tcp://broker:1883\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.MQTT.PublishInterval != 60*time.Second || cfg.MQTT.MinInterval() != 2*time.Second {
+		t.Errorf("intervals = %v / %v, want the defaults 60s / 2s", cfg.MQTT.PublishInterval, cfg.MQTT.MinInterval())
+	}
+
+	// 0s is a setting of its own: publish on the heartbeat only.
+	cfg, err = load(t, "mqtt:\n  connection: tcp://broker:1883\n  minPublishInterval: 0s\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.MQTT.MinInterval() != 0 {
+		t.Errorf("minPublishInterval 0s = %v, want 0 (change trigger off)", cfg.MQTT.MinInterval())
+	}
+
+	// A present block must be complete: an empty connection used to mean "MQTT off".
+	for _, content := range []string{"mqtt:\n  connection: \"\"\n", "mqtt:\n  publishInterval: 30s\n"} {
+		if _, err = load(t, content); err == nil || !strings.Contains(err.Error(), "delete the mqtt block") {
+			t.Errorf("Validate() = %v for %q, want the hint to delete the mqtt block", err, content)
+		}
 	}
 }
 

@@ -84,7 +84,7 @@ sudo chown -R s0meter:s0meter /opt/s0meter
 ```
 
 **3. Configure** `/opt/s0meter/etc/config.yaml`: set `env: prod`, a random `apiKey`
-(`openssl rand -hex 24`), your MQTT broker (or `connection: ""`) and one entry per meter — see
+(`openssl rand -hex 24`), your MQTT broker (or delete the `mqtt` block) and one entry per meter — see
 [Configuration](#configuration) and [Wiring](#wiring).
 
 **4. Start** it as a service and open the firewall:
@@ -287,18 +287,20 @@ dataFile: /opt/s0meter/data/s0meter.yaml
 backupInterval: 60s
 
 # =============================================================================
-# MQTT configuration (disabled when connection is empty)
+# MQTT configuration (on when this block is present; delete or comment it out to run
+# without MQTT)
 # =============================================================================
 mqtt:
-  # Broker connection string (empty = MQTT disabled)
+  # Broker connection string, required
   connection: "tcp://mqtt.example.com:1883"
 
   # Heartbeat: every meter is published at least this often, as a Go duration string
+  # (default 60s)
   publishInterval: 60s
 
   # How often the publish loop checks for new pulses. A meter is published as soon as a new
   # pulse is counted, but never more than once per minPublishInterval - this throttles a
-  # fast pulsing meter. Set to 0 to publish on the heartbeat only.
+  # fast pulsing meter. Default 2s; set to 0s to publish on the heartbeat only.
   minPublishInterval: 2s
 
 # =============================================================================
@@ -576,7 +578,7 @@ curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/health
 ```
 
 `/health` reports, besides the runtime metrics, the MQTT connection as `mqtt` (`connected`,
-`disconnected` - also while reconnecting - or `disabled` without a broker) and per meter:
+`disconnected` - also while reconnecting - or `disabled` without an `mqtt` block) and per meter:
 
 ```json
 "meters": {
@@ -753,6 +755,18 @@ a breaking change of the API, the telegram or the configuration raises the major
 like `5.0.0-3-g0c13781-dirty` instead, which is how the two are told apart on a device.
 
 Building from source needs Go and `make`: clone the repository and run `make help` for the targets.
+
+### Upgrading to 6.0.0
+
+MQTT is switched by the presence of the `mqtt` block instead of an empty `connection`:
+
+| 5.x                                   | 6.0.0                                                  |
+|---------------------------------------|--------------------------------------------------------|
+| `mqtt.connection: ""` turns MQTT off  | delete or comment out the `mqtt` block                 |
+| no `mqtt` block: defaults, MQTT off   | unchanged: MQTT off                                    |
+| `mqtt` block with a broker            | unchanged                                              |
+
+An `mqtt` block without `connection` is refused with a message that says so.
 
 ---
 

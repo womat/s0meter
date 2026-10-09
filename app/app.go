@@ -107,7 +107,8 @@ func (app *App) Run() (*App, error) {
 		return app, app.abort(err)
 	}
 
-	if broker := app.config.MQTT.Connection; broker != "" {
+	if mqttConfig := app.config.MQTT; mqttConfig != nil {
+		broker := mqttConfig.Connection
 		// The broker URL may carry credentials (tcp://user:password@host); never log them.
 		logBroker := redactURL(broker)
 		slog.Debug("Connecting to MQTT broker", "broker", logBroker)
@@ -136,11 +137,11 @@ func (app *App) Run() (*App, error) {
 		app.mqtt = mqttHandler
 		// periodically calculate the gauge- and counter-values for each meter and send the results over MQTT
 		slog.Info("Starting periodic MQTT publishing",
-			"heartbeat", app.config.MQTT.PublishInterval,
-			"minInterval", app.config.MQTT.MinPublishInterval,
+			"heartbeat", mqttConfig.PublishInterval,
+			"minInterval", mqttConfig.MinInterval(),
 			"broker", logBroker)
 		app.wg.Go(func() {
-			app.meters.RunPeriodicPublish(app.ctx, app.config.MQTT.PublishInterval, app.config.MQTT.MinPublishInterval,
+			app.meters.RunPeriodicPublish(app.ctx, mqttConfig.PublishInterval, mqttConfig.MinInterval(),
 				app.mqtt, app.mqtt.IsConnectionOpen)
 		})
 	}
