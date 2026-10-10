@@ -48,13 +48,13 @@ func TestGaugeAtScales(t *testing.T) {
 
 func TestStatusOf(t *testing.T) {
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.Local)
-	cfg := MeterConfig{Gpio: 17, CounterUnit: "l", CounterPulsesPerUnit: 1, GaugeUnit: "l/h", GaugeScale: 1}
+	cfg := MeterConfig{Gpio: 17, CounterUnit: "l", CounterPulsesPerUnit: 1, GaugeUnit: "l/h", GaugeScale: 1, MqttTopic: "home/water"}
 
 	s := statusOf(pulsecounter.Counter{Pulses: 42}, cfg, 3, now)
 	if s.LastPulse != nil || s.LastPulseAgeSeconds != nil {
 		t.Errorf("no pulse since start: lastPulse %v, age %v, want both nil", s.LastPulse, s.LastPulseAgeSeconds)
 	}
-	if s.Gpio != 17 || s.Pulses != 42 || s.DroppedEvents != 3 {
+	if s.Gpio != 17 || s.Pulses != 42 || s.DroppedEvents != 3 || s.MqttTopic != "home/water" {
 		t.Errorf("statusOf = %+v, want config and counts passed through", s)
 	}
 	if want := (Display{Counter: 42, CounterUnit: "l", GaugeUnit: "l/h"}); s.Display != want {

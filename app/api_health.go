@@ -6,6 +6,7 @@ package app
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/womat/golib/web"
@@ -18,7 +19,7 @@ var errMqttNotConnected = errors.New("mqtt broker not connected")
 // HandleHealth returns the current health data of the application.
 //
 //	@Summary		Get health data
-//	@Description	Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, the MQTT connection state, and per meter the raw pulses, the time and age of the last pulse, the GPIO events lost (counted late, the gauge skips the gap) and the reading in the display units of the web UI.
+//	@Description	Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, the MQTT connection state and broker (host:port, never credentials), and per meter the raw pulses, the time and age of the last pulse, the GPIO events lost (counted late, the gauge skips the gap), the MQTT topic and the reading in the display units of the web UI.
 //	@Tags			info
 //	@Produce		json
 //	@Security		ApiKeyAuth
@@ -30,6 +31,9 @@ func (app *App) HandleHealth() http.Handler {
 		func(w http.ResponseWriter, r *http.Request) {
 			resp := health.GetCurrentHealth(MODULE, VERSION)
 			resp.Mqtt = app.mqttState()
+			if app.config.MQTT != nil {
+				resp.MqttBroker = brokerHost(app.config.MQTT.Connection)
+			}
 			resp.Meters = app.meters.Status(time.Now())
 			web.Encode(w, http.StatusOK, resp)
 		},
@@ -47,6 +51,16 @@ func (app *App) mqttState() string {
 	default:
 		return health.MqttDisconnected
 	}
+}
+
+// brokerHost is the broker as the web page shows it: host and port, never a user or password
+// someone wrote into the connection URL.
+func brokerHost(connection string) string {
+	u, err := url.Parse(connection)
+	if err != nil {
+		return ""
+	}
+	return u.Host
 }
 
 // HandleReady is a readiness probe for monitoring.
