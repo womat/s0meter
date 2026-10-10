@@ -1,0 +1,11 @@
+# golangci-lint configuration for github.com/womat/s0meter, run by make lint
+# and CI. The default linter set is kept, as in golib and ecoflow; an exclusion
+# is a decision, not convenience, and says why. There is none so far: the
+# first run (v2.14.0) reported no issues.
+#
+# Run it for Linux, never natively on macOS: the GPIO backend
+# (warthog618/go-gpiocdev via womat/golib/gpio/rpi) only compiles there, and
+# every linter needs full type information, so a darwin run aborts with
+# "undefined: uapi.*". make lint sets GOOS/GOARCH for the deployment target.
+
+version: "2"

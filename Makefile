@@ -65,7 +65,7 @@ LDFLAGS := -X 'main.buildDate=$(BUILD_DATE)' \
            -X 'main.buildCommit=$(BUILD_COMMIT)' \
            -X 'github.com/womat/s0meter/app.VERSION=$(VERSION)'
 
-.PHONY: all test release deploy_release deploy deploy_dev clean help ensure_dev_certs
+.PHONY: all test lint release deploy_release deploy deploy_dev clean help ensure_dev_certs
 
 all: help
 
@@ -81,6 +81,23 @@ clean: ## Remove build related file
 #   docker run --rm -v "$$PWD":/src -w /src golang:1.27 make test
 test: ensure_dev_certs ## run all tests with the race detector (Linux only, see comment for macOS)
 	GOOS=linux go test -race ./...
+
+# Lint tools, pinned like in CI; dependabot does not see these - raise them by hand.
+GOLANGCI_LINT_VERSION := v2.14.0
+GOVULNCHECK_VERSION   := v1.8.0
+TOOLS_BIN             := $(CURDIR)/bin/tools
+
+# The tools are built for this machine (GOOS/GOARCH cleared) but analyse the deployment
+# target: the GPIO backend only compiles for Linux, so a native run on macOS fails with
+# undefined: uapi.*. `go run` cannot do both - it would build the tool for the target.
+lint: ensure_dev_certs ## gofmt, go vet, golangci-lint (also -tags swagger) and govulncheck for $(PI_ARCH)
+	@test -z "$$(gofmt -l ./app ./cmd ./pkg)" || { echo "not gofmt'ed:"; gofmt -l ./app ./cmd ./pkg; exit 1; }
+	@GOOS= GOARCH= GOARM= GOBIN=$(TOOLS_BIN) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	@GOOS= GOARCH= GOARM= GOBIN=$(TOOLS_BIN) go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+	$(GOENV_$(PI_ARCH)) go vet ./...
+	$(GOENV_$(PI_ARCH)) $(TOOLS_BIN)/golangci-lint run ./...
+	$(GOENV_$(PI_ARCH)) $(TOOLS_BIN)/golangci-lint run --build-tags swagger ./...
+	$(GOENV_$(PI_ARCH)) $(TOOLS_BIN)/govulncheck ./...
 
 ensure_dev_certs:
 	@mkdir -p $(DEV_CERT_DIR)

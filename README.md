@@ -760,6 +760,8 @@ a breaking change of the API, the telegram or the configuration raises the major
 like `5.0.0-3-g0c13781-dirty` instead, which is how the two are told apart on a device.
 
 Building from source needs Go and `make`: clone the repository and run `make help` for the targets.
+Before a pull request, `make test` (Linux only; on macOS in a `golang` container, see the Makefile)
+and `make lint` (gofmt, go vet, golangci-lint, govulncheck - runs on macOS too) have to pass, as in CI.
 
 ### Upgrading to 6.0.0
 
