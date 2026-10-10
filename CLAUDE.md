@@ -15,6 +15,8 @@ GOOS=linux GOARCH=arm64 go vet ./...
 GOOS=linux GOARCH=arm64 go build ./...
 ```
 
+`make lint` runs gofmt, `go vet`, golangci-lint (also `-tags swagger`) and govulncheck for `$(PI_ARCH)`, as CI does; it installs the pinned tools into `bin/tools` built for the host, because `go run` would build them for the target. Exclusions in `.golangci.yml` are decisions with a why-comment each, never a disabled linter.
+
 ```sh
 make build_arm6        # Pi 1 / Zero, 32-bit OS — the deployment target
 make build_arm7        # Pi 2/3/4/Zero2, 32-bit OS
@@ -36,7 +38,7 @@ Versioning is SemVer and the Git tag is the single source of truth. `make releas
 
 Two things to keep in mind when touching `.goreleaser.yaml`: its `before` hook must keep running `make ensure_dev_certs` (GoReleaser calls `go build` directly, so the `//go:embed`-ed dev certs would otherwise be missing), and archives must keep shipping `README.md` — it carries the third-party license overview, and the statically linked Paho MQTT client is EPL-2.0. Validate changes with `goreleaser check` and `goreleaser release --snapshot --clean`.
 
-`.github/workflows/ci.yml` runs on every push/PR against `main`: a `test` job (native, `make test`) and a `build` matrix over armv6/armv7/arm64 that vets, builds (also `-tags swagger`) and runs govulncheck. `release.yml` repeats test, vet and govulncheck on the tagged commit before GoReleaser publishes. All actions are pinned to a commit SHA with the release in a comment, and `govulncheck` to a version; `.github/dependabot.yml` updates actions and Go modules weekly, but not the `go install` pins — raise those by hand.
+`.github/workflows/ci.yml` runs on every push/PR against `main`: a `test` job (native, `make test`) and a `build` matrix over armv6/armv7/arm64 that vets, builds (also `-tags swagger`) and runs golangci-lint (default linters, `.golangci.yml`, also `-tags swagger`) and govulncheck. `release.yml` repeats test, vet and govulncheck on the tagged commit before GoReleaser publishes. All actions are pinned to a commit SHA with the release in a comment, and `golangci-lint` and `govulncheck` to a version (in `ci.yml` and in the Makefile's `lint` target); `.github/dependabot.yml` updates actions and Go modules weekly, but not the `go install` pins — raise those by hand, in both places.
 
 `PI_USER`/`PI_HOST`/`PI_PATH` default to placeholders (the real host name is deliberately not in this public repo — see `f83d16e`). The actual device comes from environment variables (set once for all projects; they win over the `?=` defaults) or, project-specific, from `Makefile.local` (gitignored, pulled in via `-include`); command-line values override both. `PI_PATH` defaults to `.`, the login directory, so it is correct for any user name.
 
