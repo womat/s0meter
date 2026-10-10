@@ -163,6 +163,7 @@ type MeterStatus struct {
 	LastPulse           *time.Time `json:"lastPulse"`           // Time of the last pulse, local time, whole seconds
 	LastPulseAgeSeconds *float64   `json:"lastPulseAgeSeconds"` // Seconds since the last pulse, one decimal place
 	DroppedEvents       uint64     `json:"droppedEvents"`       // GPIO events lost since start or reload, see pulsecounter
+	MqttTopic           string     `json:"mqttTopic"`           // Topic the meter is published to, empty = not published
 	Display             Display    `json:"display"`             // Counter and gauge in the display units
 }
 
@@ -197,6 +198,7 @@ func statusOf(c pulsecounter.Counter, cfg MeterConfig, dropped uint64, now time.
 		Gpio:          cfg.Gpio,
 		Pulses:        c.Pulses,
 		DroppedEvents: dropped,
+		MqttTopic:     cfg.MqttTopic,
 		Display:       displayOf(c, cfg, now),
 	}
 	if c.TimeStamp.IsZero() {

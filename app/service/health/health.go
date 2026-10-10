@@ -30,6 +30,11 @@ type Model struct {
 	// reconnecting) or disabled when no broker is configured. Filled in by the caller.
 	Mqtt string `json:"mqtt"`
 
+	// MqttBroker is the configured broker as host:port, for the tooltip of the MQTT pill on
+	// the web page. Never user or password from the connection URL; omitted without a broker.
+	// Filled in by the caller.
+	MqttBroker string `json:"mqttBroker,omitempty"`
+
 	// Meters holds the diagnostic state per meter name: raw pulses, the last pulse and the
 	// GPIO events lost since the last start or reload. Filled in by the caller.
 	Meters map[string]s0meters.MeterStatus `json:"meters"`

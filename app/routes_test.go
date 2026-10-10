@@ -77,6 +77,45 @@ func TestHealthReportsMeterStatusAndMqtt(t *testing.T) {
 	if _, ok := got["droppedEvents"]; ok {
 		t.Error("droppedEvents is still reported at the top level; it moved into meters")
 	}
+	if _, ok := got["mqttBroker"]; ok {
+		t.Errorf("mqttBroker = %v without a broker, want it omitted", got["mqttBroker"])
+	}
+}
+
+// The web page shows the broker in the tooltip of the MQTT pill; user and password from the
+// connection URL must never reach it.
+func TestHealthReportsBrokerWithoutCredentials(t *testing.T) {
+	app := newTestApp(t)
+	app.config.MQTT = &MQTTConfig{Connection: "tcp://user:secret@192.168.1.5:1883"}
+
+	rec := serve(app, "/health", "test-key")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /health = %d, want 200", rec.Code)
+	}
+	if body := rec.Body.String(); strings.Contains(body, "secret") || strings.Contains(body, "user:") || strings.Contains(body, "user@") {
+		t.Errorf("/health leaks the broker credentials: %s", body)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["mqttBroker"] != "192.168.1.5:1883" {
+		t.Errorf("mqttBroker = %v, want host:port 192.168.1.5:1883", got["mqttBroker"])
+	}
+}
+
+func TestBrokerHost(t *testing.T) {
+	for in, want := range map[string]string{
+		"tcp://192.168.1.5:1883":              "192.168.1.5:1883",
+		"tcp://user:secret@mqtt.example:1883": "mqtt.example:1883",
+		"ssl://user@[::1]:8883":               "[::1]:8883",
+		"tcp://%zz":                           "",
+		"":                                    "",
+	} {
+		if got := brokerHost(in); got != want {
+			t.Errorf("brokerHost(%q) = %q, want %q", in, got, want)
+		}
+	}
 }
 
 func TestErrorsAreJSON(t *testing.T) {

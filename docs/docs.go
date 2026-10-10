@@ -22,7 +22,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, the MQTT connection state, and per meter the raw pulses, the time and age of the last pulse, the GPIO events lost (counted late, the gauge skips the gap) and the reading in the display units of the web UI.",
+                "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, the MQTT connection state and broker (host:port, never credentials), and per meter the raw pulses, the time and age of the last pulse, the GPIO events lost (counted late, the gauge skips the gap), the MQTT topic and the reading in the display units of the web UI.",
                 "produces": [
                     "application/json"
                 ],
@@ -219,6 +219,10 @@ const docTemplate = `{
                     "description": "Mqtt is the state of the broker connection: connected, disconnected (also while\nreconnecting) or disabled when no broker is configured. Filled in by the caller.",
                     "type": "string"
                 },
+                "mqttBroker": {
+                    "description": "MqttBroker is the configured broker as host:port, for the tooltip of the MQTT pill on\nthe web page. Never user or password from the connection URL; omitted without a broker.\nFilled in by the caller.",
+                    "type": "string"
+                },
                 "numGoroutines": {
                     "description": "Current number of active goroutines",
                     "type": "integer"
@@ -325,6 +329,10 @@ const docTemplate = `{
                 "lastPulseAgeSeconds": {
                     "description": "Seconds since the last pulse, one decimal place",
                     "type": "number"
+                },
+                "mqttTopic": {
+                    "description": "Topic the meter is published to, empty = not published",
+                    "type": "string"
                 },
                 "pulses": {
                     "description": "Raw pulse count, including restored pulses",

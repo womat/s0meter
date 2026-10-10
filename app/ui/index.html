@@ -282,6 +282,11 @@ function render(health) {
   const state = { connected: ["ok", "MQTT connected"], disconnected: ["crit", "MQTT disconnected"], disabled: ["off", "MQTT not configured"] }[health.mqtt] || ["off", "MQTT unknown"];
   mq.className = "pill " + state[0];
   mq.textContent = state[1];
+  // As on ecoflowd's page: the broker (host:port, the server never sends credentials) and the
+  // topics behind it. s0meter has one topic per meter, so the pill lists all of them.
+  const topics = [...new Set(names.map(n => meters[n].mqttTopic).filter(Boolean))].sort();
+  mq.title = health.mqttBroker ? `${health.mqttBroker} · ${topics.length ? topics.join(", ") : "no meter has an mqttTopic"}`
+    : health.mqtt === "disabled" ? "no mqtt block in the config" : "";
   $("version").textContent = health.appVersion;
   $("host").textContent = health.hostname;
   document.title = `s0meter · ${health.hostname}`;

@@ -201,7 +201,8 @@ register and the gauge, both in the meter's [display units](#display-units), the
 pulse, the raw pulse count, the dropped events and a pulse LED. The LED flashes once per counted
 pulse, spread over the 3-second refresh because the page only learns how many pulses were added;
 the wave in the logo fires whenever any meter counts. The header names the host and shows the MQTT
-state, the footer the time of the last update, the uptime and the version. The browser tab reads
+state; its tooltip names the broker as `host:port` and the topics of the meters, e.g.
+`192.168.1.5:1883 · home/wallbox, home/water`. The footer the time of the last update, the uptime and the version. The browser tab reads
 `s0meter · <host>`, so several devices can be told apart.
 
 The page refreshes every 3 seconds while the tab is visible and marks the values as stale when the
@@ -578,7 +579,9 @@ curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/health
 ```
 
 `/health` reports, besides the runtime metrics, the MQTT connection as `mqtt` (`connected`,
-`disconnected` - also while reconnecting - or `disabled` without an `mqtt` block) and per meter:
+`disconnected` - also while reconnecting - or `disabled` without an `mqtt` block), the broker as
+`mqttBroker` (`host:port` only - user and password from `mqtt.connection` are never sent; missing
+without an `mqtt` block) and per meter:
 
 ```json
 "meters": {
@@ -588,6 +591,7 @@ curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/health
     "lastPulse": "2026-10-06T14:32:05+02:00",
     "lastPulseAgeSeconds": 2.4,
     "droppedEvents": 0,
+    "mqttTopic": "home/wallbox",
     "display": {
       "counter": 34341.881,
       "counterUnit": "kWh",
@@ -602,7 +606,8 @@ curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/health
 
 `lastPulse` and `lastPulseAgeSeconds` are `null` until the first pulse after a start or reload,
 because only the pulse count is restored from the data file. The age is computed on the device, so
-it stays right even when the clock of the client differs from that of a Pi without RTC. `display`
+it stays right even when the clock of the client differs from that of a Pi without RTC.
+`mqttTopic` is the meter's configured topic, empty when it is not published. `display`
 is the reading in the meter's [display units](#display-units), as the web UI shows it.
 
 > **Changed in 5.0.0:** `droppedEvents` moved from the top level of `/health` into
