@@ -15,6 +15,8 @@ GOOS=linux GOARCH=arm64 go vet ./...
 GOOS=linux GOARCH=arm64 go build ./...
 ```
 
+The same holds for the editor: `.vscode/settings.json` sets `gopls` `build.env` to `GOOS=linux GOARCH=arm64`, otherwise gopls checks for the host and marks the GPIO code red.
+
 `make lint` runs gofmt, `go vet`, golangci-lint (also `-tags swagger`) and govulncheck for `$(PI_ARCH)`, as CI does; it installs the pinned tools into `bin/tools` built for the host, because `go run` would build them for the target. Exclusions in `.golangci.yml` are decisions with a why-comment each, never a disabled linter.
 
 ```sh
