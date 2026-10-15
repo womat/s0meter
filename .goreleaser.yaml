@@ -64,6 +64,7 @@ archives:
       - README.md
       - LICENSE
       - config/config.yaml
+      - contrib/s0meter.service
 
 checksum:
   name_template: checksums.txt

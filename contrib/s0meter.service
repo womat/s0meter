@@ -1,0 +1,75 @@
+# systemd unit for s0meter.
+#
+#   sudo useradd --system --no-create-home --shell /usr/sbin/nologin s0meter
+#   sudo usermod -aG gpio s0meter
+#   sudo install -d -o root -g root -m 0755 /opt/s0meter /opt/s0meter/bin
+#   sudo install -d -o root -g s0meter -m 0750 /opt/s0meter/etc
+#   sudo install -d -o s0meter -g s0meter -m 0750 /opt/s0meter/data
+#   sudo install -o root -g root -m 0755 s0meter /opt/s0meter/bin/s0meter
+#   sudo install -o root -g s0meter -m 0640 config/config.yaml /opt/s0meter/etc/config.yaml
+#   sudo cp contrib/s0meter.service /etc/systemd/system/
+#   sudo /opt/s0meter/bin/s0meter token add browser
+#   sudo systemctl enable --now s0meter
+#
+# Everything under /opt/s0meter belongs to root except data/, where s0meter keeps the
+# counters; the group s0meter may only read etc/. Whoever can write config.yaml or the
+# token file can add a token of their own, and whoever can write bin/s0meter can replace
+# the program. key.pem goes in as root:s0meter 0640, cert.pem as 0644.
+#
+# "systemctl reload s0meter" rereads config.yaml and the token file. A config that does
+# not load or validate ends s0meter with exit code 78, and RestartPreventExitStatus
+# keeps systemd from restarting it until the file is fixed: "systemctl status s0meter"
+# shows why.
+#
+# The sandbox: s0meter needs the network (MQTT, HTTPS), the GPIO character device and
+# write access to data/, nothing else. A logDestination file must lie in data/ as well.
+# "systemd-analyze security s0meter" rates the result.
+
+[Unit]
+Description=s0meter - S0 pulse counter to MQTT and HTTPS
+Documentation=https://github.com/womat/s0meter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=s0meter
+Group=s0meter
+ExecStart=/opt/s0meter/bin/s0meter
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+RestartPreventExitStatus=78
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ReadWritePaths=/opt/s0meter/data
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+UMask=0077
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+# Only the GPIO chip; PrivateDevices=yes would hide it.
+DevicePolicy=closed
+DeviceAllow=/dev/gpiochip0 rw
+
+[Install]
+WantedBy=multi-user.target
