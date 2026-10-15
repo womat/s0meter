@@ -22,7 +22,7 @@ var errMqttNotConnected = errors.New("mqtt broker not connected")
 //	@Description	Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, the MQTT connection state and broker (host:port, never credentials), and per meter the raw pulses, the time and age of the last pulse, the GPIO events lost (counted late, the gauge skips the gap), the MQTT topic and the reading in the display units of the web UI.
 //	@Tags			info
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Success		200	{object}	health.Model	"Health data successfully retrieved"
 //	@Failure		401	{object}	web.ApiError	"Unauthorized"
 //	@Router			/health [get]

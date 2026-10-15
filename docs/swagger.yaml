@@ -144,7 +144,7 @@ paths:
           schema:
             $ref: '#/definitions/web.ApiError'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: Get health data
       tags:
       - info
@@ -166,7 +166,7 @@ paths:
           schema:
             $ref: '#/definitions/web.ApiError'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: Get all meter readings
       tags:
       - meters
@@ -196,7 +196,7 @@ paths:
           schema:
             $ref: '#/definitions/web.ApiError'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: Get single meter reading
       tags:
       - meters
@@ -240,8 +240,9 @@ paths:
       tags:
       - info
 securityDefinitions:
-  ApiKeyAuth:
+  BearerAuth:
+    description: A token from "s0meter token add <name>", sent as "Bearer <token>".
     in: header
-    name: X-API-Key
+    name: Authorization
     type: apiKey
 swagger: "2.0"

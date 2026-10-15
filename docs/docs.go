@@ -19,7 +19,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, the MQTT connection state and broker (host:port, never credentials), and per meter the raw pulses, the time and age of the last pulse, the GPIO events lost (counted late, the gauge skips the gap), the MQTT topic and the reading in the display units of the web UI.",
@@ -50,7 +50,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Returns the current counter and gauge values for all registered S0 meters, keyed by meter name.",
@@ -84,7 +84,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Returns the current counter and gauge values for a specific S0 meter by name.",
@@ -350,9 +350,10 @@ const docTemplate = `{
         }
     },
     "securityDefinitions": {
-        "ApiKeyAuth": {
+        "BearerAuth": {
+            "description": "A token from \"s0meter token add \u003cname\u003e\", sent as \"Bearer \u003ctoken\u003e\".",
             "type": "apiKey",
-            "name": "X-API-Key",
+            "name": "Authorization",
             "in": "header"
         }
     }

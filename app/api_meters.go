@@ -12,7 +12,7 @@ import (
 //	@Description	Returns the current counter and gauge values for all registered S0 meters, keyed by meter name.
 //	@Tags			meters
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Success		200	{object}	map[string]s0meters.MeterData	"Meter readings successfully retrieved"
 //	@Failure		401	{object}	web.ApiError					"Unauthorized"
 //	@Router			/meters [get]
@@ -30,7 +30,7 @@ func (app *App) HandleMeterAll() http.Handler {
 //	@Description	Returns the current counter and gauge values for a specific S0 meter by name.
 //	@Tags			meters
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Param			name	path		string				true	"Meter name"
 //	@Success		200		{object}	s0meters.MeterData	"Meter reading successfully retrieved"
 //	@Failure		401		{object}	web.ApiError		"Unauthorized"

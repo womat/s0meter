@@ -21,7 +21,8 @@ func writeConfig(t *testing.T, content string) string {
 }
 
 func TestLoadConfigExample(t *testing.T) {
-	cfg, err := LoadConfig("../config/config.yaml")
+	// readConfig: the example names /opt/s0meter/etc/tokens, which does not exist here.
+	cfg, err := readConfig("../config/config.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,15 +59,12 @@ func TestLoadConfigEmptyFileGivesDefaults(t *testing.T) {
 
 func TestLoadConfigExpandsBracedVariablesOnly(t *testing.T) {
 	t.Setenv("S0METER_TEST_KEY", "from-env")
-	cfg, err := LoadConfig(writeConfig(t, "webserver:\n  apiKey: ${S0METER_TEST_KEY}\nmqtt:\n  connection: tcp://u:pa$word@broker:1883\n"))
+	cfg, err := LoadConfig(writeConfig(t, "mqtt:\n  connection: tcp://u:${S0METER_TEST_KEY}@broker:1883/pa$word\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Webserver.ApiKey != "from-env" {
-		t.Errorf("apiKey = %q, want from-env", cfg.Webserver.ApiKey)
-	}
-	if cfg.MQTT.Connection != "tcp://u:pa$word@broker:1883" {
-		t.Errorf("a bare $ was changed: %q", cfg.MQTT.Connection)
+	if cfg.MQTT.Connection != "tcp://u:from-env@broker:1883/pa$word" {
+		t.Errorf("connection = %q, want the variable expanded and the bare $ kept", cfg.MQTT.Connection)
 	}
 }
 
@@ -89,7 +87,7 @@ func TestExpandEnvBraces(t *testing.T) {
 // validConfig returns a config that passes Validate.
 func validConfig() *Config {
 	c := NewConfig()
-	c.Webserver.ApiKey = "0123456789abcdefXYZ"
+	c.Webserver.TokenFile = "/opt/s0meter/etc/tokens"
 	return c
 }
 
@@ -106,10 +104,10 @@ func TestValidate(t *testing.T) {
 	}
 
 	invalid := map[string]func(*Config){
-		"missing apiKey": func(c *Config) { c.Webserver.ApiKey = "" },
-		"unknown env":    func(c *Config) { c.Env = "staging" },
-		"invalid meter":  func(c *Config) { c.Meter["a"] = meterOn(1) },
-		"duplicate gpio": func(c *Config) { c.Meter["a"] = meterOn(17); c.Meter["b"] = meterOn(17) },
+		"missing tokenFile": func(c *Config) { c.Webserver.TokenFile = "" },
+		"unknown env":       func(c *Config) { c.Env = "staging" },
+		"invalid meter":     func(c *Config) { c.Meter["a"] = meterOn(1) },
+		"duplicate gpio":    func(c *Config) { c.Meter["a"] = meterOn(17); c.Meter["b"] = meterOn(17) },
 		"display unit of another quantity": func(c *Config) {
 			m := meterOn(2)
 			m.CounterUnit, m.DisplayUnit = "Wh", "m³"
@@ -133,10 +131,10 @@ func TestValidate(t *testing.T) {
 }
 
 func TestMQTTBlockPresenceAndDefaults(t *testing.T) {
-	base := "webserver:\n  apiKey: 0123456789abcdef\n"
+	base := "webserver:\n  tokenFile: /opt/s0meter/etc/tokens\n"
 	load := func(t *testing.T, content string) (*Config, error) {
 		t.Helper()
-		cfg, err := LoadConfig(writeConfig(t, base+content))
+		cfg, err := readConfig(writeConfig(t, base+content))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -172,25 +170,6 @@ func TestMQTTBlockPresenceAndDefaults(t *testing.T) {
 	for _, content := range []string{"mqtt:\n  connection: \"\"\n", "mqtt:\n  publishInterval: 30s\n"} {
 		if _, err = load(t, content); err == nil || !strings.Contains(err.Error(), "delete the mqtt block") {
 			t.Errorf("Validate() = %v for %q, want the hint to delete the mqtt block", err, content)
-		}
-	}
-}
-
-func TestWarnings(t *testing.T) {
-	c := validConfig()
-	if w := c.Warnings(); len(w) != 0 {
-		t.Errorf("strong key: unexpected warnings %v", w)
-	}
-
-	for _, key := range []string{"Xq7z", "changeme!", "my-ChangeMe-key-that-is-long"} {
-		c.Webserver.ApiKey = key
-		w := c.Warnings()
-		if len(w) != 1 {
-			t.Errorf("key %q: warnings = %v, want one", key, w)
-			continue
-		}
-		if strings.Contains(w[0], key) {
-			t.Errorf("warning leaks the key: %q", w[0])
 		}
 	}
 }

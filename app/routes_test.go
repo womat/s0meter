@@ -16,17 +16,18 @@ import (
 func newTestApp(t *testing.T) *App {
 	t.Helper()
 	cfg := NewConfig()
-	cfg.Webserver.ApiKey = "test-key"
+	cfg.Webserver.Tokens = []web.Token{{Name: "test", Hash: web.HashToken("test-key")}}
 	app := &App{config: cfg, web: &http.Server{}, meters: s0meters.New()}
 	app.SetupRoutes()
 	return app
 }
 
-func serve(app *App, path, key string) *httptest.ResponseRecorder {
+// serve sends a GET for path, with token as bearer token unless it is empty.
+func serve(app *App, path, token string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	req.RemoteAddr = "127.0.0.1:1234"
-	if key != "" {
-		req.Header.Set("X-API-Key", key)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	rec := httptest.NewRecorder()
 	app.web.Handler.ServeHTTP(rec, req)
@@ -38,7 +39,7 @@ func TestUIIsPublicAndOnlyAtRoot(t *testing.T) {
 
 	rec := serve(app, "/", "")
 	if rec.Code != http.StatusOK {
-		t.Fatalf("GET / = %d, want 200 without API key", rec.Code)
+		t.Fatalf("GET / = %d, want 200 without a token", rec.Code)
 	}
 	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
 		t.Errorf("Content-Type = %q, want text/html", ct)
@@ -57,7 +58,7 @@ func TestHealthReportsMeterStatusAndMqtt(t *testing.T) {
 	app := newTestApp(t)
 
 	if rec := serve(app, "/health", ""); rec.Code != http.StatusUnauthorized {
-		t.Errorf("GET /health without key = %d, want 401", rec.Code)
+		t.Errorf("GET /health without a token = %d, want 401", rec.Code)
 	}
 
 	rec := serve(app, "/health", "test-key")

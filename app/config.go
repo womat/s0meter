@@ -10,9 +10,9 @@ import (
 	"regexp"
 	"slices"
 	"sort"
-	"strings"
 	"time"
 
+	"github.com/womat/golib/web"
 	"github.com/womat/s0meter/app/service/s0meters"
 	"gopkg.in/yaml.v3"
 )
@@ -36,13 +36,15 @@ type Config struct {
 
 // WebserverConfig holds HTTPS server settings.
 type WebserverConfig struct {
-	ListenHost string   `yaml:"listenHost"` // Host address for web server
-	ListenPort int      `yaml:"listenPort"` // Port for web server
-	ApiKey     string   `yaml:"apiKey"`     // API key for requests
-	KeyFile    string   `yaml:"keyFile"`    // SSL private key file
-	CertFile   string   `yaml:"certFile"`   // SSL certificate file
-	BlockedIPs []string `yaml:"blockedIPs"` // Forbidden IP addresses or networks
-	AllowedIPs []string `yaml:"allowedIPs"` // Allowed IP addresses or networks
+	ListenHost string      `yaml:"listenHost"` // Host address for web server
+	ListenPort int         `yaml:"listenPort"` // Port for web server
+	ApiKey     string      `yaml:"apiKey"`     // Removed in v7; only read to name the replacement
+	TokenFile  string      `yaml:"tokenFile"`  // File with the accepted bearer tokens as SHA-256 hashes
+	Tokens     []web.Token `yaml:"-"`          // Read from TokenFile by LoadConfig
+	KeyFile    string      `yaml:"keyFile"`    // SSL private key file
+	CertFile   string      `yaml:"certFile"`   // SSL certificate file
+	BlockedIPs []string    `yaml:"blockedIPs"` // Forbidden IP addresses or networks
+	AllowedIPs []string    `yaml:"allowedIPs"` // Allowed IP addresses or networks
 }
 
 // MQTTConfig holds MQTT client settings. MQTT is on when the mqtt block is present.
@@ -93,19 +95,50 @@ func NewConfig() *Config {
 var envBraces = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
 // expandEnvBraces replaces ${VAR} with the value of the environment variable VAR, or with an
-// empty string when it is unset. Unlike os.ExpandEnv it leaves every other "$" alone, so an API
-// key or password containing "$" is not silently cut short.
+// empty string when it is unset. Unlike os.ExpandEnv it leaves every other "$" alone, so a
+// password containing "$" is not silently cut short.
 func expandEnvBraces(s string) string {
 	return envBraces.ReplaceAllStringFunc(s, func(ref string) string {
 		return os.Getenv(envBraces.FindStringSubmatch(ref)[1])
 	})
 }
 
-// LoadConfig loads configuration from a YAML file and expands ${VAR} environment references.
+// LoadConfig loads configuration from a YAML file and expands ${VAR} environment references,
+// then reads the bearer tokens from webserver.tokenFile.
 //
 // Unknown keys are an error rather than ignored, so a misspelled or renamed key cannot silently
-// leave its setting at the default.
+// leave its setting at the default. A token file that is missing or broken is an error too: the
+// service would otherwise start and reject every request with 401. Since a SIGHUP reload goes
+// through here, a token added with "s0meter token add" applies on reload.
 func LoadConfig(fileName string) (*Config, error) {
+	cfg, err := readConfig(fileName)
+	if err != nil {
+		return cfg, err
+	}
+
+	if cfg.Webserver.TokenFile != "" {
+		if cfg.Webserver.Tokens, err = web.ReadTokenFile(cfg.Webserver.TokenFile); err != nil {
+			return cfg, fmt.Errorf("token file: %w", err)
+		}
+	}
+
+	return cfg, nil
+}
+
+// TokenFile returns webserver.tokenFile of the config file, without reading the token file
+// itself - "s0meter token add" has to work before that file exists.
+func TokenFile(fileName string) (string, error) {
+	cfg, err := readConfig(fileName)
+	if err != nil {
+		return "", err
+	}
+	return cfg.Webserver.TokenFile, nil
+}
+
+// readConfig loads the config file alone. A relative tokenFile is resolved against the
+// directory of the config file, so the service and "s0meter token" find the same file wherever
+// they are started from.
+func readConfig(fileName string) (*Config, error) {
 	cfg := NewConfig()
 
 	fileInfo, err := os.Stat(fileName)
@@ -127,6 +160,10 @@ func LoadConfig(fileName string) (*Config, error) {
 		return cfg, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
+	if f := cfg.Webserver.TokenFile; f != "" && !filepath.IsAbs(f) {
+		cfg.Webserver.TokenFile = filepath.Join(filepath.Dir(fileName), f)
+	}
+
 	return cfg, nil
 }
 
@@ -137,8 +174,12 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid environment: %s, must be %s or %s", c.Env, ProdEnv, DevEnv)
 	}
 
-	if c.Webserver.ApiKey == "" {
-		return errors.New("ApiKey is not configured")
+	if c.Webserver.ApiKey != "" {
+		return errors.New(`webserver.apiKey is no longer supported; create a token with ` +
+			`"s0meter token add <name>" and set webserver.tokenFile`)
+	}
+	if c.Webserver.TokenFile == "" {
+		return errors.New(`webserver.tokenFile is not configured; create a token with "s0meter token add <name>"`)
 	}
 
 	validLogLevels := []string{"debug", "info", "warning", "warn", "error"}
@@ -208,23 +249,4 @@ func (m *MQTTConfig) validate() error {
 	}
 
 	return nil
-}
-
-// minApiKeyLength is the length below which Warnings flags the API key as weak.
-const minApiKeyLength = 16
-
-// Warnings returns findings that do not stop the service but should be fixed. It never includes
-// secret values.
-func (c *Config) Warnings() []string {
-	var warnings []string
-
-	key := c.Webserver.ApiKey
-	switch {
-	case strings.Contains(strings.ToLower(key), "changeme"):
-		warnings = append(warnings, "apiKey is still the example value from the documentation; set a random key")
-	case len(key) < minApiKeyLength:
-		warnings = append(warnings, fmt.Sprintf("apiKey is shorter than %d characters; use a longer random key", minApiKeyLength))
-	}
-
-	return warnings
 }

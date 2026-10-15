@@ -1,8 +1,8 @@
 package app
 
-// HTTP routes and global middleware. The diagnostic page at /, /version and /ready are public; /health and the
-// meter readings require the API key (X-Api-Key). Swagger UI is registered only in
-// builds with the swagger tag. Middleware, outermost first: logging, IP filter, CORS.
+// HTTP routes and global middleware. The diagnostic page at /, /version and /ready are public; /health
+// and the meter readings require a bearer token from the token file. Swagger UI is registered
+// only in builds with the swagger tag. Middleware, outermost first: logging, IP filter, CORS.
 
 import (
 	"log/slog"
@@ -13,11 +13,7 @@ import (
 
 // SetupRoutes configures all HTTP routes and global middleware for the application.
 func (app *App) SetupRoutes() {
-	// API key only: with JwtSecret and JwtID left empty, golib's JWT path stays disabled.
-	webCfg := web.Config{
-		ApiKey:  app.config.Webserver.ApiKey,
-		AppName: MODULE,
-	}
+	webCfg := app.webConfig()
 
 	mux := http.NewServeMux()
 
@@ -41,16 +37,18 @@ func (app *App) SetupRoutes() {
 	// GET and the preflight OPTIONS only.
 	handler := web.WithCORS(mux, web.WithAllowedMethods(http.MethodGet, http.MethodOptions))
 	handler = web.WithIPFilter(handler, app.config.Webserver.AllowedIPs, app.config.Webserver.BlockedIPs)
-	handler = WithLogging(handler)
+	// One entry per request with client and caller. The web page polls every few seconds, so
+	// successful requests go to Debug; a rejected one shows as a warning.
+	handler = web.WithLogging(handler, slog.Default(), web.WithSuccessLevel(slog.LevelDebug))
 	app.web.Handler = handler
 }
 
-func WithLogging(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		slog.Debug("Incoming web request",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"client_ip", r.RemoteAddr)
-		next.ServeHTTP(w, r)
-	})
+// webConfig is the authentication of the protected routes: the bearer tokens from the token
+// file, nothing else. With ApiKey, JwtSecret and JwtID left empty, golib's other paths stay
+// disabled.
+func (app *App) webConfig() web.Config {
+	return web.Config{
+		Tokens:  app.config.Webserver.Tokens,
+		AppName: MODULE,
+	}
 }
