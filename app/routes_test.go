@@ -139,8 +139,4 @@ func TestErrorsAreJSON(t *testing.T) {
 			t.Errorf("GET %s body = %s, want {\"error\":%q}", tc.path, rec.Body, tc.msg)
 		}
 	}
-
-	if rec := serve(app, "/ready", ""); rec.Code != http.StatusOK {
-		t.Errorf("GET /ready without a broker = %d, want 200", rec.Code)
-	}
 }

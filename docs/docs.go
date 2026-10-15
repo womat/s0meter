@@ -126,35 +126,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/ready": {
-            "get": {
-                "description": "Returns 200 while the service delivers readings, 503 while a configured MQTT broker is not connected. No authentication required.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "info"
-                ],
-                "summary": "Readiness check",
-                "responses": {
-                    "200": {
-                        "description": "Application is ready",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "503": {
-                        "description": "MQTT broker not connected",
-                        "schema": {
-                            "$ref": "#/definitions/web.ApiError"
-                        }
-                    }
-                }
-            }
-        },
         "/version": {
             "get": {
                 "description": "Returns the current application name and version. No authentication required.",
