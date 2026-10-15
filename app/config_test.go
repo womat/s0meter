@@ -21,7 +21,7 @@ func writeConfig(t *testing.T, content string) string {
 }
 
 func TestLoadConfigExample(t *testing.T) {
-	// readConfig: the example names /opt/s0meter/etc/tokens, which does not exist here.
+	// readConfig: the example names /opt/s0meter/etc/token-hashes, which does not exist here.
 	cfg, err := readConfig("../config/config.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +87,7 @@ func TestExpandEnvBraces(t *testing.T) {
 // validConfig returns a config that passes Validate.
 func validConfig() *Config {
 	c := NewConfig()
-	c.Webserver.TokenFile = "/opt/s0meter/etc/tokens"
+	c.Webserver.TokenFile = "/opt/s0meter/etc/token-hashes"
 	return c
 }
 
@@ -131,7 +131,7 @@ func TestValidate(t *testing.T) {
 }
 
 func TestMQTTBlockPresenceAndDefaults(t *testing.T) {
-	base := "webserver:\n  tokenFile: /opt/s0meter/etc/tokens\n"
+	base := "webserver:\n  tokenFile: /opt/s0meter/etc/token-hashes\n"
 	load := func(t *testing.T, content string) (*Config, error) {
 		t.Helper()
 		cfg, err := readConfig(writeConfig(t, base+content))

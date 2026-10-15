@@ -30,7 +30,7 @@ webserver:
   # Bearer tokens accepted on the protected endpoints, one "<name> <sha256>" per line.
   # Manage it with "s0meter token add|remove|list"; a relative path is relative to this file.
   # The file holds hashes only, but whoever can write it can add a token: owner root.
-  tokenFile: /opt/s0meter/etc/tokens
+  tokenFile: /opt/s0meter/etc/token-hashes
 
   # TLS private key file
   keyFile: /opt/s0meter/etc/key.pem
