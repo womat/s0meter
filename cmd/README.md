@@ -29,17 +29,17 @@ s0meter token list [--config FILE]
 The config file path can also be set via the environment variable `CONFIG_FILE`.
 
 `--version` prints the semantic version the binary was built from. It is injected from the Git tag
-at build time, so an official release reports a plain `4.7.0`, while a local development build
-reports a descriptive fallback such as `4.7.0-5-g0c13781-dirty` or `dev`. `--about` additionally
+at build time, so an official release reports a plain `7.0.1`, while a local development build
+reports a descriptive fallback such as `7.0.1-5-g0c13781-dirty` or `dev`. `--about` additionally
 shows the build date and commit.
 
 **Examples:**
 
 ```bash
-s0meter --config /etc/s0meter/config.yaml
+s0meter --config /opt/s0meter/etc/config.yaml
 s0meter --debug
 s0meter --version
-CONFIG_FILE=/etc/s0meter/config.yaml s0meter
+CONFIG_FILE=/opt/s0meter/etc/config.yaml s0meter
 ```
 
 `SIGHUP` reloads the configuration and the token file; a file that does not load or validate is

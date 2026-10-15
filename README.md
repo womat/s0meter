@@ -62,7 +62,7 @@ No cloud, no database, no runtime: a single binary, configured with one YAML fil
 | `linux_arm64`  | Pi 3 / 4 / 5 / Zero 2 W with a 64-bit OS     |
 
 ```sh
-VERSION=5.0.0 ARCH=armv6        # see the release page for the latest version
+VERSION=7.0.1 ARCH=armv6        # see the release page for the latest version
 BASE=https://github.com/womat/s0meter/releases/download/v$VERSION
 curl -LO $BASE/s0meter_${VERSION}_linux_$ARCH.tar.gz -LO $BASE/checksums.txt
 sha256sum -c checksums.txt --ignore-missing
@@ -524,9 +524,6 @@ myhome/wallbox/summary  {"meter":"wallbox","timestamp":"2026-10-04T22:50:35+02:0
 The keys follow the telegrams of ecoflowd: camelCase, `timestamp` as one word, the device named in
 every telegram. The units travel with the values because they are configured per meter.
 
-> **Changed in 4.8.0:** `timeStamp` is now `timestamp`, in whole seconds instead of
-> nanoseconds, and `meter` is new. Consumers that read `timeStamp` have to be adapted.
-
 ### When a meter is published
 
 A meter is published **as soon as a new pulse has been counted** — even when the pulse does not
@@ -611,10 +608,6 @@ it stays right even when the clock of the client differs from that of a Pi witho
 `mqttTopic` is the meter's configured topic, empty when it is not published. `display`
 is the reading in the meter's [display units](#display-units), as the web UI shows it.
 
-> **Changed in 5.0.0:** `droppedEvents` moved from the top level of `/health` into
-> `meters.<name>.droppedEvents`; `mqtt` and `meters` are new. Monitoring that reads
-> `droppedEvents` has to be adapted. The telegram (MQTT, `/meters`) is unchanged.
-
 ---
 
 ## Command-line Flags
@@ -635,10 +628,10 @@ over it.
 **Examples:**
 
 ```bash
-s0meter --config /etc/s0meter/config.yaml
+s0meter --config /opt/s0meter/etc/config.yaml
 s0meter --debug
 s0meter --version
-CONFIG_FILE=/etc/s0meter/config.yaml s0meter
+CONFIG_FILE=/opt/s0meter/etc/config.yaml s0meter
 ```
 
 ---
@@ -819,7 +812,7 @@ plus a `checksums.txt` and a changelog. Versions follow [semantic versioning](ht
 a breaking change of the API, the telegram or the configuration raises the major version.
 
 `s0meter --version` reports the release a binary was built from. A local build reports something
-like `5.0.0-3-g0c13781-dirty` instead, which is how the two are told apart on a device.
+like `7.0.1-3-g0c13781-dirty` instead, which is how the two are told apart on a device.
 
 Building from source needs Go and `make`: clone the repository and run `make help` for the targets.
 Before a pull request, `make test` (Linux only; on macOS in a `golang` container, see the Makefile)
@@ -844,18 +837,6 @@ lives in the repository:
    page asks for the token once.
 6. Monitoring that polled `/ready` reads `mqtt` from `/health` instead, with a token.
 7. A client limited to TLS 1.2 can no longer connect.
-
-### Upgrading to 6.0.0
-
-MQTT is switched by the presence of the `mqtt` block instead of an empty `connection`:
-
-| 5.x                                   | 6.0.0                                                  |
-|---------------------------------------|--------------------------------------------------------|
-| `mqtt.connection: ""` turns MQTT off  | delete or comment out the `mqtt` block                 |
-| no `mqtt` block: defaults, MQTT off   | unchanged: MQTT off                                    |
-| `mqtt` block with a broker            | unchanged                                              |
-
-An `mqtt` block without `connection` is refused with a message that says so.
 
 ---
 
