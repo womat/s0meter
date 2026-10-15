@@ -9,6 +9,9 @@ rates, publishes the results via MQTT and shows them on a built-in web page (`ht
 
 ```text
 s0meter [--config FILE] [--debug] [--version] [--about] [--help]
+s0meter token add <name> [--config FILE] [--dry-run]
+s0meter token remove <name> [--config FILE] [--dry-run]
+s0meter token list [--config FILE]
 ```
 
 ---
@@ -39,6 +42,24 @@ s0meter --version
 CONFIG_FILE=/etc/s0meter/config.yaml s0meter
 ```
 
+`SIGHUP` reloads the configuration and the token file; a file that does not load or validate is
+refused and the running configuration stays. A config that does not load or validate at start ends
+s0meter with exit code 78.
+
+---
+
+## Tokens
+
+`/health` and `/meters` need `Authorization: Bearer <token>`. s0meter keeps only the SHA-256 hash of
+each token, in the file named by `webserver.tokenFile`, one `<name> <hash>` per line.
+
+- `s0meter token add <name>` writes the hash and prints the token once, on stdout alone.
+- `s0meter token remove <name>` deletes it, `s0meter token list` prints the names.
+- `--dry-run` prints what would be done and writes nothing.
+- `systemctl reload s0meter` applies a change.
+
+Run them with `sudo`: the token file belongs to root.
+
 ---
 
 ## Configuration
@@ -46,7 +67,7 @@ CONFIG_FILE=/etc/s0meter/config.yaml s0meter
 The configuration file is a YAML file. By default it is loaded from `/opt/s0meter/etc/config.yaml`.
 
 Environment variables are expanded inside the file in the `${VAR}` form only, e.g.
-`apiKey: ${S0METER_API_KEY}`. Unknown keys are rejected.
+`connection: tcp://s0meter:${MQTT_PASSWORD}@broker:1883`. Unknown keys are rejected.
 
 Every key is documented in the example configuration (`config/config.yaml`) and in the project
 README: <https://github.com/womat/s0meter#configuration>.

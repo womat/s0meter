@@ -43,7 +43,8 @@ No cloud, no database, no runtime: a single binary, configured with one YAML fil
 - **Persistent counters**: saved every `backupInterval` and on shutdown, written atomically so a
   power cut cannot corrupt the file (it costs at most the pulses since the last save)
 - **Lost pulses recovered**: pulses the GPIO layer dropped are counted late, not lost
-- **HTTPS REST API** with API key, IP allowlist / blocklist
+- **HTTPS REST API** (TLS 1.3) with one bearer token per caller, stored only as a SHA-256 hash and
+  managed with `s0meter token`; IP allowlist / blocklist; the log names who calls
 - **Hot reload** of the configuration via `SIGHUP`; a broken file is refused, counting goes on
 - Release builds for every Raspberry Pi architecture, from the **Pi Zero (ARMv6)** to 64-bit
   systems; developed and run on a Pi Zero
@@ -68,54 +69,52 @@ sha256sum -c checksums.txt --ignore-missing
 tar xzf s0meter_${VERSION}_linux_$ARCH.tar.gz
 ```
 
-**2. Install** binary, example configuration and a certificate:
+**2. Install** binary, example configuration and a certificate. Everything belongs to root except
+`data/`, where s0meter keeps the counters; the service user `s0meter` may read `etc/`:
 
 ```sh
 sudo groupadd -r -f s0meter
 sudo useradd -r -s /usr/sbin/nologin -g s0meter s0meter
 sudo usermod -aG gpio s0meter
-sudo mkdir -p /opt/s0meter/{bin,etc,data}
+sudo install -d -o root -g root -m 755 /opt/s0meter /opt/s0meter/bin
+sudo install -d -o root -g s0meter -m 750 /opt/s0meter/etc
+sudo install -d -o s0meter -g s0meter -m 750 /opt/s0meter/data
 
-sudo install -m 755 s0meter /opt/s0meter/bin/
-sudo install -m 640 config/config.yaml /opt/s0meter/etc/
+sudo install -o root -g root -m 755 s0meter /opt/s0meter/bin/
+sudo install -o root -g s0meter -m 640 config/config.yaml /opt/s0meter/etc/
 sudo openssl req -x509 -nodes -newkey rsa:2048 -days 825 \
   -keyout /opt/s0meter/etc/key.pem -out /opt/s0meter/etc/cert.pem -subj "/CN=$(hostname)"
-sudo chown -R s0meter:s0meter /opt/s0meter
+sudo chown root:s0meter /opt/s0meter/etc/key.pem /opt/s0meter/etc/cert.pem
+sudo chmod 640 /opt/s0meter/etc/key.pem
 ```
 
-**3. Configure** `/opt/s0meter/etc/config.yaml`: set `env: prod`, a random `apiKey`
-(`openssl rand -hex 24`), your MQTT broker (or delete the `mqtt` block) and one entry per meter — see
-[Configuration](#configuration) and [Wiring](#wiring).
+Why root: whoever can write `config.yaml` or the token file can add a token of their own, and
+whoever can write `bin/s0meter` can replace the program. s0meter itself needs neither.
 
-**4. Start** it as a service and open the firewall:
+**3. Configure** `/opt/s0meter/etc/config.yaml`: set `env: prod`, your MQTT broker (or delete the
+`mqtt` block) and one entry per meter — see [Configuration](#configuration) and [Wiring](#wiring).
+Then create a token for each caller, here the browser:
 
 ```sh
-sudo tee /etc/systemd/system/s0meter.service > /dev/null <<'EOF'
-[Unit]
-Description=s0meter — S0 Pulse Energy Monitor
-After=network-online.target
-Wants=network-online.target
+sudo /opt/s0meter/bin/s0meter token add browser
+```
 
-[Service]
-User=s0meter
-Group=s0meter
-Type=simple
-ExecStart=/opt/s0meter/bin/s0meter
-ExecReload=/bin/kill -HUP $MAINPID
-Restart=on-failure
-RestartSec=5
+It prints the token once; keep it, e.g. in a password manager. See [Tokens](#tokens).
 
-[Install]
-WantedBy=multi-user.target
-EOF
+**4. Start** it as a service, with the unit from the archive, and open the firewall:
 
+```sh
+sudo install -m 644 contrib/s0meter.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now s0meter
 sudo ufw allow 8443/tcp          # if ufw is active
 journalctl -u s0meter -n 20      # "Module started successfully"
 ```
 
-**5. Open** `https://<your-pi>:8443/`, accept the self-signed certificate and enter the API key.
+The unit runs s0meter in a sandbox: no capabilities, a read-only system except `data/`, only the
+GPIO chip as a device. A `logDestination` file has to go to `data/` as well.
+
+**5. Open** `https://<your-pi>:8443/`, accept the self-signed certificate and enter the token.
 
 Raspberry Pi OS often keeps the journal in RAM only, so the log of a crash is gone after the reboot.
 Check with `grep Storage /etc/systemd/journald.conf`; if it says `volatile` or is unset, make it
@@ -208,9 +207,9 @@ state; its tooltip names the broker as `host:port` and the topics of the meters,
 The page refreshes every 3 seconds while the tab is visible and marks the values as stale when the
 device stops answering.
 
-The page itself is public and contains no data. On the first visit it asks for the API key, keeps
-it in the browser's local storage and sends it as `X-API-Key` to `/health`; "Sign
-out" removes it, and a rejected key brings the prompt back. It is a single file embedded in the
+The page itself is public and contains no data. On the first visit it asks for a token
+(`s0meter token add browser`), keeps it in the browser's local storage and sends it as a bearer
+token to `/health`; "Sign out" removes it, and a rejected token brings the prompt back. It is a single file embedded in the
 binary, with no external fonts or scripts, so it works without internet access.
 
 ---
@@ -219,8 +218,8 @@ binary, with no external fonts or scripts, so it works without internet access.
 
 Default location: `/opt/s0meter/etc/config.yaml`
 Environment variables are expanded inside the file in the `${VAR}` form only, e.g.
-`apiKey: ${S0METER_API_KEY}`; an unset variable becomes empty. Any other `$` is kept literally, so
-keys and passwords may contain it. Unknown keys are rejected, so a misspelled or renamed setting
+`connection: tcp://s0meter:${MQTT_PASSWORD}@broker:1883`; an unset variable becomes empty. Any
+other `$` is kept literally, so passwords may contain it. Unknown keys are rejected, so a misspelled or renamed setting
 stops the start instead of silently keeping its default. Durations need a unit (`10ms`, `2s`, `1m`):
 a bare number, `0` included, is rejected.
 
@@ -254,8 +253,10 @@ webserver:
   # Port the HTTPS server listens on
   listenPort: 8443
 
-  # Global API key for protected endpoints
-  apiKey: changeme!
+  # Bearer tokens accepted on the protected endpoints, one "<name> <sha256>" per line.
+  # Manage it with "s0meter token add|remove|list"; a relative path is relative to this file.
+  # The file holds hashes only, but whoever can write it can add a token: owner root.
+  tokenFile: /opt/s0meter/etc/tokens
 
   # TLS private key file
   keyFile: /opt/s0meter/etc/key.pem
@@ -554,28 +555,28 @@ timeout, and resumes automatically once the client reconnects.
 |--------|------------------|---------|-------------------------------------------|
 | GET    | `/`              | —       | Diagnostic web page, see [Web UI](#web-ui) |
 | GET    | `/version`       | —       | Application name and version              |
-| GET    | `/ready`         | —       | Readiness probe: 200, or 503 while the configured MQTT broker is not connected |
-| GET    | `/health`        | API Key | Runtime metrics, MQTT state, diagnostics per meter |
-| GET    | `/meters`        | API Key | Current reading of all meters             |
-| GET    | `/meters/{name}` | API Key | Current reading of a single meter         |
+| GET    | `/health`        | Token   | Runtime metrics, MQTT state, diagnostics per meter |
+| GET    | `/meters`        | Token   | Current reading of all meters             |
+| GET    | `/meters/{name}` | Token   | Current reading of a single meter         |
 
-Authentication via the `X-API-Key` header. Errors are returned as `{"error": "..."}` with the HTTP status
-(401, 404 for an unknown meter, 503 from `/ready`).
+Authentication with a bearer token from `s0meter token add`: `Authorization: Bearer <token>`. HTTPS
+is TLS 1.3 only. Errors are returned as `{"error": "..."}` with the HTTP status (401 without a valid
+token, 404 for an unknown meter).
 
 ### Examples
 
 ```sh
 # List meters
-curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/meters
+curl -k -H "Authorization: Bearer $TOKEN" https://localhost:8443/meters
 
 # Get meter data
-curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/meters/{name}
+curl -k -H "Authorization: Bearer $TOKEN" https://localhost:8443/meters/{name}
 
 # Application version (no auth required)
 curl -k https://localhost:8443/version
 
 # Health check
-curl -k -H "X-Api-Key: your-api-key" https://localhost:8443/health
+curl -k -H "Authorization: Bearer $TOKEN" https://localhost:8443/health
 ```
 
 `/health` reports, besides the runtime metrics, the MQTT connection as `mqtt` (`connected`,
@@ -626,7 +627,10 @@ is the reading in the meter's [display units](#display-units), as the web UI sho
 | `--about`   | `false`                        | Print application details and exit                                  |
 | `--help`    | `false`                        | Print this help message and exit                                    |
 
-The config file path can also be set via the environment variable `CONFIG_FILE`.
+`s0meter token add|remove|list` manages the bearer tokens, see [Tokens](#tokens).
+
+The config file path can also be set via the environment variable `CONFIG_FILE`; `--config` wins
+over it.
 
 **Examples:**
 
@@ -636,6 +640,44 @@ s0meter --debug
 s0meter --version
 CONFIG_FILE=/etc/s0meter/config.yaml s0meter
 ```
+
+---
+
+## Tokens
+
+Every caller gets its own token: a browser, Node-RED, a script. s0meter keeps only the SHA-256 hash
+of each, in the file named by `webserver.tokenFile`, one line per caller:
+
+```
+# /opt/s0meter/etc/tokens
+browser  3f2a…c91e
+nodered  8b04…d7a2
+```
+
+The token itself exists only with the caller. Whoever reads the file cannot call s0meter with it, so
+it needs no more protection than the config — but whoever can **write** it can add a token of their
+own: keep it `root:s0meter 0640`, like `config.yaml`.
+
+| Command | Does |
+|---|---|
+| `sudo s0meter token add <name>` | Writes the hash, then prints the token once, on stdout alone |
+| `sudo s0meter token add <name> -dry-run` | Prints token and line, writes nothing |
+| `sudo s0meter token remove <name>` | Deletes the line |
+| `sudo s0meter token list` | Prints the names, never a hash |
+| `sudo systemctl reload s0meter` | Applies a change |
+
+`-config` works as for the service. A new token file gets `0640` and the owner and group of
+`config.yaml`. `add` refuses a name that is taken and prints no token when it cannot write the
+file, so a token that is shown but stored nowhere cannot happen. A name is 1–64 letters, digits,
+`.`, `_` or `-`.
+
+**Rotating without a gap:** `s0meter token add nodered-2`, move the caller to the new token,
+`s0meter token remove nodered`, reload. A lost token is not recovered but replaced the same way.
+
+**In the log:** at start and after every reload s0meter names the tokens it accepts
+(`Bearer tokens loaded … names=[browser nodered]`). The first request of each caller from each
+address is logged at info (`user=browser request.client=… firstAccess=true`), every rejected one
+as a warning with its address; the requests in between, the web page polls every 3 s, at debug.
 
 ---
 
@@ -686,14 +728,33 @@ reload is refused with `Config reload rejected, keeping the running configuratio
 service keeps counting with its current settings - fix the file and reload again. Some problems only
 show when the service starts with the new settings: a missing TLS certificate, a port or GPIO line in
 use. Then `Start with the new configuration failed, continuing with the previous one` is logged and
-the service starts again with the settings it ran with before. Warnings such as a short `apiKey` are
-logged after every start and reload.
+the service starts again with the settings it ran with before. A reload also rereads the token
+file, so a token added or removed with `s0meter token` applies without a restart.
 
 ```sh
 sudo systemctl reload s0meter          # requires ExecReload in the unit, see Quick start
 # or, independent of the unit file:
 sudo systemctl kill -s HUP s0meter
 ```
+
+---
+
+## Security
+
+- The REST API and the web page are served over HTTPS only, TLS 1.3. Use your own certificate and
+  `env: prod` on every device, see [TLS Certificate](#tls-certificate).
+- Give every caller its own token (`s0meter token add <name>`); everything except `/`, `/version`
+  and the TLS handshake needs one. s0meter stores only their hashes and logs who calls. The API is
+  read-only: it cannot change a counter.
+- Keep `/opt/s0meter` owned by root except `data/`, as in the [Quick start](#quick-start), and run
+  the unit from `contrib/` with its sandbox.
+- Limit who can reach the port with `allowedIPs`, e.g. to your home network, and do not expose it
+  to the internet.
+- `mqtt.connection` may carry a broker password; keep the config file readable for root and the
+  group `s0meter` only (`640`, as in the Quick start) or pass the password in an environment
+  variable.
+
+Report vulnerabilities privately, see [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -726,8 +787,9 @@ before a stop or reload, with no pulse after it, is not recovered. The count sta
 start or reload, and anything above 0 means the device is struggling to keep up.
 
 **Service is `dead` immediately after start**
-A configuration error; the process exits with code 1 before the logger is even in place, so the
-reason is printed on stdout: `Failed to load config file` (YAML could not be parsed - durations such
+A configuration error; the process exits with code 78 before the logger is even in place, and the
+unit does not restart it (`RestartPreventExitStatus=78`). `systemctl status s0meter` shows the
+reason: `Failed to load config file` (YAML could not be parsed - durations such
 as `backupInterval` must be Go duration strings like `60s`, not plain numbers; `field … not found`
 names a key that does not exist, often a misspelled or renamed one) or `config validation failed`,
 for example for a `displayUnit` that cannot be converted. Once the logger is up, `Failed to load
@@ -742,8 +804,7 @@ meter data` in the log means the `dataFile` is empty or damaged — see [Correct
 sudo tar czf /tmp/s0meter-backup.tar.gz /opt/s0meter
 
 # Restore
-sudo tar xzf /tmp/s0meter-backup.tar.gz -C /
-sudo chown -R s0meter:s0meter /opt/s0meter
+sudo tar xzf /tmp/s0meter-backup.tar.gz -C /     # as root, tar keeps owners and modes
 sudo systemctl restart s0meter
 ```
 
@@ -752,7 +813,8 @@ sudo systemctl restart s0meter
 ## Releases
 
 Every release on the [releases page](https://github.com/womat/s0meter/releases) carries archives for
-all Raspberry Pi architectures with the binary, `config/config.yaml`, `README.md` and `LICENSE`,
+all Raspberry Pi architectures with the binary, `config/config.yaml`, `contrib/s0meter.service`,
+`README.md` and `LICENSE`,
 plus a `checksums.txt` and a changelog. Versions follow [semantic versioning](https://semver.org/);
 a breaking change of the API, the telegram or the configuration raises the major version.
 
@@ -762,6 +824,26 @@ like `5.0.0-3-g0c13781-dirty` instead, which is how the two are told apart on a 
 Building from source needs Go and `make`: clone the repository and run `make help` for the targets.
 Before a pull request, `make test` (Linux only; on macOS in a `golang` container, see the Makefile)
 and `make lint` (gofmt, go vet, golangci-lint, govulncheck - runs on macOS too) have to pass, as in CI.
+
+### Upgrading to 7.0.0
+
+The API key is replaced by bearer tokens, HTTPS is TLS 1.3 only, `/ready` is gone, and the unit
+lives in the repository:
+
+1. Make `/opt/s0meter` root-owned except `data/`, as in the [Quick start](#quick-start).
+2. Put the new binary next to the old one as `bin/s0meter.new`, and a copy of the config as
+   `etc/config.yaml.new` with `apiKey: …` replaced by `tokenFile: tokens`. The running 6.x is not
+   touched by either.
+3. Create the tokens with the new binary: `sudo /opt/s0meter/bin/s0meter.new token add browser
+   -config /opt/s0meter/etc/config.yaml.new`. This only writes the token file; it opens no GPIO
+   and leaves the counters alone.
+4. Move `s0meter.new` and `config.yaml.new` into place, install `contrib/s0meter.service`, then
+   `sudo systemctl daemon-reload && sudo systemctl restart s0meter`. The counters are saved on stop
+   and restored on start. A config that still has `apiKey` is refused with a message that says so.
+5. Every caller sends `Authorization: Bearer <token>`; `X-API-Key` is no longer accepted. The web
+   page asks for the token once.
+6. Monitoring that polled `/ready` reads `mqtt` from `/health` instead, with a token.
+7. A client limited to TLS 1.2 can no longer connect.
 
 ### Upgrading to 6.0.0
 
