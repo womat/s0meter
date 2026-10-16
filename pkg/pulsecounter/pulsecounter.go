@@ -4,8 +4,8 @@
 // together with the timestamps of the last two pulses. It knows nothing of units or
 // scaling; that is left to the caller.
 //
-// New opens a Raspberry Pi GPIO line through golib's gpio/rpi. NewWithPin takes any
-// gpio.Pin instead, which is how the tests drive it with golib's in-memory gpio/rpiemu.
+// New opens a Raspberry Pi GPIO line through github.com/womat/gpio/rpi. NewWithPin takes
+// any gpio.Pin instead, which is how the tests drive it with the in-memory gpio/rpiemu.
 // A Handler is safe for concurrent use.
 package pulsecounter
 
@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/womat/golib/gpio"
-	"github.com/womat/golib/gpio/rpi"
+	"github.com/womat/gpio"
+	"github.com/womat/gpio/rpi"
 )
 
 // Counter stores S0 pulse data.

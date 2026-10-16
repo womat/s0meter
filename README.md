@@ -853,9 +853,10 @@ modules below. Their terms apply to anyone distributing that binary, not to the 
 |------------------------------------------|--------------------------------|
 | `github.com/eclipse/paho.mqtt.golang`    | **EPL-2.0**, dual with EDL-1.0 |
 | `github.com/warthog618/go-gpiocdev`      | MIT                            |
-| `github.com/womat/golib`                 | MIT                            |
+| `github.com/womat/golib/v2`              | MIT                            |
+| `github.com/womat/gpio`                  | MIT                            |
+| `github.com/womat/mqtt`                  | MIT                            |
 | `github.com/swaggo/swag`, `http-swagger` | MIT                            |
-| `github.com/golang-jwt/jwt/v5`           | MIT                            |
 | `gopkg.in/yaml.v3`                       | MIT                            |
 | `github.com/gorilla/websocket`           | BSD-3-Clause                   |
 

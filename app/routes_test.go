@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/womat/golib/web"
+	"github.com/womat/golib/v2/web"
 	"github.com/womat/s0meter/app/service/health"
 	"github.com/womat/s0meter/app/service/s0meters"
 )

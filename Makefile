@@ -76,7 +76,7 @@ clean: ## Remove build related file
 	rm -fr ./bin/arm64
 	rm -fr ./dist
 
-# The tests use golib's GPIO emulator, but the packages import the Linux-only GPIO
+# The tests use the GPIO emulator of womat/gpio, but the packages import the Linux-only GPIO
 # backend, so they compile on Linux only. On macOS run them in a container:
 #   docker run --rm -v "$$PWD":/src -w /src golang:1.27 make test
 test: ensure_dev_certs ## run all tests with the race detector (Linux only, see comment for macOS)

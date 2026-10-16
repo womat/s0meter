@@ -28,7 +28,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/womat/golib/mqtt"
+	"github.com/womat/mqtt"
 	"github.com/womat/s0meter/app/service/s0meters"
 )
 

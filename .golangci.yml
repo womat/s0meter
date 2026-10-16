@@ -4,7 +4,7 @@
 # first run (v2.14.0) reported no issues.
 #
 # Run it for Linux, never natively on macOS: the GPIO backend
-# (warthog618/go-gpiocdev via womat/golib/gpio/rpi) only compiles there, and
+# (warthog618/go-gpiocdev via womat/gpio/rpi) only compiles there, and
 # every linter needs full type information, so a darwin run aborts with
 # "undefined: uapi.*". make lint sets GOOS/GOARCH for the deployment target.
 

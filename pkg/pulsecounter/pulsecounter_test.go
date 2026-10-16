@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/womat/golib/gpio"
-	"github.com/womat/golib/gpio/rpiemu"
+	"github.com/womat/gpio"
+	"github.com/womat/gpio/rpiemu"
 )
 
 // newEmulated returns a Handler on an emulated input pin, plus the pin to drive it.

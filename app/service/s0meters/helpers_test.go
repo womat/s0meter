@@ -3,8 +3,8 @@ package s0meters
 import (
 	"testing"
 
-	"github.com/womat/golib/gpio"
-	"github.com/womat/golib/gpio/rpiemu"
+	"github.com/womat/gpio"
+	"github.com/womat/gpio/rpiemu"
 	"github.com/womat/s0meter/pkg/pulsecounter"
 )
 

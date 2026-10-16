@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/womat/golib/mqtt"
+	"github.com/womat/mqtt"
 )
 
 // RunPeriodicPublish runs the publishing loop. It blocks, so the caller runs it in a goroutine it

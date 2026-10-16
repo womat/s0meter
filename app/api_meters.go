@@ -3,7 +3,7 @@ package app
 import (
 	"net/http"
 
-	"github.com/womat/golib/web"
+	"github.com/womat/golib/v2/web"
 )
 
 // HandleMeterAll returns the current meter readings and monitoring data.

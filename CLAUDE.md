@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build / develop
 
-**The GPIO dependency (`warthog618/go-gpiocdev` via `womat/golib/gpio/rpi`) only compiles for Linux.** On macOS `go build ./...` and `go vet ./...` fail with `undefined: uapi.*`. Always set the target explicitly when checking code locally:
+**The GPIO dependency (`warthog618/go-gpiocdev` via `womat/gpio/rpi`) only compiles for Linux.** On macOS `go build ./...` and `go vet ./...` fail with `undefined: uapi.*`. Always set the target explicitly when checking code locally:
 
 ```sh
 GOOS=linux GOARCH=arm64 go vet ./...
@@ -30,7 +30,7 @@ make clean
 
 `ensure_dev_certs` (a prerequisite of every build target) generates `app/certs/dev_{cert,key}.pem` if missing; these are `//go:embed`-ed and gitignored, so a fresh clone must build via `make`, not bare `go build`.
 
-Tests use golib's in-memory GPIO emulator (`gpio/rpiemu`) through `pulsecounter.NewWithPin`, so they need no hardware — but they compile on Linux only, like everything here. Run them with `make test` (`go test -race ./...`), on macOS via `docker run --rm -v "$PWD":/src -w /src golang:1.27 make test`. Pure logic is kept testable on purpose: `gaugeAt` takes the time as a parameter, `reading` supplies `time.Now()`. `VERSION` (`app/app.go`), `buildDate` and `buildCommit` (`cmd/main.go`) are all `var`s injected via `-ldflags` — never edit them in source. The Makefile derives `VERSION` from `git describe --tags`; GoReleaser uses the tag itself.
+Tests use the in-memory GPIO emulator of `womat/gpio` (`gpio/rpiemu`) through `pulsecounter.NewWithPin`, so they need no hardware — but they compile on Linux only, like everything here. Run them with `make test` (`go test -race ./...`), on macOS via `docker run --rm -v "$PWD":/src -w /src golang:1.27 make test`. Pure logic is kept testable on purpose: `gaugeAt` takes the time as a parameter, `reading` supplies `time.Now()`. `VERSION` (`app/app.go`), `buildDate` and `buildCommit` (`cmd/main.go`) are all `var`s injected via `-ldflags` — never edit them in source. The Makefile derives `VERSION` from `git describe --tags`; GoReleaser uses the tag itself.
 
 ### Releases
 
@@ -82,9 +82,9 @@ Layering is strict: `cmd` → `app` → `app/service/*` → `pkg/*`. Lower layer
 - **`app/api_ui.go` / `app/ui/index.html`** — the diagnostic page at `GET /{$}`, one `//go:embed`-ed HTML file with inline JS/CSS and a strict CSP; no external resources, since the Pi may be offline. It holds no data: it asks for a token, keeps it in `localStorage` and polls `/health` only, as a bearer token. The MQTT pill's tooltip is `mqttBroker · <topics>`, the topics collected from `meters.<name>.mqttTopic`, as on ecoflowd's page. Everything it shows per meter comes from `s0meters.MeterStatus` there, including `display` — counter and gauge converted to the optional `displayUnit`/`displayGaugeUnit` via the table in `s0meters/units.go` — deliberately not from the telegram, which keeps the configured units.
 - **`app/webservices.go`** — HTTPS only, TLS 1.3 (`newTLSConfig`, pinned in `TestTLSConfigRequires13`). Falls back to the embedded dev cert when `certFile` does not exist, but only with `env: dev`; with `env: prod` that is a start-up error, because the embedded key ships in every release.
 - **`app/service/s0meters`** — the domain layer. `Handler` holds `map[name]*MeterInstance` under an `RWMutex`; `meters.go` has the pure calculation helpers (`counterOf`, `gaugeAt`, both on a counter snapshot) and `reading`, which builds the telegram, `backup.go` the YAML persistence (atomic temp-file + rename; an empty or unparsable file is a start-up error, never "start at zero") and backup loop, `mqtt.go` the publish loop. Note the locking convention: `serializeMetricLocked` assumes the caller holds `h.mux` — `collectPending` calls it under `RLock`.
-- **`pkg/pulsecounter`** — hardware-facing only. Watches a rising edge on one GPIO pin and keeps `{Pulses, TimeStamp, LastTimeStamp}`. It knows nothing of units or scaling; all unit conversion lives in `s0meters`. Lost edges (golib's `gpio.Event.Missed`, Go-side drops and kernel overflows) are real pulses — the line is kernel-debounced and rising-edge only — so they are added to `Pulses`, and `LastTimeStamp` is cleared so the gauge never uses an interval that spans a gap.
+- **`pkg/pulsecounter`** — hardware-facing only. Watches a rising edge on one GPIO pin and keeps `{Pulses, TimeStamp, LastTimeStamp}`. It knows nothing of units or scaling; all unit conversion lives in `s0meters`. Lost edges (`gpio.Event.Missed` of `womat/gpio`, Go-side drops and kernel overflows) are real pulses — the line is kernel-debounced and rising-edge only — so they are added to `Pulses`, and `LastTimeStamp` is cleared so the gauge never uses an interval that spans a gap.
 
-**External dependency `github.com/womat/golib`** supplies `gpio`/`gpio/rpi` (and `gpio/rpiemu` for the tests), `mqtt`, and `web` (auth, CORS, IP filter, `Encode`). Logging is `log/slog` via golib `xlog`, set up in `cmd/main.go`; a reload sets the new logger before closing the old one. It is not vendored — read it in `$(go env GOMODCACHE)/github.com/womat/golib@<version>` when behavior is unclear.
+**External dependencies:** `github.com/womat/golib/v2` supplies `web` (auth, CORS, IP filter, `Encode`) and `xlog`; `github.com/womat/gpio` supplies `gpio`/`gpio/rpi` (and `gpio/rpiemu` for the tests); `github.com/womat/mqtt` the MQTT client. Logging is `log/slog` via golib `xlog`, set up in `cmd/main.go`; a reload sets the new logger before closing the old one. They are not vendored — read them in `$(go env GOMODCACHE)/github.com/womat/<module>@<version>` when behavior is unclear.
 
 ### Meter value model
 
@@ -104,7 +104,7 @@ advanced or when the last message is older than `publishInterval` (the heartbeat
 `gaugeAt` lets decay continuously between pulses and would fire on every tick, and not the rounded
 counter, which a coarse `counterPrecision` would hold still across several pulses.
 
-Two invariants worth preserving: publishing happens **outside** the `RWMutex` (`golib/mqtt.Publish`
+Two invariants worth preserving: publishing happens **outside** the `RWMutex` (`womat/mqtt`'s `Publish`
 waits up to 5 s for the broker's acknowledgement), and a failed publish is not recorded in
 `publishState`, so the meter is retried on the next tick. The loop also skips entirely while
 `mqtt.Handler.IsConnectionOpen()` is false — that, not `IsConnected()`, is false during a
