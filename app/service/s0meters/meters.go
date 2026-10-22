@@ -258,9 +258,7 @@ func displayOf(c pulsecounter.Counter, cfg MeterConfig, now time.Time) Display {
 		}
 	}
 
-	if cfg.CounterPulsesPerUnit != 0 {
-		d.Counter = round(float64(c.Pulses)/cfg.CounterPulsesPerUnit*counterFactor, d.CounterPrecision)
-	}
+	d.Counter = round(amountOf(c, cfg)*counterFactor, d.CounterPrecision)
 	d.Gauge = round(rateAt(c, cfg, now)*gaugeFactor, d.GaugePrecision)
 	return d
 }
@@ -347,10 +345,16 @@ func rateAt(c pulsecounter.Counter, cfg MeterConfig, now time.Time) float64 {
 // counterOf computes the total meter value of a counter snapshot: pulses divided by the meter
 // constant, rounded to CounterPrecision.
 func counterOf(c pulsecounter.Counter, cfg MeterConfig) float64 {
+	return round(amountOf(c, cfg), cfg.CounterPrecision)
+}
+
+// amountOf is the counter in CounterUnit before rounding, 0 without CounterPulsesPerUnit.
+// counterOf rounds it as configured, displayOf after converting it to the display unit.
+func amountOf(c pulsecounter.Counter, cfg MeterConfig) float64 {
 	if cfg.CounterPulsesPerUnit == 0 {
 		return 0
 	}
-	return round(float64(c.Pulses)/cfg.CounterPulsesPerUnit, cfg.CounterPrecision)
+	return float64(c.Pulses) / cfg.CounterPulsesPerUnit
 }
 
 // round rounds a float to a given precision.
