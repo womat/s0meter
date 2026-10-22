@@ -50,9 +50,10 @@ func (app *App) StartWebServer() error {
 	app.web.IdleTimeout = defaultIdleTimeout
 
 	// Load TLS certificate
+	// A certificate that is missing, unreadable or broken needs someone to fix it.
 	cert, err := loadTLSCert(app.config.Webserver.CertFile, app.config.Webserver.KeyFile, app.config.Env)
 	if err != nil {
-		return fmt.Errorf("failed to load TLS certificate: %w", err)
+		return fmt.Errorf("failed to load TLS certificate: %w (%w)", err, ErrPermanent)
 	}
 
 	app.web.TLSConfig = newTLSConfig(cert)

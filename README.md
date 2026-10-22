@@ -789,7 +789,10 @@ as `backupInterval` must be Go duration strings like `60s`, not plain numbers; `
 names a key that does not exist, often a misspelled or renamed one) or `config validation failed`,
 for example for a `displayUnit` that cannot be converted. Once the logger is up, `Failed to load
 meter data` in the log means the `dataFile` cannot be read, is empty, damaged or lacks a meter's
-`pulses:`; that also ends with code 78 and no restart — see [Correcting a counter](#correcting-a-counter).
+`pulses:` — see [Correcting a counter](#correcting-a-counter) — and `failed to load TLS certificate`
+that the certificate is missing (with `env: prod`) or broken, see [TLS Certificate](#tls-certificate).
+`Failed to initialize logger` means the `logDestination` cannot be opened; with the unit from
+`contrib/` a log file must lie in the writable `data/`. All of these end with code 78 and no restart.
 
 ---
 

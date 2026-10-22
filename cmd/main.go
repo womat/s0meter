@@ -29,8 +29,9 @@ import (
 //go:embed README.md
 var Readme string
 
-// exitConfig is the exit code for a config file that does not load or validate, and for a start
-// that fails with app.ErrPermanent, such as a damaged data file (EX_CONFIG from sysexits.h). The
+// exitConfig is the exit code for a config file that does not load or validate, a log destination
+// that cannot be opened at the first start, and a start that fails with app.ErrPermanent, such as
+// a damaged data file or a missing certificate (EX_CONFIG from sysexits.h). The
 // unit sets RestartPreventExitStatus=78: restarting cannot fix the file, so systemd leaves
 // s0meter stopped and "systemctl status s0meter" shows why, instead of restarting it every few
 // seconds.
@@ -135,8 +136,10 @@ func loop(configFile string, debug bool, signals <-chan os.Signal) int {
 		newLogger, err := xlog.Init(config.LogDestination, config.LogLevel)
 		switch {
 		case err != nil && lastGood == nil:
+			// A log destination that cannot be opened (a path outside the unit's writable
+			// data/, a missing directory) stays so until someone changes it.
 			fmt.Printf("Failed to initialize logger: %s\n", err.Error())
-			return 1
+			return exitConfig
 		case err != nil:
 			slog.Error("Failed to initialize logger, keeping the current one", "error", err)
 		default:

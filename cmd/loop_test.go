@@ -282,3 +282,22 @@ func TestLoopEndsWithExitConfigOnDamagedDataFile(t *testing.T) {
 		t.Errorf("loop = %d with a damaged data file, want %d", code, exitConfig)
 	}
 }
+
+// A log file that cannot be opened at the first start does not fix itself either: exitConfig.
+func TestLoopEndsWithExitConfigWhenLoggerFails(t *testing.T) {
+	dir, port := t.TempDir(), freePort(t)
+	config := writeLoopConfig(t, dir, port)
+	token(t, config, "add", "nodered")
+	// The parent of the log file is a regular file, so the log file cannot be created.
+	writeFile(t, dir, "log", "")
+	content, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, dir, "config.yaml", strings.Replace(string(content),
+		`logDestination: "null"`, "logDestination: "+filepath.Join(dir, "log", "s0meter.log"), 1))
+
+	if code := loop(config, false, make(chan os.Signal, 1)); code != exitConfig {
+		t.Errorf("loop = %d with a log file that cannot be created, want %d", code, exitConfig)
+	}
+}

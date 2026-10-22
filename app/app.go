@@ -48,8 +48,8 @@ const (
 	ModeRestart = 1
 )
 
-// ErrPermanent marks a start failure that a restart cannot fix, such as a damaged data file:
-// it needs someone to repair it. cmd ends s0meter with exit code 78 for it, so systemd leaves
+// ErrPermanent marks a start failure that a restart cannot fix, such as a damaged data file or
+// a TLS certificate that cannot be loaded: it needs someone to repair it. cmd ends s0meter with exit code 78 for it, so systemd leaves
 // the service stopped instead of restarting it into the same error.
 var ErrPermanent = errors.New("restarting does not help")
 

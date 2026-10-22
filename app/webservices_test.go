@@ -130,3 +130,31 @@ func TestRunServesTLS13AndFreesThePort(t *testing.T) {
 	}
 	_ = l.Close()
 }
+
+// With env: prod a missing certificate needs someone to install one, so the start fails with
+// ErrPermanent; a port in use may free itself and does not.
+func TestRunMarksMissingProdCertPermanent(t *testing.T) {
+	dir := t.TempDir()
+	cfg := NewConfig()
+	cfg.Env = ProdEnv
+	cfg.DataFile = filepath.Join(dir, "s0meter.yaml")
+	cfg.Webserver.ListenHost = "127.0.0.1"
+	cfg.Webserver.ListenPort = 0
+	cfg.Webserver.CertFile = filepath.Join(dir, "missing.pem")
+	cfg.Webserver.KeyFile = cfg.Webserver.CertFile
+
+	if _, err := New(cfg, make(chan os.Signal, 1), nil).Run(); !errors.Is(err, ErrPermanent) {
+		t.Errorf("Run() with env prod and no certFile = %v, want ErrPermanent", err)
+	}
+
+	busy, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = busy.Close() }()
+	cfg.Env = DevEnv
+	cfg.Webserver.ListenPort = busy.Addr().(*net.TCPAddr).Port
+	if _, err := New(cfg, make(chan os.Signal, 1), nil).Run(); err == nil || errors.Is(err, ErrPermanent) {
+		t.Errorf("Run() on a port in use = %v, want an error that is not ErrPermanent", err)
+	}
+}
