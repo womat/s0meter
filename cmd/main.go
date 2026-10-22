@@ -24,10 +24,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Readme embeds the README.md file for the --help flag
+// readme is cmd/README.md, printed by --help.
 //
 //go:embed README.md
-var Readme string
+var readme string
 
 // exitConfig is the exit code for a config file that does not load or validate, a log destination
 // that cannot be opened at the first start, and a start that fails with app.ErrPermanent, such as
@@ -76,13 +76,13 @@ func main() {
 
 	switch {
 	case *about:
-		fmt.Println(About())
+		fmt.Println(aboutText())
 		os.Exit(0)
 	case *version:
 		fmt.Println(app.VERSION)
 		os.Exit(0)
 	case *help:
-		fmt.Println(Readme)
+		fmt.Println(readme)
 		os.Exit(0)
 	}
 
@@ -204,7 +204,8 @@ func tokenCommand(defaultConfig string) web.TokenCommand {
 	}
 }
 
-func About() string {
+// aboutText returns the build and project details printed by --about, as YAML.
+func aboutText() string {
 	info := map[string]string{
 		"Author":   "Wolfgang Mathe",
 		"Binary":   filepath.Join("/opt", app.MODULE, "bin", app.MODULE),
