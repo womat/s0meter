@@ -24,6 +24,23 @@ func TestLoadTLSCertFallback(t *testing.T) {
 	}
 }
 
+// A certificate without its key is as missing as no certificate: prod refuses, dev falls back.
+func TestLoadTLSCertMissingKey(t *testing.T) {
+	dir := t.TempDir()
+	certFile := filepath.Join(dir, "cert.pem")
+	if err := os.WriteFile(certFile, embeddedCertFile, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(dir, "missing.pem")
+
+	if _, err := loadTLSCert(certFile, missing, ProdEnv); err == nil {
+		t.Error("env prod with a certFile but no keyFile must fail")
+	}
+	if _, err := loadTLSCert(certFile, missing, DevEnv); err != nil {
+		t.Errorf("env dev without keyFile should fall back to the embedded certificate: %v", err)
+	}
+}
+
 func TestServerErrorRestartsApp(t *testing.T) {
 	cfg := NewConfig()
 	cfg.DataFile = filepath.Join(t.TempDir(), "s0meter.yaml")

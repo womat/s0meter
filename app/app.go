@@ -27,6 +27,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/womat/golib/v2/web"
 	"github.com/womat/mqtt"
 	"github.com/womat/s0meter/app/service/s0meters"
 )
@@ -219,6 +220,12 @@ func (app *App) setup() (err error) {
 	if err = app.meters.SaveMeterData(dataFile); err != nil {
 		slog.Error("Failed to save meter data", "file", dataFile, "error", err)
 		return err
+	}
+
+	// Checked on every start and reload, so a fixed layout stops the warning without a restart.
+	// A warning, not an error: a development checkout always looks like that.
+	if err = web.CheckTokenFile(app.config.Webserver.TokenFile); err != nil {
+		slog.Warn("Token file is not protected", "error", err)
 	}
 
 	slog.Debug("Initializing API routes")

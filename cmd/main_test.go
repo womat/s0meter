@@ -41,7 +41,7 @@ func TestLoadConfigDebugOverridesLogging(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "token-hashes", "")
 	config := writeFile(t, dir, "config.yaml",
-		"logLevel: error\nlogDestination: /var/log/s0meter.log\nwebserver:\n  tokenFile: token-hashes\n")
+		"env: dev\nlogLevel: error\nlogDestination: /var/log/s0meter.log\nwebserver:\n  tokenFile: token-hashes\n")
 
 	c, err := loadConfig(config, true)
 	if err != nil {

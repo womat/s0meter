@@ -284,6 +284,8 @@ func TestLoopEndsWithExitConfigOnDamagedDataFile(t *testing.T) {
 }
 
 // A log file that cannot be opened at the first start does not fix itself either: exitConfig.
+// Validate already refuses a log directory that is not one, so the config check ends the start
+// here, before xlog.Init is reached.
 func TestLoopEndsWithExitConfigWhenLoggerFails(t *testing.T) {
 	dir, port := t.TempDir(), freePort(t)
 	config := writeLoopConfig(t, dir, port)

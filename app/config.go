@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -94,13 +95,101 @@ func NewConfig() *Config {
 // envBraces matches ${VAR} references; see expandEnvBraces.
 var envBraces = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
-// expandEnvBraces replaces ${VAR} with the value of the environment variable VAR, or with an
-// empty string when it is unset. Unlike os.ExpandEnv it leaves every other "$" alone, so a
-// password containing "$" is not silently cut short.
-func expandEnvBraces(s string) string {
-	return envBraces.ReplaceAllStringFunc(s, func(ref string) string {
-		return os.Getenv(envBraces.FindStringSubmatch(ref)[1])
-	})
+// expandEnvBraces replaces ${VAR} with the value of the environment variable VAR.
+//
+// Unlike os.ExpandEnv it leaves every other "$" alone, so a password containing "$" is not
+// silently cut short. An unset variable is an error rather than an empty string, because an
+// empty secret is the kind of mistake that only shows up in production.
+//
+// Comments are left alone, so that documenting the ${VAR} syntax in the config file does not
+// itself demand that VAR is set. They are found line by line, so in a value that spans lines - a
+// quoted one or a block scalar (| or >) - a "#" behind a blank is taken for a comment and a
+// ${VAR} after it stays as it is. No s0meter config has such a value; that is why this is not
+// worth a YAML tokenizer.
+func expandEnvBraces(content string) (string, error) {
+	var (
+		missing  []string
+		expanded strings.Builder
+	)
+
+	for line := range strings.SplitSeq(content, "\n") {
+		if expanded.Len() > 0 {
+			expanded.WriteString("\n")
+		}
+
+		value, comment := splitYAMLComment(line)
+		expanded.WriteString(envBraces.ReplaceAllStringFunc(value, func(ref string) string {
+			name := envBraces.FindStringSubmatch(ref)[1]
+			env, ok := os.LookupEnv(name)
+			if !ok {
+				missing = append(missing, name)
+				return ref
+			}
+			return env
+		}))
+		expanded.WriteString(comment)
+	}
+
+	if len(missing) > 0 {
+		return "", fmt.Errorf("undefined environment variable(s) in config: %s", strings.Join(missing, ", "))
+	}
+
+	return expanded.String(), nil
+}
+
+// splitYAMLComment splits a line into its value part and its trailing comment.
+//
+// In YAML a "#" starts a comment when it is at the start of the line or preceded by a blank,
+// and never inside a quoted scalar - which is exactly what is tracked here. A quote opens a
+// scalar only where a value begins, so the apostrophe in a plain value like it's does not hide
+// the comment behind it.
+func splitYAMLComment(line string) (value, comment string) {
+	var quote byte // the quote of the open scalar, 0 outside of one
+
+	for i := 0; i < len(line); i++ {
+		c := line[i]
+		switch {
+		case quote == '"' && c == '\\':
+			i++ // an escaped character cannot close the scalar
+		case quote != 0 && c == quote:
+			if quote == '\'' && i+1 < len(line) && line[i+1] == '\'' {
+				i++ // '' is a quote inside a single-quoted scalar
+			} else {
+				quote = 0
+			}
+		case quote == 0 && (c == '\'' || c == '"') && opensScalar(line[:i]):
+			quote = c
+		case quote == 0 && c == '#' && (i == 0 || line[i-1] == ' ' || line[i-1] == '\t'):
+			return line[:i], line[i:]
+		}
+	}
+
+	return line, ""
+}
+
+// opensScalar reports whether a quote that follows before starts a quoted scalar: at the start
+// of the line, behind a flow indicator "[", "{" or ",", or behind ":", "-" or "?" and a blank. A
+// tag (!!str) or an anchor (&name) in between belongs to the value and is skipped.
+func opensScalar(before string) bool {
+	trimmed := strings.TrimRight(before, " \t")
+	for {
+		i := strings.LastIndexAny(trimmed, " \t")
+		if word := trimmed[i+1:]; word == "" || (word[0] != '!' && word[0] != '&') {
+			break
+		}
+		trimmed = strings.TrimRight(trimmed[:i+1], " \t")
+	}
+	if trimmed == "" {
+		return true
+	}
+
+	switch trimmed[len(trimmed)-1] {
+	case '[', '{', ',':
+		return true
+	case ':', '-', '?':
+		return len(trimmed) < len(before)
+	}
+	return false
 }
 
 // LoadConfig loads configuration from a YAML file and expands ${VAR} environment references,
@@ -147,7 +236,12 @@ func readConfig(fileName string) (*Config, error) {
 		return cfg, err
 	}
 
-	dec := yaml.NewDecoder(strings.NewReader(expandEnvBraces(string(content))))
+	expanded, err := expandEnvBraces(string(content))
+	if err != nil {
+		return cfg, err
+	}
+
+	dec := yaml.NewDecoder(strings.NewReader(expanded))
 	dec.KnownFields(true)
 	if err = dec.Decode(cfg); err != nil && !errors.Is(err, io.EOF) {
 		return cfg, fmt.Errorf("failed to unmarshal config: %w", err)
@@ -177,8 +271,31 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid log level: %s, must be one of %v", c.LogLevel, validLogLevels)
 	}
 
+	if err := validateLogDestination(c.LogDestination); err != nil {
+		return err
+	}
+
 	if c.Webserver.ListenPort < 1 || c.Webserver.ListenPort > 65535 {
 		return fmt.Errorf("invalid port: %d", c.Webserver.ListenPort)
+	}
+
+	if err := validateListenHost(c.Webserver.ListenHost); err != nil {
+		return err
+	}
+
+	// The embedded development certificate is only a fallback for env: dev, see loadTLSCert.
+	// In production both files have to be named; that they exist is checked at start.
+	if c.Env == ProdEnv && (c.Webserver.CertFile == "" || c.Webserver.KeyFile == "") {
+		return errors.New("webserver.certFile and webserver.keyFile must be configured with env: " + ProdEnv)
+	}
+
+	// The IP filter only logs and skips an unusable entry; a typo here would become a rule that
+	// never matches, so it stops the start instead.
+	if err := web.ValidateIPList(c.Webserver.AllowedIPs); err != nil {
+		return fmt.Errorf("webserver.allowedIPs: %w", err)
+	}
+	if err := web.ValidateIPList(c.Webserver.BlockedIPs); err != nil {
+		return fmt.Errorf("webserver.blockedIPs: %w", err)
 	}
 
 	// Visit the meters in a fixed order, so the reported duplicate does not depend on map order.
@@ -204,6 +321,41 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("backupInterval must be at least 1s, got %v", c.BackupInterval)
 	}
 
+	return nil
+}
+
+// validateLogDestination accepts the well known names and, for anything else, requires the
+// directory of the log file to exist - otherwise the failure only surfaces inside xlog.Init.
+func validateLogDestination(dest string) error {
+	switch strings.ToLower(strings.TrimSpace(dest)) {
+	case "":
+		return errors.New("logDestination is not configured")
+	case "stdout", "stderr", "null":
+		return nil
+	}
+
+	dir := filepath.Dir(dest)
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("invalid logDestination %q: %w", dest, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("invalid logDestination %q: %s is not a directory", dest, dir)
+	}
+
+	return nil
+}
+
+// validateListenHost accepts an empty host (all interfaces), any literal IP and localhost. A
+// name that has to be resolved is refused, because a DNS lookup at start is a dependency this
+// service does not want.
+func validateListenHost(host string) error {
+	if host == "" || host == "localhost" {
+		return nil
+	}
+	if net.ParseIP(host) == nil {
+		return fmt.Errorf("invalid listenHost: %s, must be empty, an IP address or localhost", host)
+	}
 	return nil
 }
 

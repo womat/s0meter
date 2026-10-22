@@ -71,17 +71,31 @@ func TestLoadConfigExpandsBracedVariablesOnly(t *testing.T) {
 
 func TestExpandEnvBraces(t *testing.T) {
 	t.Setenv("S0METER_TEST_KEY", "secret")
+	t.Setenv("S0METER_TEST_EMPTY", "")
 	for in, want := range map[string]string{
-		"${S0METER_TEST_KEY}":   "secret",
-		"a${S0METER_TEST_KEY}b": "asecretb",
-		"$S0METER_TEST_KEY":     "$S0METER_TEST_KEY",
-		"ab$cd":                 "ab$cd",
-		"${S0METER_UNSET_X1}":   "",
-		"$$x${":                 "$$x${",
+		"${S0METER_TEST_KEY}":               "secret",
+		"a${S0METER_TEST_KEY}b":             "asecretb",
+		"$S0METER_TEST_KEY":                 "$S0METER_TEST_KEY",
+		"ab$cd":                             "ab$cd",
+		"${S0METER_TEST_EMPTY}":             "",
+		"$$x${":                             "$$x${",
+		"# use ${S0METER_UNSET_X1}":         "# use ${S0METER_UNSET_X1}",
+		"a: ${S0METER_TEST_KEY} # ${UNSET}": "a: secret # ${UNSET}",
+		`a: "x # ${S0METER_TEST_KEY}"`:      `a: "x # secret"`,
 	} {
-		if got := expandEnvBraces(in); got != want {
-			t.Errorf("expandEnvBraces(%q) = %q, want %q", in, got, want)
+		got, err := expandEnvBraces(in)
+		if err != nil || got != want {
+			t.Errorf("expandEnvBraces(%q) = %q, %v; want %q", in, got, err, want)
 		}
+	}
+}
+
+// An unset variable is an error naming it, not an empty string - an empty secret would only
+// show up when the broker refuses the connection.
+func TestExpandEnvBracesRefusesUnsetVariable(t *testing.T) {
+	_, err := expandEnvBraces("a: ${S0METER_UNSET_X1}\nb: ${S0METER_UNSET_X2}")
+	if err == nil || !strings.Contains(err.Error(), "S0METER_UNSET_X1, S0METER_UNSET_X2") {
+		t.Errorf("err = %v, want both unset variables named", err)
 	}
 }
 
@@ -89,6 +103,8 @@ func TestExpandEnvBraces(t *testing.T) {
 func validConfig() *Config {
 	c := NewConfig()
 	c.Webserver.TokenFile = "/opt/s0meter/etc/token-hashes"
+	c.Webserver.CertFile = "/opt/s0meter/etc/cert.pem"
+	c.Webserver.KeyFile = "/opt/s0meter/etc/key.pem"
 	return c
 }
 
@@ -115,8 +131,18 @@ func TestValidate(t *testing.T) {
 		"unknown log level": {func(c *Config) { c.LogLevel = "verbose" }, "invalid log level"},
 		"port 0":            {func(c *Config) { c.Webserver.ListenPort = 0 }, "invalid port"},
 		"port 65536":        {func(c *Config) { c.Webserver.ListenPort = 65536 }, "invalid port"},
-		"backup below 1s":   {func(c *Config) { c.BackupInterval = 500 * time.Millisecond }, "backupInterval must be at least 1s"},
-		"invalid meter":     {func(c *Config) { c.Meter["a"] = meterOn(1) }, `meter "a"`},
+		"no logDestination": {func(c *Config) { c.LogDestination = "" }, "logDestination is not configured"},
+		"log dir missing": {func(c *Config) { c.LogDestination = "/nonexistent-s0meter/s0meter.log" },
+			"invalid logDestination"},
+		"host name":         {func(c *Config) { c.Webserver.ListenHost = "pi.example" }, "invalid listenHost"},
+		"prod without cert": {func(c *Config) { c.Webserver.CertFile = "" }, "certFile and webserver.keyFile"},
+		"prod without key":  {func(c *Config) { c.Webserver.KeyFile = "" }, "certFile and webserver.keyFile"},
+		"bad allowedIPs": {func(c *Config) { c.Webserver.AllowedIPs = []string{"192.168.0.300"} },
+			`allowedIPs: invalid IP address "192.168.0.300"`},
+		"bad blockedIPs": {func(c *Config) { c.Webserver.BlockedIPs = []string{"10.0.0.0/99"} },
+			`blockedIPs: invalid CIDR "10.0.0.0/99"`},
+		"backup below 1s": {func(c *Config) { c.BackupInterval = 500 * time.Millisecond }, "backupInterval must be at least 1s"},
+		"invalid meter":   {func(c *Config) { c.Meter["a"] = meterOn(1) }, `meter "a"`},
 		"duplicate gpio": {func(c *Config) { c.Meter["a"] = meterOn(17); c.Meter["b"] = meterOn(17) },
 			`meters "a" and "b" both use gpio 17`},
 		"display unit of another quantity": {func(c *Config) {
@@ -153,7 +179,7 @@ func TestValidate(t *testing.T) {
 }
 
 func TestMQTTBlockPresenceAndDefaults(t *testing.T) {
-	base := "webserver:\n  tokenFile: /opt/s0meter/etc/token-hashes\n"
+	base := "webserver:\n  tokenFile: /opt/s0meter/etc/token-hashes\n  certFile: cert.pem\n  keyFile: key.pem\n"
 	load := func(t *testing.T, content string) (*Config, error) {
 		t.Helper()
 		cfg, err := readConfig(writeConfig(t, base+content))
@@ -207,8 +233,7 @@ func TestValidateRefusesBrokerURLWithUnencodedPassword(t *testing.T) {
 		"tcp://user:" + secret + "?1@broker:1883",
 		"tcp://user:" + secret + " 1@broker:1883",
 	} {
-		c := NewConfig()
-		c.Webserver.TokenFile = "token-hashes"
+		c := validConfig()
 		c.MQTT = &MQTTConfig{Connection: connection}
 		err := c.Validate()
 		if err == nil || !strings.Contains(err.Error(), "URL-encode") {
@@ -224,8 +249,7 @@ func TestValidateRefusesBrokerURLWithUnencodedPassword(t *testing.T) {
 		"tcp://broker:1883",
 		"tcp://user:" + url.QueryEscape("123/s3cr#?") + "@broker:1883",
 	} {
-		c := NewConfig()
-		c.Webserver.TokenFile = "token-hashes"
+		c := validConfig()
 		c.MQTT = &MQTTConfig{Connection: connection}
 		if err := c.Validate(); err != nil {
 			t.Errorf("Validate(%q) = %v, want it accepted", connection, err)
@@ -239,8 +263,7 @@ func TestValidateLogLevelIgnoresCase(t *testing.T) {
 		"info": true, "Info": true, "WARNING": true, " debug ": true, "Warn": true,
 		"verbose": false, "": false,
 	} {
-		c := NewConfig()
-		c.Webserver.TokenFile = "token-hashes"
+		c := validConfig()
 		c.LogLevel = level
 		if err := c.Validate(); (err == nil) != valid {
 			t.Errorf("logLevel %q: Validate() = %v, want valid %v", level, err, valid)

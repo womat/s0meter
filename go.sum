@@ -51,8 +51,8 @@ github.com/warthog618/go-gpiocdev v0.10.0 h1:StR6I/Wjpnl1XQsTt7D0hlUDsaetNAUeTsv
 github.com/warthog618/go-gpiocdev v0.10.0/go.mod h1:Hj1ECwLE3Hy8trth5BoT/WanO02zdoSmg3a5CTNasHA=
 github.com/warthog618/go-gpiosim v0.1.2 h1:8RsinSKZbsG6REhfVDpBr7gdzQeJ7RoCUxLR9oUlk0M=
 github.com/warthog618/go-gpiosim v0.1.2/go.mod h1:YXsnB+I9jdCMY4YAlMSRrlts25ltjmuIsrnoUrBLdqU=
-github.com/womat/golib/v2 v2.0.0 h1:7p4+A46v5g4NiDOPOEhGaDV+KRftI2a6EJ4stoHrfGc=
-github.com/womat/golib/v2 v2.0.0/go.mod h1:GVnuCqXk8/bj5+ZyTMhw5P5bU0otxEF0D2tHSmAyulA=
+github.com/womat/golib/v2 v2.1.0 h1:3hVyW5np4WZ9AuPVxNAOFOJdRINNHroH/JSeDRz0Mgw=
+github.com/womat/golib/v2 v2.1.0/go.mod h1:GVnuCqXk8/bj5+ZyTMhw5P5bU0otxEF0D2tHSmAyulA=
 github.com/womat/gpio v1.0.2 h1:y/LcN2scNdClXkFC8V4AalbMrbzXNteKMQODNgGUIsI=
 github.com/womat/gpio v1.0.2/go.mod h1:gPWLljplbA0wSGA+Xw7iLxbIk58gJ8VFMj7tjWPai8k=
 github.com/womat/mqtt v1.0.1 h1:KyjfzwImpkuythOY4ThXkY/1OxV5qRH7kt0PIb7Hmwo=

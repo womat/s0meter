@@ -95,21 +95,44 @@ func (app *App) startWebServer() error {
 	return nil
 }
 
-// loadTLSCert loads the file-based cert. If certFile is missing it falls back to the embedded
-// development cert, but only with env: dev - that cert's private key ships in every release
-// binary, so with env: prod a missing certFile is an error instead.
+// loadTLSCert loads the file-based cert. If certFile or keyFile is missing it falls back to the
+// embedded development cert, but only with env: dev - that cert's private key ships in every
+// release binary, so with env: prod a missing file is an error instead.
 func loadTLSCert(certFile, keyFile, env string) (tls.Certificate, error) {
-	if _, err := os.Stat(certFile); err == nil {
-		// Production cert
-		return tls.LoadX509KeyPair(certFile, keyFile)
-	} else if errors.Is(err, os.ErrNotExist) {
-		if env == ProdEnv {
-			return tls.Certificate{}, fmt.Errorf("certFile %s not found; the embedded development certificate is not used with env: %s", certFile, ProdEnv)
-		}
-		// Dev fallback
-		slog.Warn("TLS cert file not found, using embedded fallback", "certFile", certFile, "env", env)
-		return tls.X509KeyPair(embeddedCertFile, embeddedKeyFile)
-	} else {
+	certMissing, err := isMissing(certFile)
+	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("failed to read cert file: %w", err)
 	}
+
+	keyMissing, err := isMissing(keyFile)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to read key file: %w", err)
+	}
+
+	if !certMissing && !keyMissing {
+		// Production cert
+		return tls.LoadX509KeyPair(certFile, keyFile)
+	}
+
+	if env == ProdEnv {
+		return tls.Certificate{}, fmt.Errorf("TLS certificate or key missing (cert %q, key %q); the embedded development certificate is not used with env: %s",
+			certFile, keyFile, ProdEnv)
+	}
+
+	// Dev fallback
+	slog.Warn("TLS cert or key file not found, using embedded fallback", "certFile", certFile, "keyFile", keyFile, "env", env)
+	return tls.X509KeyPair(embeddedCertFile, embeddedKeyFile)
+}
+
+// isMissing reports whether file does not exist; an empty name counts as missing. Any other
+// error - no permission, say - is returned, because falling back would hide it.
+func isMissing(file string) (bool, error) {
+	if file == "" {
+		return true, nil
+	}
+	_, err := os.Stat(file)
+	if errors.Is(err, os.ErrNotExist) {
+		return true, nil
+	}
+	return false, err
 }

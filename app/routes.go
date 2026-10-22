@@ -17,9 +17,6 @@ func (app *App) setupRoutes() {
 
 	mux := http.NewServeMux()
 
-	// Preflight CORS requests
-	mux.Handle("OPTIONS /", web.HandlePreflight())
-
 	// Dev-only Swagger documentation (only registered with -tags swagger)
 	app.registerSwaggerRoute(mux)
 
@@ -33,7 +30,9 @@ func (app *App) setupRoutes() {
 	mux.Handle("GET /meters/{name}", web.WithAuth(app.handleMeterOne(), webCfg))
 
 	// Apply global middleware: CORS + IP filter. The API is read-only, so CORS advertises
-	// GET and the preflight OPTIONS only.
+	// GET and the preflight OPTIONS only. WithCORS answers a preflight itself, before auth;
+	// an "OPTIONS /" route is not needed and would turn the mux's 404 for an unknown path into
+	// 405.
 	handler := web.WithCORS(mux, web.WithAllowedMethods(http.MethodGet, http.MethodOptions))
 	handler = web.WithIPFilter(handler, app.config.Webserver.AllowedIPs, app.config.Webserver.BlockedIPs)
 	// One entry per request with client and caller. The web page polls every few seconds, so

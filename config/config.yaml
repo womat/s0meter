@@ -9,12 +9,13 @@ logLevel: info
 
 # logDestination defines where logs are written to.
 # Supported values: stdout | stderr | null (no logging) | /path/to/logfile
-# Anything else is taken as a file path. With the unit from contrib/, a log file must
+# Anything else is taken as a file path; its directory must exist. With the unit from contrib/, a log file must
 # lie in the writable /opt/s0meter/data/; one that cannot be opened stops the start.
 logDestination: stdout
 
 # environment: prod (default) | dev
-# With prod, a missing webserver.certFile is an error; dev falls back to the embedded,
+# With prod, webserver.certFile and keyFile are required and a missing file is an error;
+# dev falls back to the embedded,
 # publicly known development certificate - set it only on a development machine.
 env: prod
 
@@ -23,7 +24,8 @@ env: prod
 # Webserver configuration (HTTPS)
 # =============================================================================
 webserver:
-  # Host address the HTTPS server listens on: 0.0.0.0 = all interfaces, IPv4 only;
+  # Host address the HTTPS server listens on, an IP address or localhost (no host names):
+  # 0.0.0.0 = all interfaces, IPv4 only;
   # "::" (quoted) = all interfaces, IPv4 and IPv6. blockedIPs and allowedIPs must then
   # list the IPv6 addresses too.
   listenHost: 0.0.0.0
@@ -42,13 +44,13 @@ webserver:
   # TLS certificate file
   certFile: /opt/s0meter/etc/cert.pem
 
-  # Blocked IP addresses or networks (empty = none blocked)
+  # Blocked IP addresses or networks (empty = none blocked); an invalid entry stops the start
   # Examples: 192.168.0.1, 192.168.0.0/16, 10.0.0.0/8
   blockedIPs: [ ]
   #  - 192.168.0.1
   #  - 192.168.0.0/16
 
-  # Allowed IP addresses or networks (empty = all allowed)
+  # Allowed IP addresses or networks (empty = all allowed); an invalid entry stops the start
   # Note: ::1 is the IPv6 loopback address
   # Examples: 127.0.0.1, ::1, 192.168.0.0/16
   allowedIPs: [ ]

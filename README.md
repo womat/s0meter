@@ -218,11 +218,15 @@ binary, with no external fonts or scripts, so it works without internet access.
 
 Default location: `/opt/s0meter/etc/config.yaml`
 Environment variables are expanded inside the file in the `${VAR}` form only, e.g.
-`connection: tcp://s0meter:${MQTT_PASSWORD}@broker:1883`; an unset variable becomes empty. Any
+`connection: tcp://s0meter:${MQTT_PASSWORD}@broker:1883`; an unset variable stops the start and is
+named in the error, while one set to an empty string is used as it is. Comments are not expanded. Any
 other `$` is kept literally, so passwords may contain it. Special characters in the user or
 password of `connection` must be URL-encoded (`/` as `%2F`, `#` as `%23`, `?` as `%3F`, a value
 taken from a variable included); otherwise the start is refused, because the password could not be
-hidden in the log and on `/health`. Unknown keys are rejected, so a misspelled or renamed setting
+hidden in the log and on `/health`. An entry in `allowedIPs` or `blockedIPs` that is no IP address
+or network, a `listenHost` that is a name rather than an IP address or `localhost`, a
+`logDestination` file whose directory does not exist, and `env: prod` without both `certFile` and
+`keyFile` are refused as well. Unknown keys are rejected, so a misspelled or renamed setting
 stops the start instead of silently keeping its default. Durations need a unit (`10ms`, `2s`, `1m`):
 a bare number, `0` included, is rejected.
 
@@ -238,12 +242,13 @@ logLevel: info
 
 # logDestination defines where logs are written to.
 # Supported values: stdout | stderr | null (no logging) | /path/to/logfile
-# Anything else is taken as a file path. With the unit from contrib/, a log file must
+# Anything else is taken as a file path; its directory must exist. With the unit from contrib/, a log file must
 # lie in the writable /opt/s0meter/data/; one that cannot be opened stops the start.
 logDestination: stdout
 
 # environment: prod (default) | dev
-# With prod, a missing webserver.certFile is an error; dev falls back to the embedded,
+# With prod, webserver.certFile and keyFile are required and a missing file is an error;
+# dev falls back to the embedded,
 # publicly known development certificate - set it only on a development machine.
 env: prod
 
@@ -252,7 +257,8 @@ env: prod
 # Webserver configuration (HTTPS)
 # =============================================================================
 webserver:
-  # Host address the HTTPS server listens on: 0.0.0.0 = all interfaces, IPv4 only;
+  # Host address the HTTPS server listens on, an IP address or localhost (no host names):
+  # 0.0.0.0 = all interfaces, IPv4 only;
   # "::" (quoted) = all interfaces, IPv4 and IPv6. blockedIPs and allowedIPs must then
   # list the IPv6 addresses too.
   listenHost: 0.0.0.0
@@ -271,13 +277,13 @@ webserver:
   # TLS certificate file
   certFile: /opt/s0meter/etc/cert.pem
 
-  # Blocked IP addresses or networks (empty = none blocked)
+  # Blocked IP addresses or networks (empty = none blocked); an invalid entry stops the start
   # Examples: 192.168.0.1, 192.168.0.0/16, 10.0.0.0/8
   blockedIPs: [ ]
   #  - 192.168.0.1
   #  - 192.168.0.0/16
 
-  # Allowed IP addresses or networks (empty = all allowed)
+  # Allowed IP addresses or networks (empty = all allowed); an invalid entry stops the start
   # Note: ::1 is the IPv6 loopback address
   # Examples: 127.0.0.1, ::1, 192.168.0.0/16
   allowedIPs: [ ]
@@ -675,8 +681,9 @@ own: keep it `root:s0meter 0640`, like `config.yaml`.
 | `sudo s0meter token list` | Prints the names, never a hash |
 | `sudo systemctl reload s0meter` | Applies a change |
 
-`-config` works as for the service. A new token file gets `0640` and the owner and group of
-`config.yaml`. `add` refuses a name that is taken and prints no token when it cannot write the
+`-config` works as for the service. A new token file gets `0640` and the group of `config.yaml`;
+its owner is whoever ran `add`, root with `sudo`. If s0meter could change the token file or its
+directory, every start and reload logs `Token file is not protected` as a warning and keeps running. `add` refuses a name that is taken and prints no token when it cannot write the
 file, so a token that is shown but stored nowhere cannot happen. A name is 1–64 letters, digits,
 `.`, `_` or `-`.
 
@@ -807,7 +814,7 @@ names a key that does not exist, often a misspelled or renamed one) or `config v
 for example for a `displayUnit` that cannot be converted. Once the logger is up, `Failed to load
 meter data` in the log means the `dataFile` cannot be read, is empty, damaged or lacks a meter's
 `pulses:` — see [Correcting a counter](#correcting-a-counter) — and `failed to load TLS certificate`
-that the certificate is missing (with `env: prod`) or broken, see [TLS Certificate](#tls-certificate).
+that the certificate or its key is missing (with `env: prod`) or broken, see [TLS Certificate](#tls-certificate).
 `Failed to initialize logger` means the `logDestination` cannot be opened; with the unit from
 `contrib/` a log file must lie in the writable `data/`. All of these end with code 78 and no restart.
 

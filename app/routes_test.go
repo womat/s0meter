@@ -63,9 +63,9 @@ func TestUIIsPublicAndOnlyAtRoot(t *testing.T) {
 		}
 	}
 
-	// "OPTIONS /" matches every path, so an unknown GET is a 405 rather than a 404.
-	if rec := serve(app, "/unknown", ""); rec.Code == http.StatusOK {
-		t.Error("GET /unknown = 200: the page must not catch every path")
+	// No "OPTIONS /" route (WithCORS answers preflights), so an unknown path is a 404, not 405.
+	if rec := serve(app, "/unknown", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("GET /unknown = %d, want 404: the page must not catch every path", rec.Code)
 	}
 }
 
@@ -208,15 +208,23 @@ func TestIPFilterGuardsEveryRoute(t *testing.T) {
 func TestCORSAndMethods(t *testing.T) {
 	app := newTestApp(t)
 
-	rec := serveMethod(app, http.MethodOptions, "/meters", "")
+	// A preflight is an OPTIONS request with Access-Control-Request-Method; WithCORS answers it
+	// before auth and the mux.
+	req := httptest.NewRequest(http.MethodOptions, "/meters", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
+	req.Header.Set("Origin", "https://example.com")
+	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	rec := httptest.NewRecorder()
+	app.web.Handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {
-		t.Errorf("OPTIONS /meters = %d, want 204 without a token", rec.Code)
+		t.Errorf("preflight OPTIONS /meters = %d, want 204 without a token", rec.Code)
 	}
 	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "GET, OPTIONS" {
 		t.Errorf("Access-Control-Allow-Methods = %q, want GET, OPTIONS", got)
 	}
 
-	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete} {
+	// A plain OPTIONS is no preflight and reaches the mux, which has no route for it.
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions} {
 		if rec := serveMethod(app, method, "/meters", "test-key"); rec.Code != http.StatusMethodNotAllowed {
 			t.Errorf("%s /meters = %d, want 405", method, rec.Code)
 		}
