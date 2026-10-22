@@ -192,7 +192,7 @@ func TestWriteFileAtomicCleansUpAfterAFailedRename(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := writeFileAtomic(target, []byte("wallbox: {}\n"), 0o600); err == nil {
+	if err := writeFileAtomic(target, []byte("wallbox: {}\n")); err == nil {
 		t.Fatal("writeFileAtomic over a non-empty directory succeeded")
 	}
 

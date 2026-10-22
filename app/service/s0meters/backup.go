@@ -110,28 +110,20 @@ func (h *Handler) SaveMeterData(file string) error {
 
 	yamlData, err := yaml.Marshal(data)
 	if err != nil {
-		slog.Error("Failed to marshal meter data to YAML", "error", err)
-		return err
+		return fmt.Errorf("marshal meter data: %w", err)
 	}
 
-	dir := filepath.Dir(file)
-	if _, err = os.Stat(dir); os.IsNotExist(err) {
-		slog.Info("Creating meter data dir", "dir", dir)
-		if err = os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory: %w", err)
-		}
+	if err = os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		return fmt.Errorf("create meter data directory: %w", err)
 	}
 
-	if err = writeFileAtomic(file, yamlData, 0o600); err != nil {
-		slog.Error("Failed to write meter data to file", "file", file, "error", err)
-		return err
-	}
-
-	return nil
+	// The callers log a failure, so it is only returned here.
+	return writeFileAtomic(file, yamlData)
 }
 
-// writeFileAtomic replaces file with data via a synced temporary file and a rename.
-func writeFileAtomic(file string, data []byte, perm os.FileMode) (err error) {
+// writeFileAtomic replaces file with data via a synced temporary file and a rename. The file gets
+// mode 0600 from os.CreateTemp: the counters are nobody else's business.
+func writeFileAtomic(file string, data []byte) (err error) {
 	dir := filepath.Dir(file)
 
 	tmp, err := os.CreateTemp(dir, filepath.Base(file)+".tmp-*")
@@ -145,10 +137,6 @@ func writeFileAtomic(file string, data []byte, perm os.FileMode) (err error) {
 	}()
 
 	if _, err = tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err = tmp.Chmod(perm); err != nil {
 		_ = tmp.Close()
 		return err
 	}
