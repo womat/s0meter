@@ -161,17 +161,6 @@ func (app *App) Run() (*App, error) {
 		app.meters.RunPeriodicBackup(app.ctx, app.config.BackupInterval, app.config.DataFile)
 	})
 
-	names := make([]string, 0, len(app.config.Webserver.Tokens))
-	for _, t := range app.config.Webserver.Tokens {
-		names = append(names, t.Name)
-	}
-	if len(names) == 0 {
-		slog.Warn("No bearer tokens loaded, every request to /health and /meters is rejected",
-			"tokenFile", app.config.Webserver.TokenFile)
-	} else {
-		slog.Info("Bearer tokens loaded", "tokenFile", app.config.Webserver.TokenFile, "names", names)
-	}
-
 	slog.Info("Starting web server", "url", app.web.Addr)
 	err := app.StartWebServer()
 	if err != nil {
@@ -235,11 +224,25 @@ func (app *App) Init() (err error) {
 		return err
 	}
 
-	// initRoutes should always be called at the end
 	slog.Debug("Initializing API routes")
 	app.SetupRoutes()
+	app.logTokens()
 
 	return nil
+}
+
+// logTokens names the bearer tokens the protected routes accept, or warns that there are none.
+func (app *App) logTokens() {
+	names := make([]string, 0, len(app.config.Webserver.Tokens))
+	for _, t := range app.config.Webserver.Tokens {
+		names = append(names, t.Name)
+	}
+	if len(names) == 0 {
+		slog.Warn("No bearer tokens loaded, every request to /health and /meters is rejected",
+			"tokenFile", app.config.Webserver.TokenFile)
+		return
+	}
+	slog.Info("Bearer tokens loaded", "tokenFile", app.config.Webserver.TokenFile, "names", names)
 }
 
 // Restart returns a read-only channel for restart signals.
