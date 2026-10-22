@@ -2,6 +2,7 @@ package s0meters
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -43,6 +44,18 @@ func TestGaugeAtScales(t *testing.T) {
 	c := pulsecounter.Counter{LastTimeStamp: now.Add(-2 * time.Second), TimeStamp: now.Add(-time.Second)}
 	if got := gaugeAt(c, MeterConfig{GaugeScale: 0.001, GaugePrecision: 2}, now); got != 3.6 {
 		t.Errorf("kW gauge = %v, want 3.6", got)
+	}
+}
+
+// The gauge counts pulses per hour times gaugeScale; counterPulsesPerUnit is the counter's
+// business only.
+func TestGaugeAtIgnoresCounterPulsesPerUnit(t *testing.T) {
+	now := time.Now()
+	c := pulsecounter.Counter{LastTimeStamp: now.Add(-2 * time.Second), TimeStamp: now.Add(-time.Second)}
+	for _, ppu := range []float64{1, 1000} {
+		if got := gaugeAt(c, MeterConfig{CounterPulsesPerUnit: ppu, GaugeScale: 1}, now); got != 3600 {
+			t.Errorf("counterPulsesPerUnit %v: gauge = %v, want 3600", ppu, got)
+		}
 	}
 }
 
@@ -127,24 +140,27 @@ func TestMeterConfigValidate(t *testing.T) {
 		t.Fatalf("valid config: %v", err)
 	}
 
-	invalid := map[string]func(*MeterConfig){
-		"gpio 0":                  func(c *MeterConfig) { c.Gpio = 0 },
-		"gpio 1":                  func(c *MeterConfig) { c.Gpio = 1 },
-		"gpio 28":                 func(c *MeterConfig) { c.Gpio = 28 },
-		"negative debounce":       func(c *MeterConfig) { c.DebounceTime = -time.Millisecond },
-		"zero pulses per unit":    func(c *MeterConfig) { c.CounterPulsesPerUnit = 0 },
-		"infinite pulses":         func(c *MeterConfig) { c.CounterPulsesPerUnit = math.Inf(1) },
-		"NaN gauge scale":         func(c *MeterConfig) { c.GaugeScale = math.NaN() },
-		"negative gauge scale":    func(c *MeterConfig) { c.GaugeScale = -1 },
-		"counter precision 16":    func(c *MeterConfig) { c.CounterPrecision = 16 },
-		"negative gauge precison": func(c *MeterConfig) { c.GaugePrecision = -1 },
+	invalid := map[string]struct {
+		mutate func(*MeterConfig)
+		want   string
+	}{
+		"gpio 0":                  {func(c *MeterConfig) { c.Gpio = 0 }, "gpio 0"},
+		"gpio 1":                  {func(c *MeterConfig) { c.Gpio = 1 }, "HAT ID EEPROM"},
+		"gpio 28":                 {func(c *MeterConfig) { c.Gpio = 28 }, "not on the 40-pin header"},
+		"negative debounce":       {func(c *MeterConfig) { c.DebounceTime = -time.Millisecond }, "debounceTime"},
+		"zero pulses per unit":    {func(c *MeterConfig) { c.CounterPulsesPerUnit = 0 }, "counterPulsesPerUnit"},
+		"infinite pulses":         {func(c *MeterConfig) { c.CounterPulsesPerUnit = math.Inf(1) }, "counterPulsesPerUnit"},
+		"NaN gauge scale":         {func(c *MeterConfig) { c.GaugeScale = math.NaN() }, "gaugeScale"},
+		"negative gauge scale":    {func(c *MeterConfig) { c.GaugeScale = -1 }, "gaugeScale"},
+		"counter precision 16":    {func(c *MeterConfig) { c.CounterPrecision = 16 }, "counterPrecision"},
+		"negative gauge precison": {func(c *MeterConfig) { c.GaugePrecision = -1 }, "gaugePrecision"},
 	}
-	for name, mutate := range invalid {
+	for name, tc := range invalid {
 		t.Run(name, func(t *testing.T) {
 			c := valid
-			mutate(&c)
-			if err := c.Validate(); err == nil {
-				t.Error("expected an error")
+			tc.mutate(&c)
+			if err := c.Validate(); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("Validate() = %v, want an error containing %q", err, tc.want)
 			}
 		})
 	}

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/womat/mqtt"
 )
 
 func TestCollectPending(t *testing.T) {
@@ -104,6 +106,10 @@ func TestTelegramContract(t *testing.T) {
 	if payload["meter"] != "wallbox" || payload["counter"] != float64(34341804) || payload["counterUnit"] != "Wh" {
 		t.Errorf("payload = %s", b)
 	}
+	// The Node-RED flows read gauge as a number.
+	if _, ok := payload["gauge"].(float64); !ok || payload["gaugeUnit"] != "W" {
+		t.Errorf("gauge %v (%T), gaugeUnit %v; want a number in W", payload["gauge"], payload["gauge"], payload["gaugeUnit"])
+	}
 
 	// RFC 3339 with offset, whole seconds - no fraction.
 	ts, _ := payload["timestamp"].(string)
@@ -126,5 +132,24 @@ func TestReadingUsesLocalTimeInWholeSeconds(t *testing.T) {
 	}
 	if want := `"timestamp":"2026-10-04T22:50:35+02:00"`; !strings.Contains(string(b), want) {
 		t.Errorf("payload %s does not contain %s", b, want)
+	}
+}
+
+// A message the broker did not take is not recorded, so the meter is sent again on the next
+// tick instead of waiting for the heartbeat.
+func TestFailedPublishIsRetried(t *testing.T) {
+	h := handlerWith(map[string]*MeterInstance{
+		"wallbox": newMeter(t, MeterConfig{Gpio: 17, CounterPulsesPerUnit: 1, GaugeScale: 1, MqttTopic: "home/wallbox"}, 10),
+	})
+	state := map[string]publishState{}
+
+	// A handler without a client fails every publish.
+	h.publishDue(&mqtt.Handler{}, state, time.Minute)
+
+	if len(state) != 0 {
+		t.Errorf("state = %+v after a failed publish, want nothing recorded", state)
+	}
+	if got := h.collectPending(state, time.Minute, time.Now()); len(got) != 1 {
+		t.Errorf("next tick collects %d meters, want the one that failed", len(got))
 	}
 }
