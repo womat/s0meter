@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -97,4 +98,38 @@ func TestCancelledHandlerLeavesSignalForNextApp(t *testing.T) {
 			t.Error("the handler of a cancelled App consumed the signal")
 		}
 	})
+}
+
+// A signal that waits in the channel while a start fails stays there for the next App: the
+// failed App must not handle it, because its abort would run alongside the shutdown the
+// signal starts (F1).
+func TestFailedStartLeavesSignalForNextApp(t *testing.T) {
+	busy, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = busy.Close() }()
+
+	dir := t.TempDir()
+	cfg := NewConfig()
+	cfg.Env = DevEnv
+	cfg.DataFile = filepath.Join(dir, "s0meter.yaml")
+	cfg.Webserver.ListenHost = "127.0.0.1"
+	cfg.Webserver.ListenPort = busy.Addr().(*net.TCPAddr).Port
+	cfg.Webserver.CertFile = filepath.Join(dir, "missing.pem")
+
+	signals := make(chan os.Signal, 1)
+	signals <- syscall.SIGTERM
+	if _, err := New(cfg, signals, nil).Run(); err == nil {
+		t.Fatal("Run() succeeded on a port in use")
+	}
+
+	select {
+	case s := <-signals:
+		if s != syscall.SIGTERM {
+			t.Errorf("signal = %v, want SIGTERM", s)
+		}
+	default:
+		t.Error("the failed App took the signal away from the next one")
+	}
 }

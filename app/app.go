@@ -157,9 +157,6 @@ func (app *App) Run() (*App, error) {
 		app.meters.RunPeriodicBackup(app.ctx, app.config.BackupInterval, app.config.DataFile)
 	})
 
-	// handle the OS signals
-	app.HandleOSSignals()
-
 	names := make([]string, 0, len(app.config.Webserver.Tokens))
 	for _, t := range app.config.Webserver.Tokens {
 		names = append(names, t.Name)
@@ -177,6 +174,10 @@ func (app *App) Run() (*App, error) {
 		slog.Error("Web server failed to start", "url", app.web.Addr, "error", err)
 		return app, app.abort(err)
 	}
+
+	// Handle the OS signals only once nothing can fail any more. A signal that is already
+	// waiting would otherwise start a shutdown alongside abort, and be lost to the next App.
+	app.HandleOSSignals()
 
 	slog.Info("Module started successfully",
 		"module", MODULE,
