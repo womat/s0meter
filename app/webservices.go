@@ -49,7 +49,6 @@ func (app *App) StartWebServer() error {
 	app.web.WriteTimeout = defaultWriteTimeout
 	app.web.IdleTimeout = defaultIdleTimeout
 
-	// Load TLS certificate
 	// A certificate that is missing, unreadable or broken needs someone to fix it.
 	cert, err := loadTLSCert(app.config.Webserver.CertFile, app.config.Webserver.KeyFile, app.config.Env)
 	if err != nil {
@@ -73,39 +72,23 @@ func (app *App) StartWebServer() error {
 	// Nothing in the service reads Addr after this point.
 	app.web.Addr = listener.Addr().String()
 
-	// Channel to report server runtime errors
-	serverErrCh := make(chan error, 1)
-
-	go func() {
-		// ServeTLS blocks until Shutdown is called
-		err := app.web.ServeTLS(listener, "", "")
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			serverErrCh <- err
-		}
-
-		// Close the listener when ServeTLS exits, but ignore the normal
-		// already-closed case during graceful shutdown.
-		if err := listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
-			slog.Error("Failed to close listener", "error", err)
-		}
-	}()
-
-	// Goroutine to monitor runtime errors and handle shutdown
+	// ServeTLS blocks until Shutdown and closes the listener when it returns. A server that
+	// stops on its own is reported to the signal handler, which restarts the App; it must not
+	// be done from here, because the restart waits for this goroutine via app.wg.
 	app.wg.Go(func() {
-
-		select {
-		case err := <-serverErrCh:
-			// The signal handler restarts the App. It must not be done from here: the
-			// restart waits for this goroutine via app.wg.
+		if err := app.web.ServeTLS(listener, "", ""); !errors.Is(err, http.ErrServerClosed) {
 			app.serverErr <- err
-		case <-app.ctx.Done():
-			ctxShutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if err := app.web.Shutdown(ctxShutdown); err != nil {
-				slog.Error("Failed to shutdown webserver gracefully", "error", err)
-			} else {
-				slog.Info("Webserver stopped gracefully")
-			}
+		}
+	})
+
+	app.wg.Go(func() {
+		<-app.ctx.Done()
+		ctxShutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := app.web.Shutdown(ctxShutdown); err != nil {
+			slog.Error("Failed to shutdown webserver gracefully", "error", err)
+		} else {
+			slog.Info("Webserver stopped gracefully")
 		}
 	})
 
