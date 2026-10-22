@@ -6,7 +6,7 @@ import (
 	"github.com/womat/golib/v2/web"
 )
 
-// HandleMeterAll returns the current meter readings and monitoring data.
+// handleMeterAll returns the current meter readings and monitoring data.
 //
 //	@Summary		Get all meter readings
 //	@Description	Returns the current counter and gauge values for all registered S0 meters, keyed by meter name.
@@ -16,7 +16,7 @@ import (
 //	@Success		200	{object}	map[string]s0meters.MeterData	"Meter readings successfully retrieved"
 //	@Failure		401	{object}	web.ApiError					"Unauthorized"
 //	@Router			/meters [get]
-func (app *App) HandleMeterAll() http.Handler {
+func (app *App) handleMeterAll() http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			res := app.meters.GetMeterAll()
@@ -24,7 +24,7 @@ func (app *App) HandleMeterAll() http.Handler {
 		})
 }
 
-// HandleMeterOne returns the meter reading for a specific meter.
+// handleMeterOne returns the meter reading for a specific meter.
 //
 //	@Summary		Get single meter reading
 //	@Description	Returns the current counter and gauge values for a specific S0 meter by name.
@@ -36,7 +36,7 @@ func (app *App) HandleMeterAll() http.Handler {
 //	@Failure		401		{object}	web.ApiError		"Unauthorized"
 //	@Failure		404		{object}	web.ApiError		"Meter not found"
 //	@Router			/meters/{name} [get]
-func (app *App) HandleMeterOne() http.Handler {
+func (app *App) handleMeterOne() http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			name := r.PathValue("name")

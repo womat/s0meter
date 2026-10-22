@@ -28,7 +28,7 @@ func TestServerErrorRestartsApp(t *testing.T) {
 	cfg := NewConfig()
 	cfg.DataFile = filepath.Join(t.TempDir(), "s0meter.yaml")
 	app := New(cfg, make(chan os.Signal), nil)
-	app.HandleOSSignals()
+	app.handleSignals()
 
 	app.serverErr <- errors.New("listener died")
 
@@ -82,7 +82,7 @@ func TestRunServesTLS13AndFreesThePort(t *testing.T) {
 	cfg := NewConfig()
 	cfg.DataFile = filepath.Join(dir, "s0meter.yaml")
 	cfg.Webserver.ListenHost = "127.0.0.1"
-	cfg.Webserver.ListenPort = 0 // StartWebServer records the port it got in Addr
+	cfg.Webserver.ListenPort = 0 // startWebServer records the port it got in Addr
 	cfg.Webserver.CertFile = filepath.Join(dir, "missing.pem")
 	cfg.Webserver.KeyFile = cfg.Webserver.CertFile
 	cfg.Env = DevEnv

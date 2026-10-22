@@ -11,8 +11,8 @@ import (
 	"github.com/womat/golib/v2/web"
 )
 
-// SetupRoutes configures all HTTP routes and global middleware for the application.
-func (app *App) SetupRoutes() {
+// setupRoutes configures all HTTP routes and global middleware for the application.
+func (app *App) setupRoutes() {
 	webCfg := app.webConfig()
 
 	mux := http.NewServeMux()
@@ -24,13 +24,13 @@ func (app *App) SetupRoutes() {
 	app.registerSwaggerRoute(mux)
 
 	// Public routes. {$} matches / only, so the page does not catch unknown paths.
-	mux.Handle("GET /{$}", app.HandleUI())
-	mux.Handle("GET /version", app.HandleVersion())
+	mux.Handle("GET /{$}", app.handleUI())
+	mux.Handle("GET /version", app.handleVersion())
 
 	// Protected routes
-	mux.Handle("GET /health", web.WithAuth(app.HandleHealth(), webCfg))
-	mux.Handle("GET /meters", web.WithAuth(app.HandleMeterAll(), webCfg))
-	mux.Handle("GET /meters/{name}", web.WithAuth(app.HandleMeterOne(), webCfg))
+	mux.Handle("GET /health", web.WithAuth(app.handleHealth(), webCfg))
+	mux.Handle("GET /meters", web.WithAuth(app.handleMeterAll(), webCfg))
+	mux.Handle("GET /meters/{name}", web.WithAuth(app.handleMeterOne(), webCfg))
 
 	// Apply global middleware: CORS + IP filter. The API is read-only, so CORS advertises
 	// GET and the preflight OPTIONS only.

@@ -59,8 +59,8 @@ var ErrPermanent = errors.New("restarting does not help")
 // App is where the application is wired up: one App lives for one configuration.
 type App struct {
 	wg sync.WaitGroup // tracks the web server, backup and MQTT publish goroutines
-	// metersLoaded is set once Init registered every meter with its saved counter; only then
-	// may Cleanup write the data file.
+	// metersLoaded is set once setup registered every meter with its saved counter; only then
+	// may cleanup write the data file.
 	metersLoaded bool
 	config       *Config      // app configuration
 	web          *http.Server // HTTP server
@@ -111,7 +111,7 @@ func New(config *Config, signals <-chan os.Signal, checkReload func() error) *Ap
 func (app *App) Run() (*App, error) {
 	slog.Debug("Initializing application")
 
-	if err := app.Init(); err != nil {
+	if err := app.setup(); err != nil {
 		return app, app.abort(err)
 	}
 
@@ -162,7 +162,7 @@ func (app *App) Run() (*App, error) {
 	})
 
 	slog.Info("Starting web server", "url", app.web.Addr)
-	err := app.StartWebServer()
+	err := app.startWebServer()
 	if err != nil {
 		slog.Error("Web server failed to start", "url", app.web.Addr, "error", err)
 		return app, app.abort(err)
@@ -170,7 +170,7 @@ func (app *App) Run() (*App, error) {
 
 	// Handle the OS signals only once nothing can fail any more. A signal that is already
 	// waiting would otherwise start a shutdown alongside abort, and be lost to the next App.
-	app.HandleOSSignals()
+	app.handleSignals()
 
 	slog.Info("Module started successfully",
 		"module", MODULE,
@@ -180,12 +180,12 @@ func (app *App) Run() (*App, error) {
 	return app, nil
 }
 
-// Init prepares the application:
+// setup prepares the application:
 // - loads the saved pulse counts
 // - adds meters, each counting on from its saved value
 // - writes the data file once, which also proves it is writable
 // - initializes API routes
-func (app *App) Init() (err error) {
+func (app *App) setup() (err error) {
 
 	// Read the saved values before any GPIO pin is watched, so every meter starts counting from
 	// its restored value and no pulse counted during start-up can be overwritten afterwards.
@@ -215,7 +215,7 @@ func (app *App) Init() (err error) {
 		}
 	}
 
-	// From here on the meters hold every saved counter, so Cleanup may save them. Saving after a
+	// From here on the meters hold every saved counter, so cleanup may save them. Saving after a
 	// failed registration would drop the counters of the meters not registered yet.
 	app.metersLoaded = true
 
@@ -225,7 +225,7 @@ func (app *App) Init() (err error) {
 	}
 
 	slog.Debug("Initializing API routes")
-	app.SetupRoutes()
+	app.setupRoutes()
 	app.logTokens()
 
 	return nil
@@ -255,13 +255,13 @@ func (app *App) Shutdown() <-chan struct{} {
 	return app.shutdown
 }
 
-// HandleOSSignals handles SIGHUP (restart), SIGTERM and SIGINT (stop) from app.signals, and
+// handleSignals handles SIGHUP (restart), SIGTERM and SIGINT (stop) from app.signals, and
 // restarts the App when the web server stopped on its own.
 //
 // The subscription itself belongs to the caller and outlives this App, so nothing here
 // stops or resets it; one goroutine per App consumes at most one signal. Being the only
 // caller of shutdownProcedure, it also rules out two shutdowns running at once.
-func (app *App) HandleOSSignals() {
+func (app *App) handleSignals() {
 
 	go func() {
 		slog.Debug("Starting signal handler")
@@ -325,16 +325,16 @@ func (app *App) shutdownProcedure(m mode) {
 
 }
 
-// Cleanup releases application resources.
+// cleanup releases application resources.
 // It's called when the application is shutdown or restarted.
 // Should be used to free up resources.
-func (app *App) Cleanup() error {
+func (app *App) cleanup() error {
 	// Close first, so no pulse can be counted after the values have been saved. The counters
 	// stay readable after Close.
 	slog.Info("Closing all meters")
 	err := app.meters.Close()
 
-	// After a half-way Init the meters lack some saved counters: keep the data file as it is.
+	// After a half-way setup the meters lack some saved counters: keep the data file as it is.
 	if app.metersLoaded {
 		slog.Info("Saving meter data", "file", app.config.DataFile)
 		err = errors.Join(err, app.meters.SaveMeterData(app.config.DataFile))
@@ -349,7 +349,7 @@ func (app *App) Cleanup() error {
 }
 
 // abort undoes a Run that failed half way: it stops the goroutines already started and
-// releases what Init acquired, so the caller can start another App with the same GPIO lines,
+// releases what setup acquired, so the caller can start another App with the same GPIO lines,
 // port and data file. It returns err.
 func (app *App) abort(err error) error {
 	app.stop()
@@ -357,12 +357,12 @@ func (app *App) abort(err error) error {
 }
 
 // stop cancels the App's context, waits for the web server, the backup loop and the MQTT loop,
-// and then releases the resources, so the final save in Cleanup neither races a periodic backup
+// and then releases the resources, so the final save in cleanup neither races a periodic backup
 // nor runs while a publish is still in flight.
 func (app *App) stop() {
 	app.cancelFunc()
 	app.wg.Wait()
-	if err := app.Cleanup(); err != nil {
+	if err := app.cleanup(); err != nil {
 		slog.Error("Cleanup failed", "error", err)
 	}
 }

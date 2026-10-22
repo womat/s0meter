@@ -23,7 +23,7 @@ func newTestApp(t *testing.T, configure ...func(*Config)) *App {
 		f(cfg)
 	}
 	app := &App{config: cfg, web: &http.Server{}, meters: s0meters.New()}
-	app.SetupRoutes()
+	app.setupRoutes()
 	return app
 }
 

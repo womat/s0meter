@@ -6,7 +6,7 @@ import (
 	"github.com/womat/golib/v2/web"
 )
 
-// HandleVersion returns the application name and version.
+// handleVersion returns the application name and version.
 //
 //	@Summary		Get application version and name
 //	@Description	Returns the current application name and version. No authentication required.
@@ -14,7 +14,7 @@ import (
 //	@Produce		json
 //	@Success		200	{object}	object{app=string,appVersion=string}	"Application version and name"
 //	@Router			/version [get]
-func (app *App) HandleVersion() http.Handler {
+func (app *App) handleVersion() http.Handler {
 	// Response defines the JSON structure returned by /version
 	type HandleVersionResponse struct {
 		App        string `json:"app"`        // Application name (MODULE)

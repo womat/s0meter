@@ -37,13 +37,13 @@ func newTLSConfig(cert tls.Certificate) *tls.Config {
 	}
 }
 
-// StartWebServer initializes and starts the HTTPS server asynchronously.
+// startWebServer initializes and starts the HTTPS server asynchronously.
 // - Uses the file-based cert/key from config
 // - Development fallback (env: dev only): embedded self-signed cert
 // - Non-blocking: runs in goroutine
 // - Graceful shutdown on app.ctx cancellation
 // - A server that stops on its own is reported on app.serverErr, which restarts the App
-func (app *App) StartWebServer() error {
+func (app *App) startWebServer() error {
 	// Set default timeouts
 	app.web.ReadTimeout = defaultReadTimeout
 	app.web.WriteTimeout = defaultWriteTimeout

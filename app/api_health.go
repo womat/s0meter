@@ -49,7 +49,7 @@ const (
 
 var startTime = time.Now() // start of the process, for UptimeSeconds; a reload does not reset it
 
-// HandleHealth returns the current health data of the application.
+// handleHealth returns the current health data of the application.
 //
 //	@Summary		Get health data
 //	@Description	Retrieves memory usage, goroutine count, version, hostname, Go runtime version, OS, the MQTT connection state and broker (host:port, never credentials), and per meter the raw pulses, the time and age of the last pulse, the GPIO events lost (counted late, the gauge skips the gap), the MQTT topic and the reading in the display units of the web UI.
@@ -59,7 +59,7 @@ var startTime = time.Now() // start of the process, for UptimeSeconds; a reload 
 //	@Success		200	{object}	Health			"Health data successfully retrieved"
 //	@Failure		401	{object}	web.ApiError	"Unauthorized"
 //	@Router			/health [get]
-func (app *App) HandleHealth() http.Handler {
+func (app *App) handleHealth() http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			host, err := os.Hostname()

@@ -113,15 +113,15 @@ func waitForCounter(t *testing.T, app *App, meter string, want float64) {
 	}
 }
 
-// Init opens every meter with its saved value, so no pulse counted during start-up can be
-// overwritten by the restore; Cleanup closes the pins before the final save, so the file holds
+// setup opens every meter with its saved value, so no pulse counted during start-up can be
+// overwritten by the restore; cleanup closes the pins before the final save, so the file holds
 // every counted pulse and nothing after it.
 func TestInitRestoresAndCleanupSavesLastPulse(t *testing.T) {
 	app, pins := newMeterApp(t, "wallbox:\n    pulses: 4711\n", map[string]s0meters.MeterConfig{
 		"wallbox": {Gpio: 17, CounterPulsesPerUnit: 1, GaugeScale: 1},
 	})
 
-	if err := app.Init(); err != nil {
+	if err := app.setup(); err != nil {
 		t.Fatal(err)
 	}
 	if got := pins.starts[17]; got != 4711 {
@@ -132,17 +132,17 @@ func TestInitRestoresAndCleanupSavesLastPulse(t *testing.T) {
 	pulse(t, pin)
 	waitForCounter(t, app, "wallbox", 4712)
 
-	if err := app.Cleanup(); err != nil {
+	if err := app.cleanup(); err != nil {
 		t.Fatal(err)
 	}
 	if !pin.closed.Load() {
-		t.Error("Cleanup left the GPIO pin open")
+		t.Error("cleanup left the GPIO pin open")
 	}
 
 	// The pin no longer delivers events, so this pulse is neither counted nor saved.
 	pulse(t, pin)
 	if m, _ := app.meters.GetMeter("wallbox"); m.Counter != 4712 {
-		t.Errorf("counter = %v after Cleanup, want 4712", m.Counter)
+		t.Errorf("counter = %v after cleanup, want 4712", m.Counter)
 	}
 	saved, err := s0meters.ReadMeterData(app.config.DataFile)
 	if err != nil || saved["wallbox"] != 4712 {
@@ -182,10 +182,10 @@ func TestMetersEndpointsServeRegisteredMeter(t *testing.T) {
 	app, _ := newMeterApp(t, "wallbox:\n    pulses: 4711\n", map[string]s0meters.MeterConfig{
 		"wallbox": {Gpio: 17, CounterPulsesPerUnit: 1, GaugeScale: 1, CounterUnit: "Wh", GaugeUnit: "W"},
 	})
-	if err := app.Init(); err != nil {
+	if err := app.setup(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = app.Cleanup() })
+	t.Cleanup(func() { _ = app.cleanup() })
 
 	rec := serve(app, "/meters", "test-key")
 	if rec.Code != http.StatusOK {
@@ -216,21 +216,21 @@ func TestUnconfiguredCounterStaysInDataFile(t *testing.T) {
 	app, _ := newMeterApp(t, "wallbox:\n    pulses: 4711\nheatpump:\n    pulses: 99\n", map[string]s0meters.MeterConfig{
 		"wallbox": {Gpio: 17, CounterPulsesPerUnit: 1, GaugeScale: 1},
 	})
-	if err := app.Init(); err != nil {
+	if err := app.setup(); err != nil {
 		t.Fatal(err)
 	}
 
 	saved, err := s0meters.ReadMeterData(app.config.DataFile)
 	if err != nil || saved["heatpump"] != 99 {
-		t.Errorf("data file after Init = %v, %v; want heatpump kept at 99", saved, err)
+		t.Errorf("data file after setup = %v, %v; want heatpump kept at 99", saved, err)
 	}
 
-	if err := app.Cleanup(); err != nil {
+	if err := app.cleanup(); err != nil {
 		t.Fatal(err)
 	}
 	saved, err = s0meters.ReadMeterData(app.config.DataFile)
 	if err != nil || saved["heatpump"] != 99 || saved["wallbox"] != 4711 {
-		t.Errorf("data file after Cleanup = %v, %v; want heatpump 99 and wallbox 4711", saved, err)
+		t.Errorf("data file after cleanup = %v, %v; want heatpump 99 and wallbox 4711", saved, err)
 	}
 	if _, err := app.meters.GetMeter("heatpump"); err == nil {
 		t.Error("the unconfigured meter is served by the API")

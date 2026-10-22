@@ -18,7 +18,7 @@ func newSignalApp(t *testing.T, checkReload func() error) (*App, chan os.Signal)
 	cfg.DataFile = filepath.Join(t.TempDir(), "s0meter.yaml")
 	signals := make(chan os.Signal, 1)
 	app := New(cfg, signals, checkReload)
-	app.HandleOSSignals()
+	app.handleSignals()
 	return app, signals
 }
 

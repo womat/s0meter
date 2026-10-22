@@ -16,8 +16,8 @@ var uiPage []byte
 const uiCSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; " +
 	"connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
-// HandleUI serves the diagnostic web page.
-func (app *App) HandleUI() http.Handler {
+// handleUI serves the diagnostic web page.
+func (app *App) handleUI() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("Content-Type", "text/html; charset=utf-8")
