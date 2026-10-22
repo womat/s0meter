@@ -91,7 +91,7 @@ sudo chmod 640 /opt/s0meter/etc/key.pem
 Why root: whoever can write `config.yaml` or the token file can add a token of their own, and
 whoever can write `bin/s0meter` can replace the program. s0meter itself needs neither.
 
-**3. Configure** `/opt/s0meter/etc/config.yaml`: set `env: prod`, your MQTT broker (or delete the
+**3. Configure** `/opt/s0meter/etc/config.yaml`: keep `env: prod`, set your MQTT broker (or delete the
 `mqtt` block) and one entry per meter — see [Configuration](#configuration) and [Wiring](#wiring).
 Then create a token for each caller, here the browser:
 
@@ -237,10 +237,10 @@ logLevel: info
 # Supported values: stdout | stderr | /path/to/logfile
 logDestination: stdout
 
-# environment: dev | prod
+# environment: prod (default) | dev
 # With prod, a missing webserver.certFile is an error; dev falls back to the embedded,
-# publicly known development certificate.
-env: dev
+# publicly known development certificate - set it only on a development machine.
+env: prod
 
 
 # =============================================================================

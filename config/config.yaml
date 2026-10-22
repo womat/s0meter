@@ -11,10 +11,10 @@ logLevel: info
 # Supported values: stdout | stderr | /path/to/logfile
 logDestination: stdout
 
-# environment: dev | prod
+# environment: prod (default) | dev
 # With prod, a missing webserver.certFile is an error; dev falls back to the embedded,
-# publicly known development certificate.
-env: dev
+# publicly known development certificate - set it only on a development machine.
+env: prod
 
 
 # =============================================================================

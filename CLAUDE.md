@@ -71,6 +71,8 @@ docker run --rm -v "$PWD":/src -w /src mcr.microsoft.com/playwright/python:v1.52
 go run ./cmd/main.go --config config/config.yaml --debug   # Linux/Pi only
 ```
 
+`config/config.yaml` and `NewConfig()` default to `env: prod`, which refuses to start without `certFile`; set `env: dev` in a local copy to use the embedded development certificate.
+
 ## Architecture
 
 Layering is strict: `cmd` → `app` → `app/service/*` → `pkg/*`. Lower layers never import upward.

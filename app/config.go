@@ -76,7 +76,7 @@ func (m *MQTTConfig) MinInterval() time.Duration {
 // NewConfig returns a Config with sane defaults
 func NewConfig() *Config {
 	return &Config{
-		Env:            DevEnv,
+		Env:            ProdEnv, // dev only when set explicitly: it falls back to the public dev certificate
 		LogLevel:       "info",
 		LogDestination: "stdout",
 		BackupInterval: 60 * time.Second,
