@@ -147,8 +147,7 @@ func (app *App) Run() (*App, error) {
 			"minInterval", mqttConfig.MinInterval(),
 			"broker", logBroker)
 		app.wg.Go(func() {
-			app.meters.RunPeriodicPublish(app.ctx, mqttConfig.PublishInterval, mqttConfig.MinInterval(),
-				app.mqtt, app.mqtt.IsConnectionOpen)
+			app.meters.RunPeriodicPublish(app.ctx, mqttConfig.PublishInterval, mqttConfig.MinInterval(), app.mqtt)
 		})
 	}
 

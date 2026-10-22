@@ -142,7 +142,7 @@ func (h *Handler) GetMeterAll() map[string]MeterData {
 	now := time.Now()
 	data := make(map[string]MeterData, len(h.meters))
 	for name, m := range h.meters {
-		data[name] = reading(name, m, now)
+		data[name] = reading(name, m.Meter.GetCounter(), m.Config, now)
 	}
 	return data
 }
@@ -157,20 +157,19 @@ func (h *Handler) GetMeter(name string) (MeterData, error) {
 		return MeterData{}, fmt.Errorf("meter %s not found", name)
 	}
 
-	return reading(name, m, time.Now()), nil
+	return reading(name, m.Meter.GetCounter(), m.Config, time.Now()), nil
 }
 
-// reading builds the MeterData of meter name at now. Counter and gauge come from the same
-// counter snapshot, so they always describe the same state of the meter.
-func reading(name string, m *MeterInstance, now time.Time) MeterData {
-	c := m.Meter.GetCounter()
+// reading builds the MeterData of meter name from the counter snapshot c at now. Counter and
+// gauge come from the same snapshot, so they always describe the same state of the meter.
+func reading(name string, c pulsecounter.Counter, cfg MeterConfig, now time.Time) MeterData {
 	return MeterData{
 		Meter:       name,
 		TimeStamp:   now.Truncate(time.Second),
-		Counter:     counterOf(c, m.Config),
-		CounterUnit: m.Config.CounterUnit,
-		Gauge:       gaugeAt(c, m.Config, now),
-		GaugeUnit:   m.Config.GaugeUnit,
+		Counter:     counterOf(c, cfg),
+		CounterUnit: cfg.CounterUnit,
+		Gauge:       gaugeAt(c, cfg, now),
+		GaugeUnit:   cfg.GaugeUnit,
 	}
 }
 

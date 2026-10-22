@@ -85,12 +85,11 @@ func TestTelegramContract(t *testing.T) {
 		"wallbox": newMeter(t, MeterConfig{Gpio: 17, CounterPulsesPerUnit: 1, GaugeScale: 1, CounterUnit: "Wh", GaugeUnit: "W", MqttTopic: "home/wallbox"}, 34341804),
 	})
 
-	h.mux.RLock()
-	b, err := h.serializeMetricLocked("wallbox")
-	h.mux.RUnlock()
-	if err != nil {
-		t.Fatal(err)
+	pending := h.collectPending(nil, 0, time.Now())
+	if len(pending) != 1 {
+		t.Fatalf("collected %d messages, want 1", len(pending))
 	}
+	b := pending[0].msg.Payload
 
 	var payload map[string]any
 	if err := json.Unmarshal(b, &payload); err != nil {
@@ -130,7 +129,7 @@ func TestReadingUsesLocalTimeInWholeSeconds(t *testing.T) {
 	}
 	now := time.Date(2026, 10, 4, 22, 50, 35, 649486212, vienna)
 
-	b, err := json.Marshal(reading("wallbox", m, now))
+	b, err := json.Marshal(reading("wallbox", m.Meter.GetCounter(), m.Config, now))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +160,8 @@ func TestFailedPublishIsRetried(t *testing.T) {
 // fakePublisher records the messages it is given and whether the Handler's lock was held at the
 // time, which would block every API request for as long as the broker takes to acknowledge.
 type fakePublisher struct {
-	h *Handler
+	h    *Handler
+	open atomic.Bool // what IsConnectionOpen reports
 
 	mu         sync.Mutex
 	msgs       []mqtt.Message
@@ -180,6 +180,8 @@ func (f *fakePublisher) Publish(msg mqtt.Message) error {
 	f.lockedOnce = f.lockedOnce || !free
 	return nil
 }
+
+func (f *fakePublisher) IsConnectionOpen() bool { return f.open.Load() }
 
 func (f *fakePublisher) sent() []mqtt.Message {
 	f.mu.Lock()
@@ -232,11 +234,10 @@ func TestPublishLoopWaitsForTheConnection(t *testing.T) {
 
 	synctest.Test(t, func(t *testing.T) {
 		pub := &fakePublisher{h: h}
-		var connected atomic.Bool
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
 		go func() {
-			h.RunPeriodicPublish(ctx, time.Minute, time.Second, pub, connected.Load)
+			h.RunPeriodicPublish(ctx, time.Minute, time.Second, pub)
 			close(done)
 		}()
 
@@ -247,7 +248,7 @@ func TestPublishLoopWaitsForTheConnection(t *testing.T) {
 			t.Fatalf("published %d messages without a connection", got)
 		}
 
-		connected.Store(true)
+		pub.open.Store(true)
 		time.Sleep(time.Second)
 		synctest.Wait()
 		if got := len(pub.sent()); got != 1 {
