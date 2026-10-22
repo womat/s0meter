@@ -21,6 +21,7 @@ func loadYAML(t *testing.T, content string) (*Config, error) {
 func TestLoadConfigRejectsDurationWithoutUnit(t *testing.T) {
 	for name, tc := range map[string]struct{ yaml, key string }{
 		"backupInterval": {"backupInterval: 60\n", "backupInterval"},
+		"zero":           {"backupInterval: 0\n", "backupInterval"},
 		"meter debounce": {"meter:\n  wallbox:\n    gpio: 5\n    debounceTime: 10\n", "meter.wallbox.debounceTime"},
 		"minPublish":     {"mqtt:\n  minPublishInterval: 2\n", "mqtt.minPublishInterval"},
 	} {

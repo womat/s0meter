@@ -60,8 +60,8 @@ func TestLoadConfigRefusesMissingOrBrokenTokenFile(t *testing.T) {
 		"broken":  "nodered not-a-hash\n",
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := LoadConfig(writeTokenSetup(t, "token-hashes", tokens)); err == nil {
-				t.Error("LoadConfig accepted it")
+			if _, err := LoadConfig(writeTokenSetup(t, "token-hashes", tokens)); err == nil || !strings.Contains(err.Error(), "token file") {
+				t.Errorf("LoadConfig() = %v, want a token file error", err)
 			}
 		})
 	}
@@ -137,5 +137,40 @@ func TestProtectedRoutesRejectWithoutToken(t *testing.T) {
 		if rec := serve(app, path, "wrong"); rec.Code != http.StatusUnauthorized {
 			t.Errorf("GET %s = %d, want 401", path, rec.Code)
 		}
+	}
+}
+
+// A token file without tokens is not an error: the service starts and refuses every request
+// to the protected routes until a token is added.
+func TestLoadConfigAcceptsTokenFileWithoutTokens(t *testing.T) {
+	c, err := LoadConfig(writeTokenSetup(t, "token-hashes", "# no callers yet\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Webserver.Tokens) != 0 {
+		t.Errorf("Tokens = %+v, want none", c.Webserver.Tokens)
+	}
+}
+
+// A token added the way "s0meter token add" does it - to the file TokenFile names - is
+// accepted by the service that loads the same config.
+func TestTokenCommandAndServiceShareTheFile(t *testing.T) {
+	config := writeTokenSetup(t, "token-hashes", "")
+
+	file, err := TokenFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := web.AddTokenToFile(file, "nodered", web.HashToken("the-token")); err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := LoadConfig(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := newTestApp(t, func(cfg *Config) { cfg.Webserver.Tokens = c.Webserver.Tokens })
+	if rec := serve(app, "/health", "the-token"); rec.Code != http.StatusOK {
+		t.Errorf("GET /health with the added token = %d, want 200", rec.Code)
 	}
 }

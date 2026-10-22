@@ -103,28 +103,49 @@ func TestValidate(t *testing.T) {
 		t.Fatalf("valid config: %v", err)
 	}
 
-	invalid := map[string]func(*Config){
-		"missing tokenFile": func(c *Config) { c.Webserver.TokenFile = "" },
-		"unknown env":       func(c *Config) { c.Env = "staging" },
-		"invalid meter":     func(c *Config) { c.Meter["a"] = meterOn(1) },
-		"duplicate gpio":    func(c *Config) { c.Meter["a"] = meterOn(17); c.Meter["b"] = meterOn(17) },
-		"display unit of another quantity": func(c *Config) {
+	// Each case names a part of the message it must produce, so it cannot pass for another
+	// reason when validConfig changes.
+	invalid := map[string]struct {
+		mutate func(*Config)
+		want   string
+	}{
+		"missing tokenFile": {func(c *Config) { c.Webserver.TokenFile = "" }, "tokenFile is not configured"},
+		"unknown env":       {func(c *Config) { c.Env = "staging" }, "invalid environment"},
+		"unknown log level": {func(c *Config) { c.LogLevel = "verbose" }, "invalid log level"},
+		"port 0":            {func(c *Config) { c.Webserver.ListenPort = 0 }, "invalid port"},
+		"port 65536":        {func(c *Config) { c.Webserver.ListenPort = 65536 }, "invalid port"},
+		"backup below 1s":   {func(c *Config) { c.BackupInterval = 500 * time.Millisecond }, "backupInterval must be at least 1s"},
+		"invalid meter":     {func(c *Config) { c.Meter["a"] = meterOn(1) }, `meter "a"`},
+		"duplicate gpio": {func(c *Config) { c.Meter["a"] = meterOn(17); c.Meter["b"] = meterOn(17) },
+			`meters "a" and "b" both use gpio 17`},
+		"display unit of another quantity": {func(c *Config) {
 			m := meterOn(2)
 			m.CounterUnit, m.DisplayUnit = "Wh", "m³"
 			c.Meter["a"] = m
-		},
-		"unknown display gauge unit": func(c *Config) {
+		}, "displayUnit"},
+		"unknown display gauge unit": {func(c *Config) {
 			m := meterOn(2)
 			m.GaugeUnit, m.DisplayGaugeUnit = "W", "PS"
 			c.Meter["a"] = m
-		},
+		}, "displayGaugeUnit"},
+		"publishInterval below 1s": {func(c *Config) {
+			c.MQTT = &MQTTConfig{Connection: "tcp://broker:1883", PublishInterval: 500 * time.Millisecond}
+		}, "publishInterval must be at least 1s"},
+		"negative minPublishInterval": {func(c *Config) {
+			minInterval := -time.Second
+			c.MQTT = &MQTTConfig{Connection: "tcp://broker:1883", MinPublishInterval: &minInterval}
+		}, "must not be negative"},
+		"minPublishInterval above publishInterval": {func(c *Config) {
+			minInterval := 2 * time.Minute
+			c.MQTT = &MQTTConfig{Connection: "tcp://broker:1883", MinPublishInterval: &minInterval}
+		}, "must not exceed publishInterval"},
 	}
-	for name, mutate := range invalid {
+	for name, tc := range invalid {
 		t.Run(name, func(t *testing.T) {
 			c := validConfig()
-			mutate(c)
-			if err := c.Validate(); err == nil {
-				t.Error("expected an error")
+			tc.mutate(c)
+			if err := c.Validate(); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("Validate() = %v, want an error containing %q", err, tc.want)
 			}
 		})
 	}
