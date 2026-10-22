@@ -92,9 +92,23 @@ func main() {
 	os.Exit(run(*configFile, *debug))
 }
 
-// run initializes configuration, logging, and the application loop.
-// It supports hot-reloading of the configuration and handles graceful shutdown.
+// run subscribes to the OS signals and runs the application loop.
 func run(configFile string, debug bool) int {
+	// Subscribe once for the whole process, not per App: between two lifecycles no App is
+	// listening, and without a subscription a SIGTERM or a second SIGHUP in that gap would end
+	// the process with the default action, before the counters are saved. Here the signal
+	// waits in the buffer and the next App handles it.
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
+	defer signal.Stop(signals)
+
+	return loop(configFile, debug, signals)
+}
+
+// loop initializes configuration and logging, then runs one App after another until a stop
+// signal arrives, and returns the exit code. It supports hot-reloading of the configuration
+// and handles graceful shutdown. signals must stay subscribed for the whole loop, see run.
+func loop(configFile string, debug bool, signals <-chan os.Signal) int {
 
 	var logger *xlog.LoggerWrapper
 	defer func() {
@@ -105,14 +119,6 @@ func run(configFile string, debug bool) int {
 
 	fmt.Printf("Starting %s %s\n", app.MODULE, app.VERSION)
 	fmt.Printf("Loading configuration from: %s\n", configFile)
-
-	// Subscribe once for the whole process, not per App: between two lifecycles no App is
-	// listening, and without a subscription a SIGTERM or a second SIGHUP in that gap would end
-	// the process with the default action, before the counters are saved. Here the signal
-	// waits in the buffer and the next App handles it.
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
-	defer signal.Stop(signals)
 
 	config, err := loadConfig(configFile, debug)
 	if err != nil {
