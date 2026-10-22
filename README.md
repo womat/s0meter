@@ -494,6 +494,11 @@ from 0 — fix or restore the file, set `pulses: 0` to start one meter from 0, o
 start every meter from 0 on purpose. A missing file is fine: all meters start from 0 and the file is
 created right away.
 
+A meter removed from (or commented out of) `meter:` keeps its entry in the file, with `Saved meter is
+not configured, its counter is kept in the data file` in the log; configured again under the same
+name, it continues from that count. To get rid of the entry, delete it from the file with the
+service stopped, as above.
+
 Two worked examples:
 
 | Physical reading | `counterUnit` | `counterPulsesPerUnit` | `pulses:` |

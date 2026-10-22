@@ -213,16 +213,18 @@ func (app *App) Init() (err error) {
 		}
 	}
 
-	// From here on the meters hold every counter, so Cleanup may save them. Saving after a
-	// failed registration would drop the counters of the meters not registered yet.
-	app.metersLoaded = true
-
+	// A meter that was commented out keeps its counter, so enabling it again continues from it.
 	for name, pulses := range saved {
 		if _, ok := app.config.Meter[name]; !ok {
-			slog.Warn("Saved meter is not configured, its counter is dropped with the next save",
+			slog.Warn("Saved meter is not configured, its counter is kept in the data file",
 				"meter", name, "pulses", pulses, "file", dataFile)
+			app.meters.KeepSaved(name, pulses)
 		}
 	}
+
+	// From here on the meters hold every saved counter, so Cleanup may save them. Saving after a
+	// failed registration would drop the counters of the meters not registered yet.
+	app.metersLoaded = true
 
 	if err = app.meters.SaveMeterData(dataFile); err != nil {
 		slog.Error("Failed to save meter data", "file", dataFile, "error", err)

@@ -99,7 +99,10 @@ type savedCounter struct {
 // file, never an empty or half-written one.
 func (h *Handler) SaveMeterData(file string) error {
 	h.mux.RLock()
-	data := make(map[string]pulsecounter.Counter, len(h.meters))
+	data := make(map[string]pulsecounter.Counter, len(h.meters)+len(h.kept))
+	for name, pulses := range h.kept {
+		data[name] = pulsecounter.Counter{Pulses: pulses}
+	}
 	for name, m := range h.meters {
 		data[name] = m.Meter.GetCounter()
 	}

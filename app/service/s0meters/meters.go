@@ -30,7 +30,8 @@ import (
 type Handler struct {
 	mux    sync.RWMutex
 	meters map[string]*MeterInstance
-	open   OpenFunc // opens the pulse counter of a meter in RegisterMeter
+	kept   map[string]uint64 // saved counters of meters no longer configured, see KeepSaved
+	open   OpenFunc          // opens the pulse counter of a meter in RegisterMeter
 }
 
 // OpenFunc opens the pulse counter of one meter on GPIO line gpio, counting on from pulses.
@@ -90,8 +91,18 @@ func New() *Handler {
 func NewWith(open OpenFunc) *Handler {
 	return &Handler{
 		meters: make(map[string]*MeterInstance),
+		kept:   make(map[string]uint64),
 		open:   open,
 	}
+}
+
+// KeepSaved carries the saved pulse count of a meter that is no longer configured, so that
+// SaveMeterData writes it back instead of dropping it. It is not counted, published or served;
+// it only stays in the data file until someone removes it there, with the service stopped.
+func (h *Handler) KeepSaved(name string, pulses uint64) {
+	h.mux.Lock()
+	defer h.mux.Unlock()
+	h.kept[name] = pulses
 }
 
 // Close stops counting on all meters and releases their GPIO lines. The counters stay readable.

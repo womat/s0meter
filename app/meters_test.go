@@ -209,3 +209,30 @@ func TestMetersEndpointsServeRegisteredMeter(t *testing.T) {
 		t.Errorf("GET /meters/unknown = %d, want 404", rec.Code)
 	}
 }
+
+// A saved counter whose meter is no longer configured stays in the data file until someone
+// removes it there, so commenting a meter out and back in does not lose its count (F3).
+func TestUnconfiguredCounterStaysInDataFile(t *testing.T) {
+	app, _ := newMeterApp(t, "wallbox:\n    pulses: 4711\nheatpump:\n    pulses: 99\n", map[string]s0meters.MeterConfig{
+		"wallbox": {Gpio: 17, CounterPulsesPerUnit: 1, GaugeScale: 1},
+	})
+	if err := app.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	saved, err := s0meters.ReadMeterData(app.config.DataFile)
+	if err != nil || saved["heatpump"] != 99 {
+		t.Errorf("data file after Init = %v, %v; want heatpump kept at 99", saved, err)
+	}
+
+	if err := app.Cleanup(); err != nil {
+		t.Fatal(err)
+	}
+	saved, err = s0meters.ReadMeterData(app.config.DataFile)
+	if err != nil || saved["heatpump"] != 99 || saved["wallbox"] != 4711 {
+		t.Errorf("data file after Cleanup = %v, %v; want heatpump 99 and wallbox 4711", saved, err)
+	}
+	if _, err := app.meters.GetMeter("heatpump"); err == nil {
+		t.Error("the unconfigured meter is served by the API")
+	}
+}
