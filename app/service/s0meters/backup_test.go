@@ -1,9 +1,13 @@
 package s0meters
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 )
 
 func TestReadMeterDataMissingFile(t *testing.T) {
@@ -89,5 +93,77 @@ func TestSaveMeterDataRoundtripIsAtomic(t *testing.T) {
 	}
 	if perm := info.Mode().Perm(); perm != 0o600 {
 		t.Errorf("permissions = %v, want 0600", perm)
+	}
+}
+
+// The loop saves every interval; a failed save is logged and the next one is tried again.
+func TestPeriodicBackupSurvivesAFailedSave(t *testing.T) {
+	h := handlerWith(map[string]*MeterInstance{
+		"wallbox": newMeter(t, MeterConfig{Gpio: 17, CounterPulsesPerUnit: 1, GaugeScale: 1}, 4711),
+	})
+	// The data directory is a regular file at first, so the first save cannot create its
+	// temporary file.
+	dir := filepath.Join(t.TempDir(), "data")
+	if err := os.WriteFile(dir, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "s0meter.yaml")
+
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		go func() {
+			h.RunPeriodicBackup(ctx, time.Minute, file)
+			close(done)
+		}()
+
+		time.Sleep(time.Minute + time.Second)
+		synctest.Wait()
+		if _, err := os.Stat(file); err == nil {
+			t.Fatal("the save into a regular file as directory succeeded")
+		}
+
+		if err := os.Remove(dir); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(time.Minute)
+		synctest.Wait()
+		got, err := ReadMeterData(file)
+		if err != nil || got["wallbox"] != 4711 {
+			t.Errorf("after the next interval: %v, %v; want wallbox at 4711", got, err)
+		}
+
+		cancel()
+		<-done
+	})
+}
+
+// A rename that fails leaves the old file in place and no temporary file behind.
+func TestWriteFileAtomicCleansUpAfterAFailedRename(t *testing.T) {
+	dir := t.TempDir()
+	// A non-empty directory cannot be replaced by a file, not even by root.
+	target := filepath.Join(dir, "s0meter.yaml")
+	if err := os.MkdirAll(filepath.Join(target, "keep"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeFileAtomic(target, []byte("wallbox: {}\n"), 0o600); err == nil {
+		t.Fatal("writeFileAtomic over a non-empty directory succeeded")
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.Contains(e.Name(), ".tmp-") {
+			t.Errorf("temporary file %s left behind", e.Name())
+		}
+	}
+	if _, err := os.Stat(filepath.Join(target, "keep")); err != nil {
+		t.Errorf("the old target was touched: %v", err)
 	}
 }
