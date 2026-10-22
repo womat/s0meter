@@ -25,6 +25,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # GoReleaser needs the full history to build the changelog
+          # Keep the write token out of .git/config while `make test` runs the code of every
+          # dependency; GoReleaser gets it through its env, and fetching this public repo
+          # needs none.
+          persist-credentials: false
 
       # Releases are cut from main only. `make release` enforces this locally, but
       # a hand-made `git tag` bypasses it, so the workflow refuses to publish a
