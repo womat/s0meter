@@ -67,7 +67,9 @@ backupInterval: 60s
 # without MQTT)
 # =============================================================================
 mqtt:
-  # Broker connection string, required
+  # Broker connection string, required. With credentials: tcp://user:password@host:1883;
+  # URL-encode special characters in user and password (/ as %2F, # as %23, ? as %3F),
+  # otherwise the start is refused, because the password could not be hidden in the log.
   connection: "tcp://mqtt.example.com:1883"
 
   # Heartbeat: every meter is published at least this often, as a Go duration string

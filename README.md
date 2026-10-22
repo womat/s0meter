@@ -219,7 +219,10 @@ binary, with no external fonts or scripts, so it works without internet access.
 Default location: `/opt/s0meter/etc/config.yaml`
 Environment variables are expanded inside the file in the `${VAR}` form only, e.g.
 `connection: tcp://s0meter:${MQTT_PASSWORD}@broker:1883`; an unset variable becomes empty. Any
-other `$` is kept literally, so passwords may contain it. Unknown keys are rejected, so a misspelled or renamed setting
+other `$` is kept literally, so passwords may contain it. Special characters in the user or
+password of `connection` must be URL-encoded (`/` as `%2F`, `#` as `%23`, `?` as `%3F`, a value
+taken from a variable included); otherwise the start is refused, because the password could not be
+hidden in the log and on `/health`. Unknown keys are rejected, so a misspelled or renamed setting
 stops the start instead of silently keeping its default. Durations need a unit (`10ms`, `2s`, `1m`):
 a bare number, `0` included, is rejected.
 
@@ -293,7 +296,9 @@ backupInterval: 60s
 # without MQTT)
 # =============================================================================
 mqtt:
-  # Broker connection string, required
+  # Broker connection string, required. With credentials: tcp://user:password@host:1883;
+  # URL-encode special characters in user and password (/ as %2F, # as %23, ? as %3F),
+  # otherwise the start is refused, because the password could not be hidden in the log.
   connection: "tcp://mqtt.example.com:1883"
 
   # Heartbeat: every meter is published at least this often, as a Go duration string

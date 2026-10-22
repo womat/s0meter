@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/womat/golib/v2/web"
@@ -230,6 +232,15 @@ func (m *MQTTConfig) validate() error {
 
 	if m.Connection == "" {
 		return errors.New("mqtt.connection is required; delete the mqtt block to run without MQTT")
+	}
+
+	// The broker URL is redacted before it is logged or shown on /health, which only works when
+	// url.Parse finds the user part. An unencoded "/", "#", "?" or space in the password hides
+	// it, and the password would appear in plain text. The errors do not repeat the URL.
+	u, err := url.Parse(m.Connection)
+	if err != nil || (u.User == nil && strings.Contains(m.Connection, "@")) {
+		return errors.New("mqtt.connection is not a valid URL; URL-encode special characters " +
+			"in user and password, e.g. / as %2F, # as %23, ? as %3F")
 	}
 
 	if m.PublishInterval == 0 {

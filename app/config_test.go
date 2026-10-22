@@ -1,6 +1,7 @@
 package app
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -191,6 +192,43 @@ func TestMQTTBlockPresenceAndDefaults(t *testing.T) {
 	for _, content := range []string{"mqtt:\n  connection: \"\"\n", "mqtt:\n  publishInterval: 30s\n"} {
 		if _, err = load(t, content); err == nil || !strings.Contains(err.Error(), "delete the mqtt block") {
 			t.Errorf("Validate() = %v for %q, want the hint to delete the mqtt block", err, content)
+		}
+	}
+}
+
+// A broker URL whose password is not URL-encoded cannot be redacted: url.Parse no longer finds
+// the user part, so the password would reach the log and /health in plain text (S2). Such a
+// URL is refused, and the error does not repeat it.
+func TestValidateRefusesBrokerURLWithUnencodedPassword(t *testing.T) {
+	const secret = "s3cr"
+	for _, connection := range []string{
+		"tcp://user:123/" + secret + "@broker:1883", // digits + "/": parses, but without a user
+		"tcp://user:" + secret + "#1@broker:1883",
+		"tcp://user:" + secret + "?1@broker:1883",
+		"tcp://user:" + secret + " 1@broker:1883",
+	} {
+		c := NewConfig()
+		c.Webserver.TokenFile = "token-hashes"
+		c.MQTT = &MQTTConfig{Connection: connection}
+		err := c.Validate()
+		if err == nil || !strings.Contains(err.Error(), "URL-encode") {
+			t.Errorf("Validate(%q) = %v, want an error asking to URL-encode", connection, err)
+			continue
+		}
+		if strings.Contains(err.Error(), secret) {
+			t.Errorf("the error for %q repeats the password: %v", connection, err)
+		}
+	}
+
+	for _, connection := range []string{
+		"tcp://broker:1883",
+		"tcp://user:" + url.QueryEscape("123/s3cr#?") + "@broker:1883",
+	} {
+		c := NewConfig()
+		c.Webserver.TokenFile = "token-hashes"
+		c.MQTT = &MQTTConfig{Connection: connection}
+		if err := c.Validate(); err != nil {
+			t.Errorf("Validate(%q) = %v, want it accepted", connection, err)
 		}
 	}
 }
