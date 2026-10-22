@@ -52,12 +52,7 @@ func main() {
 
 	// "s0meter token add|remove|list" manages the bearer tokens in webserver.tokenFile.
 	if len(os.Args) > 1 && os.Args[1] == "token" {
-		os.Exit(web.TokenCommand{
-			App:           app.MODULE,
-			DefaultConfig: defaultConfig,
-			TokenFile:     app.TokenFile,
-			Apply:         "Apply with: systemctl reload " + app.MODULE,
-		}.Run(os.Args[2:]))
+		os.Exit(tokenCommand(defaultConfig).Run(os.Args[2:]))
 	}
 
 	// Parse command line flags.
@@ -188,6 +183,17 @@ func loop(configFile string, debug bool, signals <-chan os.Signal) int {
 			slog.Info("Shutdown requested")
 			return 0
 		}
+	}
+}
+
+// tokenCommand returns the "token" subcommand, which finds the token file through the same
+// webserver.tokenFile of defaultConfig (or -config) that the service reads.
+func tokenCommand(defaultConfig string) web.TokenCommand {
+	return web.TokenCommand{
+		App:           app.MODULE,
+		DefaultConfig: defaultConfig,
+		TokenFile:     app.TokenFile,
+		Apply:         "Apply with: systemctl reload " + app.MODULE,
 	}
 }
 
