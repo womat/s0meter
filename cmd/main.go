@@ -177,19 +177,18 @@ func loop(configFile string, debug bool, signals <-chan os.Signal) int {
 		}
 		lastGood = config
 
-		// Wait for restart or shutdown signals
-		select {
-		case <-a.Restart():
-			slog.Info("Reloading configuration", "configFile", configFile)
-			time.Sleep(time.Second) // prevent tight restart loops
-			// The file was checked before the restart, but it may have changed since.
-			if config, err = loadConfig(configFile, debug); err != nil {
-				slog.Error("Config reload failed, continuing with the previous configuration", "error", err)
-				config = lastGood
-			}
-		case <-a.Shutdown():
+		// Wait until the App has stopped, for a restart or for good.
+		<-a.Done()
+		if !a.Restarting() {
 			slog.Info("Shutdown requested")
 			return 0
+		}
+		slog.Info("Reloading configuration", "configFile", configFile)
+		time.Sleep(time.Second) // prevent tight restart loops
+		// The file was checked before the restart, but it may have changed since.
+		if config, err = loadConfig(configFile, debug); err != nil {
+			slog.Error("Config reload failed, continuing with the previous configuration", "error", err)
+			config = lastGood
 		}
 	}
 }

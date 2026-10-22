@@ -33,9 +33,12 @@ func TestServerErrorRestartsApp(t *testing.T) {
 	app.serverErr <- errors.New("listener died")
 
 	select {
-	case <-app.Restart():
+	case <-app.Done():
 	case <-time.After(5 * time.Second):
-		t.Fatal("a web server error did not restart the App")
+		t.Fatal("a web server error did not stop the App")
+	}
+	if !app.Restarting() {
+		t.Error("a web server error stopped the App for good instead of restarting it")
 	}
 	if app.ctx.Err() == nil {
 		t.Error("the App context was not cancelled by the restart")
@@ -119,7 +122,7 @@ func TestRunServesTLS13AndFreesThePort(t *testing.T) {
 
 	signals <- syscall.SIGTERM
 	select {
-	case <-app.Shutdown():
+	case <-app.Done():
 	case <-time.After(10 * time.Second):
 		t.Fatal("SIGTERM did not stop the App")
 	}
@@ -177,7 +180,7 @@ func TestIPv4ListenHostIsNotReachableOverIPv6(t *testing.T) {
 	}
 	defer func() {
 		signals <- syscall.SIGTERM
-		<-app.Shutdown()
+		<-app.Done()
 	}()
 
 	_, port, err := net.SplitHostPort(app.web.Addr)

@@ -10,10 +10,8 @@
 //	signals := make(chan os.Signal, 1)
 //	signal.Notify(signals, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
 //	a, err := app.New(cfg, signals, checkReload).Run()
-//	select {
-//	case <-a.Restart():  // build the next App
-//	case <-a.Shutdown(): // exit
-//	}
+//	<-a.Done()
+//	if a.Restarting() { /* build the next App */ } else { /* exit */ }
 package app
 
 import (
@@ -69,8 +67,8 @@ type App struct {
 	signals      <-chan os.Signal // OS signals, subscribed once by the caller for all lifecycles
 	checkReload  func() error     // loads and validates the config file before a SIGHUP restart
 	serverErr    chan error       // reports a web server that stopped on its own
-	restart      chan struct{}    // signals application restart
-	shutdown     chan struct{}    // signals application shutdown
+	done         chan struct{}    // closed once the App has stopped, see Done
+	restarting   bool             // set before done is closed, see Restarting
 	ctx          context.Context
 	cancelFunc   context.CancelFunc
 }
@@ -99,8 +97,7 @@ func New(config *Config, signals <-chan os.Signal, checkReload func() error) *Ap
 		meters: s0meters.New(),
 
 		serverErr:  make(chan error, 1),
-		restart:    make(chan struct{}),
-		shutdown:   make(chan struct{}),
+		done:       make(chan struct{}),
 		ctx:        ctx,
 		cancelFunc: cancel,
 	}
@@ -245,14 +242,16 @@ func (app *App) logTokens() {
 	slog.Info("Bearer tokens loaded", "tokenFile", app.config.Webserver.TokenFile, "names", names)
 }
 
-// Restart returns a read-only channel for restart signals.
-func (app *App) Restart() <-chan struct{} {
-	return app.restart
+// Done is closed once the App has stopped and released everything: after SIGHUP, SIGTERM or
+// SIGINT, or a web server that stopped on its own. Restarting then tells what comes next.
+func (app *App) Done() <-chan struct{} {
+	return app.done
 }
 
-// Shutdown returns a read-only channel for shutdown signals.
-func (app *App) Shutdown() <-chan struct{} {
-	return app.shutdown
+// Restarting reports, once Done is closed, whether the App stopped to be replaced by one with
+// the reloaded configuration (SIGHUP, web server error); false means the process exits.
+func (app *App) Restarting() bool {
+	return app.restarting
 }
 
 // handleSignals handles SIGHUP (restart), SIGTERM and SIGINT (stop) from app.signals, and
@@ -306,23 +305,19 @@ func (app *App) handleSignals() {
 	}()
 }
 
-// shutdownProcedure stops the App and then reports on Restart or Shutdown, depending on m.
+// shutdownProcedure stops the App and closes Done; m decides what Restarting reports. Closing
+// instead of sending means it never blocks on a caller that is not listening.
 func (app *App) shutdownProcedure(m mode) {
 	slog.Info("Initiating shutdown", "mode", m)
 	app.stop()
 
-	switch m {
-	case modeRestart:
+	app.restarting = m == modeRestart
+	if app.restarting {
 		slog.Info("Shutdown complete, restarting")
-		app.restart <- struct{}{}
-		// Channels are intentionally left open: cmd/main.go receives the restart
-		// signal and calls New(), which creates fresh channels for the next lifecycle.
-	case modeStop:
+	} else {
 		slog.Info("Module stopped", "module", MODULE, "version", VERSION, "pid", os.Getpid())
-		app.shutdown <- struct{}{}
-		close(app.shutdown)
 	}
-
+	close(app.done)
 }
 
 // cleanup releases application resources.

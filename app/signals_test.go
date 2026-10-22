@@ -29,7 +29,10 @@ func TestSIGHUPRestarts(t *testing.T) {
 		app, signals := newSignalApp(t, func() error { checked = true; return nil })
 
 		signals <- syscall.SIGHUP
-		<-app.Restart()
+		<-app.Done()
+		if !app.Restarting() {
+			t.Error("SIGHUP stopped the App for good instead of restarting it")
+		}
 
 		if !checked {
 			t.Error("the config was not checked before the restart")
@@ -52,18 +55,18 @@ func TestRejectedReloadKeepsRunning(t *testing.T) {
 			t.Fatal("a rejected reload stopped the App")
 		}
 		select {
-		case <-app.Restart():
-			t.Fatal("a rejected reload restarted the App")
+		case <-app.Done():
+			t.Fatal("a rejected reload stopped the App")
 		default:
 		}
 
 		signals <- syscall.SIGTERM
-		<-app.Shutdown()
+		<-app.Done()
 	})
 }
 
-// SIGTERM and SIGINT stop the App; the shutdown channel is closed afterwards, so every later
-// receive returns at once.
+// SIGTERM and SIGINT stop the App for good; Done is closed, so every later receive returns at
+// once.
 func TestStopSignals(t *testing.T) {
 	for _, sig := range []os.Signal{syscall.SIGTERM, syscall.SIGINT} {
 		t.Run(sig.String(), func(t *testing.T) {
@@ -71,9 +74,12 @@ func TestStopSignals(t *testing.T) {
 				app, signals := newSignalApp(t, nil)
 
 				signals <- sig
-				<-app.Shutdown()
-				if _, open := <-app.Shutdown(); open {
-					t.Error("shutdown channel is still open after the stop")
+				<-app.Done()
+				if _, open := <-app.Done(); open {
+					t.Error("Done is still open after the stop")
+				}
+				if app.Restarting() {
+					t.Errorf("%v reports a restart, want a stop", sig)
 				}
 				if app.ctx.Err() == nil {
 					t.Error("the App context was not cancelled by the stop")
