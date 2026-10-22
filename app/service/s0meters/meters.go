@@ -30,7 +30,12 @@ import (
 type Handler struct {
 	mux    sync.RWMutex
 	meters map[string]*MeterInstance
+	open   OpenFunc // opens the pulse counter of a meter in RegisterMeter
 }
+
+// OpenFunc opens the pulse counter of one meter on GPIO line gpio, counting on from pulses.
+// pulsecounter.New is the one for the hardware.
+type OpenFunc func(gpio int, debounce time.Duration, pulses uint64) (*pulsecounter.Handler, error)
 
 // MeterConfig defines the configuration of a single meter.
 type MeterConfig struct {
@@ -75,10 +80,17 @@ type MeterData struct {
 	GaugeUnit   string    `json:"gaugeUnit"`   // Gauge unit
 }
 
-// New initializes the meter manager with the provided configuration.
+// New initializes the meter manager; its meters count on the Raspberry Pi's GPIO lines.
 func New() *Handler {
+	return NewWith(pulsecounter.New)
+}
+
+// NewWith initializes the meter manager with open as the way to open a meter's pulse counter,
+// which lets the tests count on emulated GPIO pins.
+func NewWith(open OpenFunc) *Handler {
 	return &Handler{
 		meters: make(map[string]*MeterInstance),
+		open:   open,
 	}
 }
 
@@ -97,7 +109,7 @@ func (h *Handler) Close() error {
 // RegisterMeter adds a new S0 meter and initializes its pulse handler.
 // Counting continues from pulses, the value restored by ReadMeterData.
 func (h *Handler) RegisterMeter(name string, cfg MeterConfig, pulses uint64) error {
-	meter, err := pulsecounter.New(cfg.Gpio, cfg.DebounceTime, pulses)
+	meter, err := h.open(cfg.Gpio, cfg.DebounceTime, pulses)
 	if err != nil {
 		return err
 	}
