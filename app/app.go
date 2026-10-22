@@ -41,11 +41,14 @@ import (
 // .goreleaser.yaml). The "dev" default applies to builds made without them.
 var VERSION = "dev"
 
-const (
-	MODULE = "s0meter"
+const MODULE = "s0meter"
 
-	ModeStop    = 0
-	ModeRestart = 1
+// mode is what shutdownProcedure does after the App has stopped.
+type mode string
+
+const (
+	modeStop    mode = "stop"    // the process exits
+	modeRestart mode = "restart" // cmd builds the next App with the reloaded configuration
 )
 
 // ErrPermanent marks a start failure that a restart cannot fix, such as a damaged data file or
@@ -278,15 +281,15 @@ func (app *App) HandleOSSignals() {
 						}
 					}
 					slog.Info("SIGHUP received, initiating restart")
-					app.shutdownProcedure(ModeRestart)
+					app.shutdownProcedure(modeRestart)
 				case syscall.SIGTERM, syscall.SIGINT:
 					slog.Info("SIGTERM/SIGINT received, stopping")
-					app.shutdownProcedure(ModeStop)
+					app.shutdownProcedure(modeStop)
 				}
 				return
 			case err := <-app.serverErr:
 				slog.Error("Web server stopped unexpectedly, initiating restart", "error", err)
-				app.shutdownProcedure(ModeRestart)
+				app.shutdownProcedure(modeRestart)
 				return
 			case <-app.ctx.Done():
 				// Context was cancelled externally – exit without triggering
@@ -298,29 +301,18 @@ func (app *App) HandleOSSignals() {
 	}()
 }
 
-// shutdownProcedure gracefully stops or restarts the app based on mode.
-//   - ModeStop: graceful shutdown the web server, Cleanup app resources and exit the application.
-//   - ModeRestart: graceful shutdown the web server and Cleanup app resources and restart the application.
-func (app *App) shutdownProcedure(mode int) {
-	slog.Info("Initiating shutdown", "mode", mode)
+// shutdownProcedure stops the App and then reports on Restart or Shutdown, depending on m.
+func (app *App) shutdownProcedure(m mode) {
+	slog.Info("Initiating shutdown", "mode", m)
+	app.stop()
 
-	// cancel the application context to stop all running goroutines
-	app.cancelFunc()
-	// Wait for the web server, the backup loop and the MQTT loop, so the final save in Cleanup
-	// neither races a periodic backup nor runs while a publish is still in flight.
-	app.wg.Wait()
-
-	if err := app.Cleanup(); err != nil {
-		slog.Error("Cleanup failed", "error", err)
-	}
-
-	switch mode {
-	case ModeRestart:
+	switch m {
+	case modeRestart:
 		slog.Info("Shutdown complete, restarting")
 		app.restart <- struct{}{}
 		// Channels are intentionally left open: cmd/main.go receives the restart
 		// signal and calls New(), which creates fresh channels for the next lifecycle.
-	case ModeStop:
+	case modeStop:
 		slog.Info("Module stopped", "module", MODULE, "version", VERSION, "pid", os.Getpid())
 		app.shutdown <- struct{}{}
 		close(app.shutdown)
@@ -355,12 +347,19 @@ func (app *App) Cleanup() error {
 // releases what Init acquired, so the caller can start another App with the same GPIO lines,
 // port and data file. It returns err.
 func (app *App) abort(err error) error {
+	app.stop()
+	return err
+}
+
+// stop cancels the App's context, waits for the web server, the backup loop and the MQTT loop,
+// and then releases the resources, so the final save in Cleanup neither races a periodic backup
+// nor runs while a publish is still in flight.
+func (app *App) stop() {
 	app.cancelFunc()
 	app.wg.Wait()
-	if cerr := app.Cleanup(); cerr != nil {
-		slog.Error("Cleanup failed", "error", cerr)
+	if err := app.Cleanup(); err != nil {
+		slog.Error("Cleanup failed", "error", err)
 	}
-	return err
 }
 
 // redactURL returns broker with a password replaced by "xxxxx", for logging.
