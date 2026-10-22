@@ -10,6 +10,12 @@ import (
 	"github.com/womat/mqtt"
 )
 
+// Publisher sends one MQTT message. *mqtt.Handler implements it; the tests use a fake, because
+// womat/mqtt offers none.
+type Publisher interface {
+	Publish(msg mqtt.Message) error
+}
+
 // RunPeriodicPublish runs the publishing loop. It blocks, so the caller runs it in a goroutine it
 // can wait for.
 //
@@ -31,7 +37,7 @@ import (
 // Passing nil disables the check.
 //
 // The loop stops when the provided context is cancelled.
-func (h *Handler) RunPeriodicPublish(ctx context.Context, heartbeat, minInterval time.Duration, mqttHandler *mqtt.Handler, isConnected func() bool) {
+func (h *Handler) RunPeriodicPublish(ctx context.Context, heartbeat, minInterval time.Duration, mqttHandler Publisher, isConnected func() bool) {
 	tick := minInterval
 	if tick <= 0 || tick > heartbeat {
 		tick = heartbeat
@@ -86,7 +92,7 @@ type pendingMsg struct {
 }
 
 // publishDue sends the meters that advanced or whose heartbeat is due, and records what went out.
-func (h *Handler) publishDue(mqttHandler *mqtt.Handler, state map[string]publishState, heartbeat time.Duration) {
+func (h *Handler) publishDue(mqttHandler Publisher, state map[string]publishState, heartbeat time.Duration) {
 	if mqttHandler == nil {
 		return
 	}
@@ -144,7 +150,7 @@ func (h *Handler) collectPending(state map[string]publishState, heartbeat time.D
 
 // publishPending sends each message and returns those the broker accepted. A message that failed
 // is left out, so its meter is retried on the next tick instead of being recorded as delivered.
-func publishPending(mqttHandler *mqtt.Handler, pending []pendingMsg) []pendingMsg {
+func publishPending(mqttHandler Publisher, pending []pendingMsg) []pendingMsg {
 	sent := make([]pendingMsg, 0, len(pending))
 
 	for _, p := range pending {
