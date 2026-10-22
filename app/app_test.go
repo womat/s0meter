@@ -32,8 +32,10 @@ func TestFailedRunKeepsDataFile(t *testing.T) {
 		"wallbox": {Gpio: 999, CounterPulsesPerUnit: 1, GaugeScale: 1},
 	}
 
-	if _, err := New(cfg, make(chan os.Signal), nil).Run(); err == nil {
-		t.Fatal("Run with an unavailable GPIO line succeeded")
+	// The error must come from the registration: a data file wrongly refused while reading
+	// would leave it unchanged too.
+	if _, err := New(cfg, make(chan os.Signal), nil).Run(); err == nil || !strings.Contains(err.Error(), "GPIO port 999") {
+		t.Fatalf("Run() = %v, want the GPIO registration to fail", err)
 	}
 	got, err := os.ReadFile(file)
 	if err != nil || string(got) != saved {

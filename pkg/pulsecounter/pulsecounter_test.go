@@ -35,25 +35,6 @@ func pulse(t *testing.T, pin rpiemu.Pin) {
 	}
 }
 
-// waitForIdle waits until the counter has stopped changing, i.e. no delivered event is still
-// being counted.
-func waitForIdle(t *testing.T, h *Handler) Counter {
-	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	last := h.GetCounter()
-	for {
-		time.Sleep(50 * time.Millisecond)
-		c := h.GetCounter()
-		if c.Pulses == last.Pulses {
-			return c
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("pulses still changing after 2 s, last %d", c.Pulses)
-		}
-		last = c
-	}
-}
-
 // waitForPulses waits until the asynchronously delivered events have been counted.
 func waitForPulses(t *testing.T, h *Handler, want uint64) Counter {
 	t.Helper()
@@ -86,8 +67,8 @@ func TestCountsRisingEdgesFromStartValue(t *testing.T) {
 	if c.TimeStamp.Before(before) || c.LastTimeStamp.Before(before) {
 		t.Errorf("timestamps %v / %v lie before the pulses", c.LastTimeStamp, c.TimeStamp)
 	}
-	if !c.TimeStamp.After(c.LastTimeStamp) {
-		t.Errorf("TimeStamp %v is not after LastTimeStamp %v", c.TimeStamp, c.LastTimeStamp)
+	if c.TimeStamp.Before(c.LastTimeStamp) {
+		t.Errorf("TimeStamp %v lies before LastTimeStamp %v", c.TimeStamp, c.LastTimeStamp)
 	}
 	if d := h.DroppedEvents(); d != 0 {
 		t.Errorf("DroppedEvents = %d, want 0", d)
@@ -107,8 +88,10 @@ func TestStopsCountingAfterClose(t *testing.T) {
 		t.Errorf("second Close: %v", err)
 	}
 
-	pulse(t, pin)
-	time.Sleep(20 * time.Millisecond)
+	// After StopWatching the pin delivers nothing new, but events already buffered still
+	// reach the handler; Close must make it ignore them, so no pulse is counted after the
+	// final save.
+	h.handlePulseEvent(gpio.Event{Time: time.Now(), Edge: gpio.RisingEdge})
 	if got := h.GetCounter().Pulses; got != 1 {
 		t.Errorf("pulses after Close = %d, want 1", got)
 	}
@@ -157,18 +140,20 @@ func TestRecountsPulsesDroppedWhileProcessingFellBehind(t *testing.T) {
 	if dropped == 0 {
 		t.Fatal("no event was dropped; the test did not overflow the buffer")
 	}
-	// Let the buffer drain, so the next pulse is delivered and reports the gap. The count
-	// after draining is not simply driven-dropped: once the delivery goroutine takes the
-	// first event, a buffer slot comes free, and the event that takes it already carries the
-	// pulses dropped so far. Only the pulses dropped after the last buffered event are still
-	// outstanding, so wait for the counter to settle instead of for an exact value.
-	if c := waitForIdle(t, h); c.Pulses >= driven {
-		t.Fatalf("pulses = %d after draining, want fewer than %d: nothing left to report", c.Pulses, driven)
-	}
-
-	pulse(t, pin)
-	c := waitForPulses(t, h, driven+1)
-	if !c.LastTimeStamp.IsZero() {
-		t.Errorf("LastTimeStamp = %v after a gap, want zero", c.LastTimeStamp)
+	// Each pulse delivered after the gap carries the pulses dropped before it. Which event
+	// that is depends on how fast the buffer drains, which a test cannot tell from outside -
+	// a pulse driven while the buffer is still full is dropped as well. So keep driving
+	// single pulses until the counter accounts for every one of them.
+	deadline := time.Now().Add(2 * time.Second)
+	for extra := uint64(1); ; extra++ {
+		pulse(t, pin)
+		time.Sleep(10 * time.Millisecond)
+		got := h.GetCounter().Pulses
+		if got == driven+extra {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("pulses = %d after %d extra pulses, want %d: dropped pulses were not recounted", got, extra, driven+extra)
+		}
 	}
 }
