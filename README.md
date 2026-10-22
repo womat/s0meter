@@ -728,7 +728,10 @@ reload is refused with `Config reload rejected, keeping the running configuratio
 service keeps counting with its current settings - fix the file and reload again. Some problems only
 show when the service starts with the new settings: a missing TLS certificate, a port or GPIO line in
 use. Then `Start with the new configuration failed, continuing with the previous one` is logged and
-the service starts again with the settings it ran with before. A reload also rereads the token
+the service starts again with the settings it ran with before. Only if that fails as well - the data
+file was damaged in the meantime, or another process took the port - does s0meter end: with exit
+code 78 when a person has to fix something (data file, certificate), so systemd leaves it stopped,
+otherwise with 1, so systemd restarts it. A reload also rereads the token
 file, so a token added or removed with `s0meter token` applies without a restart.
 
 ```sh
