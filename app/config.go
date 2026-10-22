@@ -39,7 +39,7 @@ type Config struct {
 type WebserverConfig struct {
 	ListenHost string      `yaml:"listenHost"` // Host address for web server
 	ListenPort int         `yaml:"listenPort"` // Port for web server
-	ApiKey     string      `yaml:"apiKey"`     // Removed in v7; only read to name the replacement
+	ApiKey     string      `yaml:"apiKey"`     // Removed in v7; only read to name the replacement. Delete in v8.
 	TokenFile  string      `yaml:"tokenFile"`  // File with the accepted bearer tokens as SHA-256 hashes
 	Tokens     []web.Token `yaml:"-"`          // Read from TokenFile by LoadConfig
 	KeyFile    string      `yaml:"keyFile"`    // SSL private key file
