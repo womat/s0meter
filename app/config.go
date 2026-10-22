@@ -28,7 +28,7 @@ const (
 type Config struct {
 	Env            string                          `yaml:"env"`            // Application environment: dev | prod
 	LogLevel       string                          `yaml:"logLevel"`       // Log level: debug | info | warning | error
-	LogDestination string                          `yaml:"logDestination"` // Log output: stdout | stderr | /path/to/logfile
+	LogDestination string                          `yaml:"logDestination"` // Log output: stdout | stderr | null | /path/to/logfile
 	Webserver      WebserverConfig                 `yaml:"webserver"`      // Webserver configuration
 	MQTT           *MQTTConfig                     `yaml:"mqtt"`           // MQTT client configuration; nil = no MQTT
 	DataFile       string                          `yaml:"dataFile"`       // Path to meter data YAML file
@@ -184,8 +184,9 @@ func (c *Config) Validate() error {
 		return errors.New(`webserver.tokenFile is not configured; create a token with "s0meter token add <name>"`)
 	}
 
+	// Matched like xlog.Init matches it, case-insensitively and ignoring surrounding blanks.
 	validLogLevels := []string{"debug", "info", "warning", "warn", "error"}
-	if !slices.Contains(validLogLevels, c.LogLevel) {
+	if !slices.Contains(validLogLevels, strings.ToLower(strings.TrimSpace(c.LogLevel))) {
 		return fmt.Errorf("invalid log level: %s, must be one of %v", c.LogLevel, validLogLevels)
 	}
 

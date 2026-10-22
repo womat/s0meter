@@ -232,3 +232,18 @@ func TestValidateRefusesBrokerURLWithUnencodedPassword(t *testing.T) {
 		}
 	}
 }
+
+// logLevel is matched like xlog matches it: case-insensitively and ignoring surrounding blanks.
+func TestValidateLogLevelIgnoresCase(t *testing.T) {
+	for level, valid := range map[string]bool{
+		"info": true, "Info": true, "WARNING": true, " debug ": true, "Warn": true,
+		"verbose": false, "": false,
+	} {
+		c := NewConfig()
+		c.Webserver.TokenFile = "token-hashes"
+		c.LogLevel = level
+		if err := c.Validate(); (err == nil) != valid {
+			t.Errorf("logLevel %q: Validate() = %v, want valid %v", level, err, valid)
+		}
+	}
+}

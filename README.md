@@ -233,11 +233,13 @@ a bare number, `0` included, is rejected.
 
 # logLevel defines the minimum log level.
 # Messages with at least this level are logged.
-# Allowed values: debug | info | warn | error
+# Allowed values: debug | info | warning (or warn) | error, in any case
 logLevel: info
 
 # logDestination defines where logs are written to.
-# Supported values: stdout | stderr | /path/to/logfile
+# Supported values: stdout | stderr | null (no logging) | /path/to/logfile
+# Anything else is taken as a file path. With the unit from contrib/, a log file must
+# lie in the writable /opt/s0meter/data/; one that cannot be opened stops the start.
 logDestination: stdout
 
 # environment: prod (default) | dev
