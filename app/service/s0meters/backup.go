@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -42,8 +43,11 @@ func (h *Handler) RunPeriodicBackup(ctx context.Context, interval time.Duration,
 // could be far off, so the gauge restarts with the first two pulses of this run instead.
 //
 // A missing file is not an error and yields an empty map: the counters start at zero and the
-// file is written by the next save. An empty or unparsable file is an error, because silently
-// starting from zero would overwrite the real counter values with the next backup.
+// file is written by the next save. Everything else that would start a meter at zero without
+// saying so is an error, because the save right after the start would overwrite the real
+// counter values: an empty or unparsable file, a document without meters (null, ~, only
+// comments; a service without meters writes {}), a meter without pulses, and an unknown key
+// such as a misspelled "pulse". A counter is set to zero on purpose with "pulses: 0".
 func ReadMeterData(file string) (map[string]uint64, error) {
 	data, err := os.ReadFile(file)
 	if errors.Is(err, os.ErrNotExist) {
@@ -58,16 +62,33 @@ func ReadMeterData(file string) (map[string]uint64, error) {
 		return nil, fmt.Errorf("meter data file %s is empty; restore it, or delete it to start all counters at zero", file)
 	}
 
-	var saved map[string]pulsecounter.Counter
-	if err = yaml.Unmarshal(data, &saved); err != nil {
+	var saved map[string]*savedCounter
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err = dec.Decode(&saved); errors.Is(err, io.EOF) || (err == nil && saved == nil) {
+		return nil, fmt.Errorf("meter data file %s holds no meters; restore it, or delete it to start all counters at zero", file)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("meter data file %s is damaged (%w); restore it, or delete it to start all counters at zero", file, err)
 	}
 
 	pulses := make(map[string]uint64, len(saved))
 	for name, counter := range saved {
-		pulses[name] = counter.Pulses
+		if counter == nil || counter.Pulses == nil {
+			return nil, fmt.Errorf(`meter data file %s is damaged: meter %q has no pulses; restore it, set "pulses: 0" to start it at zero, or remove the meter`, file, name)
+		}
+		pulses[name] = *counter.Pulses
 	}
 	return pulses, nil
+}
+
+// savedCounter is one entry of the data file as ReadMeterData reads it: the fields SaveMeterData
+// writes for a pulsecounter.Counter, with Pulses a pointer so that a missing count is told apart
+// from zero.
+type savedCounter struct {
+	Pulses        *uint64   `yaml:"pulses"`
+	TimeStamp     time.Time `yaml:"timestamp"`
+	LastTimeStamp time.Time `yaml:"lastTimestamp"`
 }
 
 // SaveMeterData writes the current counter values of all meters to the YAML file.

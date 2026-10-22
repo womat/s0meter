@@ -487,8 +487,10 @@ sudo systemctl start s0meter
 
 Only `pulses:` is read back; the two timestamps in the file are informational. The file is replaced
 atomically (temporary file, sync, rename), so a power cut leaves either the previous or the new
-version. If it is nevertheless empty or not valid YAML, the service refuses to start with
-`Failed to load meter data` rather than silently counting from 0 — restore the file, or delete it to
+version. If it is nevertheless empty, not valid YAML, holds no meters (`null`, only comments), has a
+meter without `pulses:` or an unknown key (a misspelled `pulse:`, or `ticks:` from a version before
+4.6.3), the service refuses to start with `Failed to load meter data` rather than silently counting
+from 0 — fix or restore the file, set `pulses: 0` to start one meter from 0, or delete the file to
 start every meter from 0 on purpose. A missing file is fine: all meters start from 0 and the file is
 created right away.
 
@@ -786,7 +788,7 @@ reason: `Failed to load config file` (YAML could not be parsed - durations such
 as `backupInterval` must be Go duration strings like `60s`, not plain numbers; `field … not found`
 names a key that does not exist, often a misspelled or renamed one) or `config validation failed`,
 for example for a `displayUnit` that cannot be converted. Once the logger is up, `Failed to load
-meter data` in the log means the `dataFile` is empty or damaged — see [Correcting a counter](#correcting-a-counter).
+meter data` in the log means the `dataFile` is empty, damaged or lacks a meter's `pulses:` — see [Correcting a counter](#correcting-a-counter).
 
 ---
 

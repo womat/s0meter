@@ -38,6 +38,48 @@ func TestReadMeterDataRejectsEmptyOrDamagedFile(t *testing.T) {
 	}
 }
 
+// Valid YAML that does not hold a pulse count for every entry is refused as well: the save
+// right after the start would otherwise replace the real counters by 0.
+func TestReadMeterDataRejectsFileWithoutPulses(t *testing.T) {
+	for name, tt := range map[string]struct{ content, msg string }{
+		"null document":    {"null\n", "holds no meters"},
+		"tilde document":   {"~\n", "holds no meters"},
+		"only a comment":   {"# wallbox: 34341798\n", "holds no meters"},
+		"meter no value":   {"wallbox:\n", `meter "wallbox" has no pulses`},
+		"pulses missing":   {"wallbox:\n    timestamp: 2026-10-04T20:48:28+02:00\n", `meter "wallbox" has no pulses`},
+		"misspelled key":   {"wallbox:\n    pulse: 34341798\n", "field pulse not found"},
+		"one meter of two": {"wallbox:\n    pulses: 1\nwater:\n", `meter "water" has no pulses`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			file := filepath.Join(t.TempDir(), "data.yaml")
+			if err := os.WriteFile(file, []byte(tt.content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ReadMeterData(file); err == nil || !strings.Contains(err.Error(), tt.msg) {
+				t.Errorf("ReadMeterData(%q) = %v, want an error naming %q", tt.content, err, tt.msg)
+			}
+		})
+	}
+}
+
+// A file without meters, as a service without meters writes it, and a counter set to 0 on
+// purpose are fine.
+func TestReadMeterDataAcceptsNoMetersAndExplicitZero(t *testing.T) {
+	for content, want := range map[string]map[string]uint64{
+		"{}\n":                      {},
+		"wallbox:\n    pulses: 0\n": {"wallbox": 0},
+	} {
+		file := filepath.Join(t.TempDir(), "data.yaml")
+		if err := os.WriteFile(file, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := ReadMeterData(file)
+		if err != nil || len(got) != len(want) || got["wallbox"] != want["wallbox"] {
+			t.Errorf("ReadMeterData(%q) = %v, %v; want %v", content, got, err, want)
+		}
+	}
+}
+
 func TestReadMeterDataRestoresPulsesOnly(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "data.yaml")
 	content := "wallbox:\n" +
