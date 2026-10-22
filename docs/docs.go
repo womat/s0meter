@@ -34,7 +34,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Health data successfully retrieved",
                         "schema": {
-                            "$ref": "#/definitions/health.Model"
+                            "$ref": "#/definitions/app.Health"
                         }
                     },
                     "401": {
@@ -156,7 +156,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "health.Model": {
+        "app.Health": {
             "type": "object",
             "properties": {
                 "app": {
@@ -180,18 +180,18 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "meters": {
-                    "description": "Meters holds the diagnostic state per meter name: raw pulses, the last pulse and the\nGPIO events lost since the last start or reload. Filled in by the caller.",
+                    "description": "Meters holds the diagnostic state per meter name: raw pulses, the last pulse and the\nGPIO events lost since the last start or reload.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/s0meters.MeterStatus"
                     }
                 },
                 "mqtt": {
-                    "description": "Mqtt is the state of the broker connection: connected, disconnected (also while\nreconnecting) or disabled when no broker is configured. Filled in by the caller.",
+                    "description": "Mqtt is the state of the broker connection: connected, disconnected (also while\nreconnecting) or disabled when no broker is configured.",
                     "type": "string"
                 },
                 "mqttBroker": {
-                    "description": "MqttBroker is the configured broker as host:port, for the tooltip of the MQTT pill on\nthe web page. Never user or password from the connection URL; omitted without a broker.\nFilled in by the caller.",
+                    "description": "MqttBroker is the configured broker as host:port, for the tooltip of the MQTT pill on\nthe web page. Never user or password from the connection URL; omitted without a broker.",
                     "type": "string"
                 },
                 "numGoroutines": {

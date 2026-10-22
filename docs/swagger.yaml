@@ -1,5 +1,5 @@
 definitions:
-  health.Model:
+  app.Health:
     properties:
       app:
         description: Application name (MODULE)
@@ -21,18 +21,17 @@ definitions:
           $ref: '#/definitions/s0meters.MeterStatus'
         description: |-
           Meters holds the diagnostic state per meter name: raw pulses, the last pulse and the
-          GPIO events lost since the last start or reload. Filled in by the caller.
+          GPIO events lost since the last start or reload.
         type: object
       mqtt:
         description: |-
           Mqtt is the state of the broker connection: connected, disconnected (also while
-          reconnecting) or disabled when no broker is configured. Filled in by the caller.
+          reconnecting) or disabled when no broker is configured.
         type: string
       mqttBroker:
         description: |-
           MqttBroker is the configured broker as host:port, for the tooltip of the MQTT pill on
           the web page. Never user or password from the connection URL; omitted without a broker.
-          Filled in by the caller.
         type: string
       numGoroutines:
         description: Current number of active goroutines
@@ -138,7 +137,7 @@ paths:
         "200":
           description: Health data successfully retrieved
           schema:
-            $ref: '#/definitions/health.Model'
+            $ref: '#/definitions/app.Health'
         "401":
           description: Unauthorized
           schema:

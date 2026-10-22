@@ -10,7 +10,6 @@ import (
 
 	"github.com/womat/golib/v2/web"
 	"github.com/womat/mqtt"
-	"github.com/womat/s0meter/app/service/health"
 	"github.com/womat/s0meter/app/service/s0meters"
 )
 
@@ -85,8 +84,8 @@ func TestHealthReportsMeterStatusAndMqtt(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got["mqtt"] != health.MqttDisabled {
-		t.Errorf("mqtt = %v, want %q without a broker", got["mqtt"], health.MqttDisabled)
+	if got["mqtt"] != mqttDisabled {
+		t.Errorf("mqtt = %v, want %q without a broker", got["mqtt"], mqttDisabled)
 	}
 	if _, ok := got["meters"].(map[string]any); !ok {
 		t.Errorf("meters = %v, want an object", got["meters"])
@@ -235,7 +234,7 @@ func TestHealthReportsDisconnectedBroker(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got["mqtt"] != health.MqttDisconnected {
-		t.Errorf("mqtt = %v, want %q", got["mqtt"], health.MqttDisconnected)
+	if got["mqtt"] != mqttDisconnected {
+		t.Errorf("mqtt = %v, want %q", got["mqtt"], mqttDisconnected)
 	}
 }
