@@ -1,16 +1,15 @@
 package app
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 
@@ -143,20 +142,13 @@ func TokenFile(fileName string) (string, error) {
 func readConfig(fileName string) (*Config, error) {
 	cfg := NewConfig()
 
-	fileInfo, err := os.Stat(fileName)
-	if err != nil {
-		return cfg, err
-	}
-	if fileInfo.IsDir() {
-		return cfg, errors.New("config path is a directory, not a file")
-	}
-
+	// A directory fails here too, with "is a directory".
 	content, err := os.ReadFile(fileName)
 	if err != nil {
 		return cfg, err
 	}
 
-	dec := yaml.NewDecoder(bytes.NewReader([]byte(expandEnvBraces(string(content)))))
+	dec := yaml.NewDecoder(strings.NewReader(expandEnvBraces(string(content))))
 	dec.KnownFields(true)
 	if err = dec.Decode(cfg); err != nil && !errors.Is(err, io.EOF) {
 		return cfg, fmt.Errorf("failed to unmarshal config: %w", err)
@@ -195,11 +187,7 @@ func (c *Config) Validate() error {
 	}
 
 	// Visit the meters in a fixed order, so the reported duplicate does not depend on map order.
-	names := make([]string, 0, len(c.Meter))
-	for name := range c.Meter {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names := slices.Sorted(maps.Keys(c.Meter))
 
 	gpioUsedBy := make(map[int]string, len(names))
 	for _, name := range names {

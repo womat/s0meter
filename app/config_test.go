@@ -247,3 +247,10 @@ func TestValidateLogLevelIgnoresCase(t *testing.T) {
 		}
 	}
 }
+
+// A directory given as config file is an error, not an empty config with defaults.
+func TestLoadConfigRefusesDirectory(t *testing.T) {
+	if _, err := LoadConfig(t.TempDir()); err == nil {
+		t.Error("LoadConfig(directory) succeeded")
+	}
+}
