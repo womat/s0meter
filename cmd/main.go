@@ -7,6 +7,7 @@ package main
 
 import (
 	_ "embed"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -28,10 +29,11 @@ import (
 //go:embed README.md
 var Readme string
 
-// exitConfig is the exit code for a config file that does not load or validate (EX_CONFIG from
-// sysexits.h). The unit sets RestartPreventExitStatus=78: restarting cannot fix the file, so
-// systemd leaves s0meter stopped and "systemctl status s0meter" shows why, instead of restarting
-// it every few seconds.
+// exitConfig is the exit code for a config file that does not load or validate, and for a start
+// that fails with app.ErrPermanent, such as a damaged data file (EX_CONFIG from sysexits.h). The
+// unit sets RestartPreventExitStatus=78: restarting cannot fix the file, so systemd leaves
+// s0meter stopped and "systemctl status s0meter" shows why, instead of restarting it every few
+// seconds.
 const exitConfig = 78
 
 // buildDate and buildCommit are injected at build time via -ldflags
@@ -161,6 +163,9 @@ func loop(configFile string, debug bool, signals <-chan os.Signal) int {
 		if err != nil {
 			if lastGood == nil || config == lastGood {
 				slog.Error("Critical error occurred, shutting down", "error", err)
+				if errors.Is(err, app.ErrPermanent) {
+					return exitConfig
+				}
 				return 1
 			}
 			slog.Error("Start with the new configuration failed, continuing with the previous one", "error", err)

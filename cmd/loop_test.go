@@ -263,8 +263,22 @@ func TestLoopEndsWhenLastGoodFailsToo(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// A data file no App can read does not fix itself, so systemd must not restart s0meter.
 	l.signals <- syscall.SIGHUP
-	if code := l.exitCode(t); code != 1 {
-		t.Errorf("loop = %d, want 1 when the previous configuration fails too", code)
+	if code := l.exitCode(t); code != exitConfig {
+		t.Errorf("loop = %d, want %d when the previous configuration fails on the data file too", code, exitConfig)
+	}
+}
+
+// A damaged data file at the first start ends with exitConfig as well, not with 1, after which
+// systemd would restart s0meter every few seconds into the same error.
+func TestLoopEndsWithExitConfigOnDamagedDataFile(t *testing.T) {
+	dir, port := t.TempDir(), freePort(t)
+	config := writeLoopConfig(t, dir, port)
+	token(t, config, "add", "nodered")
+	writeFile(t, dir, "s0meter.yaml", "wallbox:\n    pulse: 34341798\n")
+
+	if code := loop(config, false, make(chan os.Signal, 1)); code != exitConfig {
+		t.Errorf("loop = %d with a damaged data file, want %d", code, exitConfig)
 	}
 }

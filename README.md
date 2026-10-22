@@ -788,7 +788,8 @@ reason: `Failed to load config file` (YAML could not be parsed - durations such
 as `backupInterval` must be Go duration strings like `60s`, not plain numbers; `field … not found`
 names a key that does not exist, often a misspelled or renamed one) or `config validation failed`,
 for example for a `displayUnit` that cannot be converted. Once the logger is up, `Failed to load
-meter data` in the log means the `dataFile` is empty, damaged or lacks a meter's `pulses:` — see [Correcting a counter](#correcting-a-counter).
+meter data` in the log means the `dataFile` cannot be read, is empty, damaged or lacks a meter's
+`pulses:`; that also ends with code 78 and no restart — see [Correcting a counter](#correcting-a-counter).
 
 ---
 

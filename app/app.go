@@ -19,6 +19,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -46,6 +47,11 @@ const (
 	ModeStop    = 0
 	ModeRestart = 1
 )
+
+// ErrPermanent marks a start failure that a restart cannot fix, such as a damaged data file:
+// it needs someone to repair it. cmd ends s0meter with exit code 78 for it, so systemd leaves
+// the service stopped instead of restarting it into the same error.
+var ErrPermanent = errors.New("restarting does not help")
 
 // App is the main application struct.
 // App is where the application is wired up.
@@ -194,7 +200,7 @@ func (app *App) Init() (err error) {
 	saved, err := s0meters.ReadMeterData(dataFile)
 	if err != nil {
 		slog.Error("Failed to load meter data", "file", dataFile, "error", err)
-		return err
+		return fmt.Errorf("%w (%w)", err, ErrPermanent)
 	}
 
 	// register the meters and the GPIO pins

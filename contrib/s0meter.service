@@ -17,9 +17,9 @@
 # the program. key.pem goes in as root:s0meter 0640, cert.pem as 0644.
 #
 # "systemctl reload s0meter" rereads config.yaml and the token file. A config that does
-# not load or validate ends s0meter with exit code 78, and RestartPreventExitStatus
-# keeps systemd from restarting it until the file is fixed: "systemctl status s0meter"
-# shows why.
+# not load or validate, and a meter data file that cannot be read or is damaged, end
+# s0meter with exit code 78, and RestartPreventExitStatus keeps systemd from restarting
+# it until the file is fixed: "systemctl status s0meter" or the log shows why.
 #
 # The sandbox: s0meter needs the network (MQTT, HTTPS), the GPIO character device and
 # write access to data/, nothing else. A logDestination file must lie in data/ as well.

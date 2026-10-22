@@ -43,8 +43,8 @@ CONFIG_FILE=/opt/s0meter/etc/config.yaml s0meter
 ```
 
 `SIGHUP` reloads the configuration and the token file; a file that does not load or validate is
-refused and the running configuration stays. A config that does not load or validate at start ends
-s0meter with exit code 78.
+refused and the running configuration stays. A config that does not load or validate at start, or a
+damaged meter data file, ends s0meter with exit code 78.
 
 ---
 
