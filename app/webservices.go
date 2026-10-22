@@ -62,6 +62,9 @@ func (app *App) StartWebServer() error {
 	if err != nil {
 		return fmt.Errorf("failed to create listener: %w", err)
 	}
+	// Record the address actually bound, so a test that listens on port 0 learns its port.
+	// Nothing in the service reads Addr after this point.
+	app.web.Addr = listener.Addr().String()
 
 	// Channel to report server runtime errors
 	serverErrCh := make(chan error, 1)
