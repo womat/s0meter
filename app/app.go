@@ -332,21 +332,15 @@ func (app *App) shutdownProcedure(mode int) {
 // It's called when the application is shutdown or restarted.
 // Should be used to free up resources.
 func (app *App) Cleanup() error {
-	var errs error
+	// Close first, so no pulse can be counted after the values have been saved. The counters
+	// stay readable after Close.
+	slog.Info("Closing all meters")
+	err := app.meters.Close()
 
-	if app.meters != nil && app.metersLoaded {
-		// Close first, so no pulse can be counted after the values have been saved.
-		// The counters stay readable after Close.
-		slog.Info("Closing all meters")
-		errs = errors.Join(errs, app.meters.Close())
-
+	// After a half-way Init the meters lack some saved counters: keep the data file as it is.
+	if app.metersLoaded {
 		slog.Info("Saving meter data", "file", app.config.DataFile)
-		errs = errors.Join(errs, app.meters.SaveMeterData(app.config.DataFile))
-	}
-
-	if app.meters != nil && !app.metersLoaded {
-		// Init failed half way: release the GPIO lines, but keep the data file as it is.
-		errs = errors.Join(errs, app.meters.Close())
+		err = errors.Join(err, app.meters.SaveMeterData(app.config.DataFile))
 	}
 
 	if app.mqtt != nil {
@@ -354,7 +348,7 @@ func (app *App) Cleanup() error {
 		app.mqtt.Disconnect()
 	}
 
-	return errs
+	return err
 }
 
 // abort undoes a Run that failed half way: it stops the goroutines already started and
