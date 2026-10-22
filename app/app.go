@@ -56,8 +56,7 @@ const (
 // the service stopped instead of restarting it into the same error.
 var ErrPermanent = errors.New("restarting does not help")
 
-// App is the main application struct.
-// App is where the application is wired up.
+// App is where the application is wired up: one App lives for one configuration.
 type App struct {
 	wg sync.WaitGroup // tracks the web server, backup and MQTT publish goroutines
 	// metersLoaded is set once Init registered every meter with its saved counter; only then
@@ -138,6 +137,9 @@ func (app *App) Run() (*App, error) {
 			mqtt.WithOnConnectionLost(func(err error) {
 				slog.Warn("MQTT connection lost", "error", err)
 			}))
+		// womat/mqtt v1.0.1 returns no error here: a broker that cannot be reached is retried
+		// in the background, and the publish loop waits for IsConnectionOpen. The branch stays
+		// for a later version whose New can fail.
 		if err != nil {
 			slog.Error("Failed to connect to MQTT broker", "broker", logBroker, "error", err)
 			return app, app.abort(err)
