@@ -252,7 +252,9 @@ env: prod
 # Webserver configuration (HTTPS)
 # =============================================================================
 webserver:
-  # Host address the HTTPS server listens on (0.0.0.0 = all interfaces)
+  # Host address the HTTPS server listens on: 0.0.0.0 = all interfaces, IPv4 only;
+  # "::" (quoted) = all interfaces, IPv4 and IPv6. blockedIPs and allowedIPs must then
+  # list the IPv6 addresses too.
   listenHost: 0.0.0.0
 
   # Port the HTTPS server listens on

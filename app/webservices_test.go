@@ -158,3 +158,39 @@ func TestRunMarksMissingProdCertPermanent(t *testing.T) {
 		t.Errorf("Run() on a port in use = %v, want an error that is not ErrPermanent", err)
 	}
 }
+
+// An IPv4 listenHost listens on IPv4 only: on Linux 0.0.0.0 would otherwise open a dual-stack
+// socket, and IPv6 clients would bypass blockedIPs and allowedIPs written as IPv4 (S6).
+func TestIPv4ListenHostIsNotReachableOverIPv6(t *testing.T) {
+	dir := t.TempDir()
+	cfg := NewConfig()
+	cfg.Env = DevEnv
+	cfg.DataFile = filepath.Join(dir, "s0meter.yaml")
+	cfg.Webserver.ListenHost = "0.0.0.0"
+	cfg.Webserver.ListenPort = 0
+	cfg.Webserver.CertFile = filepath.Join(dir, "missing.pem")
+
+	signals := make(chan os.Signal, 1)
+	app, err := New(cfg, signals, nil).Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		signals <- syscall.SIGTERM
+		<-app.Shutdown()
+	}()
+
+	_, port, err := net.SplitHostPort(app.web.Addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, err := net.Dial("tcp4", net.JoinHostPort("127.0.0.1", port)); err != nil {
+		t.Errorf("IPv4 not reachable: %v", err)
+	} else {
+		_ = c.Close()
+	}
+	if c, err := net.Dial("tcp6", net.JoinHostPort("::1", port)); err == nil {
+		_ = c.Close()
+		t.Error("listenHost 0.0.0.0 is reachable over IPv6")
+	}
+}
