@@ -855,7 +855,7 @@ lives in the repository:
    and leaves the counters alone.
 4. Move `s0meter.new` and `config.yaml.new` into place, install `contrib/s0meter.service`, then
    `sudo systemctl daemon-reload && sudo systemctl restart s0meter`. The counters are saved on stop
-   and restored on start. A config that still has `apiKey` is refused with a message that says so.
+   and restored on start. A config that still has `apiKey` is refused as an unknown key.
 5. Every caller sends `Authorization: Bearer <token>`; `X-API-Key` is no longer accepted. The web
    page asks for the token once.
 6. Monitoring that polled `/ready` reads `mqtt` from `/health` instead, with a token.

@@ -39,7 +39,6 @@ type Config struct {
 type WebserverConfig struct {
 	ListenHost string      `yaml:"listenHost"` // Host address for web server
 	ListenPort int         `yaml:"listenPort"` // Port for web server
-	ApiKey     string      `yaml:"apiKey"`     // Removed in v7; only read to name the replacement. Delete in v8.
 	TokenFile  string      `yaml:"tokenFile"`  // File with the accepted bearer tokens as SHA-256 hashes
 	Tokens     []web.Token `yaml:"-"`          // Read from TokenFile by LoadConfig
 	KeyFile    string      `yaml:"keyFile"`    // SSL private key file
@@ -168,10 +167,6 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid environment: %s, must be %s or %s", c.Env, ProdEnv, DevEnv)
 	}
 
-	if c.Webserver.ApiKey != "" {
-		return errors.New(`webserver.apiKey is no longer supported; create a token with ` +
-			`"s0meter token add <name>" and set webserver.tokenFile`)
-	}
 	if c.Webserver.TokenFile == "" {
 		return errors.New(`webserver.tokenFile is not configured; create a token with "s0meter token add <name>"`)
 	}

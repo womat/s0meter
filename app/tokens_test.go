@@ -88,13 +88,18 @@ func TestValidateNeedsTokenFile(t *testing.T) {
 	}
 }
 
-// An old config with apiKey fails with a message that names the replacement, not just
-// "unknown key".
-func TestValidateRejectsApiKey(t *testing.T) {
-	c := validConfig()
-	c.Webserver.ApiKey = "old"
-	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "tokenFile") {
-		t.Errorf("Validate with apiKey: %v", err)
+// The apiKey of 6.x is an unknown key like any other: a config that still has it does not load.
+func TestLoadConfigRejectsApiKey(t *testing.T) {
+	config := writeTokenSetup(t, "token-hashes", tokenLine("nodered", "secret"))
+	content, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config, append(content, "  apiKey: old\n"...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadConfig(config); err == nil || !strings.Contains(err.Error(), "apiKey") {
+		t.Errorf("LoadConfig with apiKey = %v, want an error naming apiKey", err)
 	}
 }
 
