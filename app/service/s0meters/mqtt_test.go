@@ -1,11 +1,15 @@
 package s0meters
 
 import (
+	"context"
 	"encoding/json"
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/womat/mqtt"
@@ -152,4 +156,105 @@ func TestFailedPublishIsRetried(t *testing.T) {
 	if got := h.collectPending(state, time.Minute, time.Now()); len(got) != 1 {
 		t.Errorf("next tick collects %d meters, want the one that failed", len(got))
 	}
+}
+
+// fakePublisher records the messages it is given and whether the Handler's lock was held at the
+// time, which would block every API request for as long as the broker takes to acknowledge.
+type fakePublisher struct {
+	h *Handler
+
+	mu         sync.Mutex
+	msgs       []mqtt.Message
+	lockedOnce bool
+}
+
+func (f *fakePublisher) Publish(msg mqtt.Message) error {
+	free := f.h.mux.TryLock()
+	if free {
+		f.h.mux.Unlock()
+	}
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.msgs = append(f.msgs, msg)
+	f.lockedOnce = f.lockedOnce || !free
+	return nil
+}
+
+func (f *fakePublisher) sent() []mqtt.Message {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.msgs)
+}
+
+// Publishing happens without the Handler's lock, with the topic, retain flag and QoS 0 of each
+// meter, and is recorded so the next tick does not repeat it.
+func TestPublishOutsideTheLock(t *testing.T) {
+	h := handlerWith(map[string]*MeterInstance{
+		"wallbox": newMeter(t, MeterConfig{Gpio: 17, CounterPulsesPerUnit: 1, GaugeScale: 1, MqttTopic: "home/wallbox", MqttRetained: true}, 10),
+		"water":   newMeter(t, MeterConfig{Gpio: 5, CounterPulsesPerUnit: 1, GaugeScale: 1, MqttTopic: "home/water"}, 20),
+	})
+	pub := &fakePublisher{h: h}
+	state := map[string]publishState{}
+
+	h.publishDue(pub, state, time.Minute)
+
+	msgs := pub.sent()
+	if len(msgs) != 2 {
+		t.Fatalf("published %d messages, want 2", len(msgs))
+	}
+	if pub.lockedOnce {
+		t.Error("Publish ran while the Handler's lock was held")
+	}
+	for _, m := range msgs {
+		wantRetained := m.Topic == "home/wallbox"
+		if m.Retained != wantRetained || m.Qos != 0 {
+			t.Errorf("%s: retained %v, qos %d; want retained %v, qos 0", m.Topic, m.Retained, m.Qos, wantRetained)
+		}
+	}
+	if state["wallbox"].pulses != 10 || state["water"].pulses != 20 {
+		t.Errorf("state = %+v, want both meters recorded", state)
+	}
+
+	h.publishDue(pub, state, time.Minute)
+	if got := len(pub.sent()); got != 2 {
+		t.Errorf("a second tick without new pulses published again, %d messages in total", got)
+	}
+}
+
+// While the broker connection is not open the loop publishes nothing; once it is, the next tick
+// publishes.
+func TestPublishLoopWaitsForTheConnection(t *testing.T) {
+	// The emulated pin is created outside the bubble; only the loop runs inside it.
+	h := handlerWith(map[string]*MeterInstance{
+		"wallbox": newMeter(t, MeterConfig{Gpio: 17, CounterPulsesPerUnit: 1, GaugeScale: 1, MqttTopic: "home/wallbox"}, 10),
+	})
+
+	synctest.Test(t, func(t *testing.T) {
+		pub := &fakePublisher{h: h}
+		var connected atomic.Bool
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		go func() {
+			h.RunPeriodicPublish(ctx, time.Minute, time.Second, pub, connected.Load)
+			close(done)
+		}()
+
+		// Half a tick off the ticker, so sleep and tick never wake at the same instant.
+		time.Sleep(5*time.Second + 500*time.Millisecond)
+		synctest.Wait()
+		if got := len(pub.sent()); got != 0 {
+			t.Fatalf("published %d messages without a connection", got)
+		}
+
+		connected.Store(true)
+		time.Sleep(time.Second)
+		synctest.Wait()
+		if got := len(pub.sent()); got != 1 {
+			t.Errorf("published %d messages on the first connected tick, want 1", got)
+		}
+
+		cancel()
+		<-done
+	})
 }
