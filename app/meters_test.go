@@ -139,8 +139,10 @@ func TestInitRestoresAndCleanupSavesLastPulse(t *testing.T) {
 		t.Error("cleanup left the GPIO pin open")
 	}
 
-	// The pin no longer delivers events, so this pulse is neither counted nor saved.
-	pulse(t, pin)
+	// The pin is closed, so a pulse can no longer reach the counter or the data file.
+	if err := pin.Drive(gpio.Low); !errors.Is(err, gpio.ErrClosed) {
+		t.Errorf("Drive after cleanup = %v, want %v", err, gpio.ErrClosed)
+	}
 	if m, _ := app.meters.GetMeter("wallbox"); m.Counter != 4712 {
 		t.Errorf("counter = %v after cleanup, want 4712", m.Counter)
 	}
