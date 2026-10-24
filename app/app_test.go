@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/womat/s0meter/app/service/s0meters"
 )
@@ -61,5 +63,41 @@ func TestRunMarksDataFileErrorsPermanent(t *testing.T) {
 	cfg.Meter = map[string]s0meters.MeterConfig{"wallbox": {Gpio: 999, CounterPulsesPerUnit: 1, GaugeScale: 1}}
 	if _, err := New(cfg, make(chan os.Signal), nil).Run(); err == nil || errors.Is(err, ErrPermanent) {
 		t.Errorf("Run() with a GPIO line that cannot be opened = %v, want an error that is not ErrPermanent", err)
+	}
+}
+
+// With an mqtt block Run starts although the broker cannot be reached: the client keeps trying
+// in the background, /health reports it as disconnected, and the stop disconnects it, so the
+// next App does not run a second client with the same ID. It takes the 5 s womat/mqtt waits for
+// the first connect.
+func TestRunWithUnreachableBrokerStartsAndDisconnects(t *testing.T) {
+	dir := t.TempDir()
+	cfg := NewConfig()
+	cfg.DataFile = filepath.Join(dir, "s0meter.yaml")
+	cfg.Webserver.ListenHost = "127.0.0.1"
+	cfg.Webserver.ListenPort = 0
+	cfg.Env = DevEnv
+	cfg.MQTT = &MQTTConfig{Connection: "tcp://127.0.0.1:1", PublishInterval: time.Minute}
+
+	signals := make(chan os.Signal, 1)
+	app, err := New(cfg, signals, nil).Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if app.mqtt == nil || !app.mqtt.IsConnected() {
+		t.Fatal("Run did not leave an MQTT client trying to connect")
+	}
+	if got := app.mqttState(); got != mqttDisconnected {
+		t.Errorf("mqttState = %q, want %q", got, mqttDisconnected)
+	}
+
+	signals <- syscall.SIGTERM
+	select {
+	case <-app.Done():
+	case <-time.After(10 * time.Second):
+		t.Fatal("SIGTERM did not stop the App")
+	}
+	if app.mqtt.IsConnected() {
+		t.Error("the stopped App left its MQTT client connecting")
 	}
 }
