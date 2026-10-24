@@ -83,8 +83,8 @@ test: ensure_dev_certs ## run all tests with the race detector (Linux only, see 
 	GOOS=linux go test -race ./...
 
 # Lint tools, pinned like in CI; dependabot does not see these - raise them by hand.
-GOLANGCI_LINT_VERSION := v2.14.0
-GOVULNCHECK_VERSION   := v1.8.0
+GOLANGCI_LINT_VERSION := v2.15.0
+GOVULNCHECK_VERSION   := v1.9.0
 TOOLS_BIN             := $(CURDIR)/bin/tools
 
 # The tools are built for this machine (GOOS/GOARCH cleared) but analyse the deployment
