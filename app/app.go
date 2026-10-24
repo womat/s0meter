@@ -135,9 +135,9 @@ func (app *App) Run() (*App, error) {
 			mqtt.WithOnConnectionLost(func(err error) {
 				slog.Warn("MQTT connection lost", "error", err)
 			}))
-		// womat/mqtt v1.0.1 returns no error here: a broker that cannot be reached is retried
-		// in the background, and the publish loop waits for IsConnectionOpen. The branch stays
-		// for a later version whose New can fail.
+		// New fails only with ErrInvalidBroker, for a URL Paho cannot parse, which Validate
+		// already rules out. A broker that cannot be reached is no error: it is retried in the
+		// background, and the publish loop waits for IsConnectionOpen.
 		if err != nil {
 			slog.Error("Failed to connect to MQTT broker", "broker", logBroker, "error", err)
 			return app, app.abort(err)

@@ -181,7 +181,7 @@ Four limits apply; the lowest one counts:
 | Limit | Maximum | Notes |
 |-------|---------|-------|
 | S0 interface (DIN 43864) | about **16 Hz** | pulse at least 30 ms, pause at least 30 ms |
-| s0meter's debounce | **1 / (2 × `debounceTime`)** | pulse and pause must each outlast the debounce: 10 ms → 50 Hz, 20 ms → 25 Hz |
+| s0meter's debounce | **1 / (2 × `debounceTime`)** | pulse and pause must each outlast the debounce, rounded up to 4 ms kernel ticks: 10 ms (acts as 12 ms) → about 41 Hz, 20 ms → 25 Hz |
 | PC817 with 10 kΩ pull-up | a few **kHz** | switching times of a few to some tens of µs; irrelevant for S0 |
 | Raspberry Pi, even a Zero | far above any S0 rate | edges are timestamped by the kernel and buffered; a burst that overruns the buffers is counted late, not lost — see `droppedEvents` |
 
@@ -461,7 +461,8 @@ How the gauge behaves over time:
 ### Choosing a debounce time
 
 `debounceTime` is handed to the kernel's GPIO debouncer: an edge is reported only after the line has
-been stable for the full period. **The value must therefore be shorter than the pulse itself** — a
+been stable for the full period, rounded up to a whole kernel tick (see below). **The value must
+therefore be shorter than the pulse itself** — a
 debounce longer than the pulse swallows it entirely and the meter under-counts.
 
 | Meter type                        | Output                     | Bounce behaviour                       | Suggested |
@@ -475,6 +476,15 @@ window: the bounces are then counted as extra pulses.
 
 Pulse spacing is rarely the limit. At 1000 imp/kWh an 11 kW load still leaves 327 ms between pulses
 (164 ms at 22 kW), and a water meter at 1000 imp/m³ leaves over 700 ms even at 5 m³/h.
+
+**The Pi debounces in kernel ticks.** Its GPIO controller has no debounce of its own; the kernel
+uses a timer that counts whole ticks, 4 ms at the usual `CONFIG_HZ=250`. `debounceTime` is rounded
+up to a tick — `10ms` acts as 12 ms, `20ms` as 20 ms — and a pulse is stamped when the timer runs,
+not at its edge. The counter does not care. The gauge is computed from the interval between two
+stamps, so it can be off by up to one tick per interval: about 1 % at 327 ms between pulses, less at
+lower power. That is accepted here, because the debounce keeps noise on the cable from being
+counted; with `debounceTime: 0s` the stamps come straight from the edge. Measured by womat/gpio on a
+Pi 3B+ with Linux 6.18, see its README.
 
 > `pkg/pulsecounter` watches the rising edge only, so the pulse *width* cannot be measured from the
 > logs. Take it from the meter's data sheet and stay well below it.

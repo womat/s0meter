@@ -12,7 +12,7 @@
 //	h := s0meters.New()
 //	err = h.RegisterMeter("wallbox", cfg, saved["wallbox"])
 //	go h.RunPeriodicBackup(ctx, time.Minute, file)
-//	go h.RunPeriodicPublish(ctx, time.Minute, 2*time.Second, mqttHandler, mqttHandler.IsConnectionOpen)
+//	go h.RunPeriodicPublish(ctx, time.Minute, 2*time.Second, mqttHandler)
 //	defer h.Close()
 package s0meters
 
