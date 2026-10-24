@@ -370,6 +370,13 @@ func (m *MQTTConfig) validate() error {
 		return errors.New("mqtt.connection is required; delete the mqtt block to run without MQTT")
 	}
 
+	// Without a scheme url.Parse takes a host name for the scheme and finds no host, so /health
+	// would show no broker, although Paho connects by assuming tcp://.
+	const needHost = "mqtt.connection needs scheme://host:port, e.g. tcp://broker:1883"
+	if !strings.Contains(m.Connection, "://") {
+		return errors.New(needHost)
+	}
+
 	// The broker URL is redacted before it is logged or shown on /health, which only works when
 	// url.Parse finds the user part. An unencoded "/", "#", "?" or space in the password hides
 	// it, and the password would appear in plain text. The errors do not repeat the URL.
@@ -377,6 +384,9 @@ func (m *MQTTConfig) validate() error {
 	if err != nil || (u.User == nil && strings.Contains(m.Connection, "@")) {
 		return errors.New("mqtt.connection is not a valid URL; URL-encode special characters " +
 			"in user and password, e.g. / as %2F, # as %23, ? as %3F")
+	}
+	if u.Host == "" {
+		return errors.New(needHost)
 	}
 
 	if m.PublishInterval == 0 {

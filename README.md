@@ -223,7 +223,8 @@ named in the error, while one set to an empty string is used as it is. Comments 
 other `$` is kept literally, so passwords may contain it. Special characters in the user or
 password of `connection` must be URL-encoded (`/` as `%2F`, `#` as `%23`, `?` as `%3F`, a value
 taken from a variable included); otherwise the start is refused, because the password could not be
-hidden in the log and on `/health`. An entry in `allowedIPs` or `blockedIPs` that is no IP address
+hidden in the log and on `/health`. A `connection` without a scheme (`broker:1883` instead of
+`tcp://broker:1883`) is refused too. An entry in `allowedIPs` or `blockedIPs` that is no IP address
 or network, a `listenHost` that is a name rather than an IP address or `localhost`, a
 `logDestination` file whose directory does not exist, and `env: prod` without both `certFile` and
 `keyFile` are refused as well. Unknown keys are rejected, so a misspelled or renamed setting

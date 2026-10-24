@@ -257,6 +257,19 @@ func TestValidateRefusesBrokerURLWithUnencodedPassword(t *testing.T) {
 	}
 }
 
+// Without a scheme url.Parse takes a host name for the scheme and finds no host, so /health
+// would show no broker although Paho connects; with an IP it fails outright. Both are refused
+// alike, as is a scheme without a host.
+func TestValidateRefusesBrokerURLWithoutHost(t *testing.T) {
+	for _, connection := range []string{"mqtt.example:1883", "192.168.1.5:1883", "tcp://", "tcp:///x"} {
+		c := validConfig()
+		c.MQTT = &MQTTConfig{Connection: connection}
+		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "scheme://host:port") {
+			t.Errorf("Validate(%q) = %v, want an error asking for scheme://host:port", connection, err)
+		}
+	}
+}
+
 // logLevel is matched like xlog matches it: case-insensitively and ignoring surrounding blanks.
 func TestValidateLogLevelIgnoresCase(t *testing.T) {
 	for level, valid := range map[string]bool{
