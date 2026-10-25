@@ -82,7 +82,12 @@ clean: ## Remove build related file
 test: ensure_dev_certs ## run all tests with the race detector (Linux only, see comment for macOS)
 	GOOS=linux go test -race ./...
 
-# Lint tools, pinned like in CI; dependabot does not see these - raise them by hand.
+# The analysers are pinned here only - ci.yml and release.yml call make lint - and
+# raised by hand: dependabot does not see go install lines.
+#
+# go fix -diff and go mod tidy -diff report a pending change and fail instead of
+# writing it; `GOOS=linux go fix ./...` and `go mod tidy` apply it. go fix goes red on
+# its own when a new Go release adds a fixer - that is the point.
 GOLANGCI_LINT_VERSION := v2.15.0
 GOVULNCHECK_VERSION   := v1.9.0
 TOOLS_BIN             := $(CURDIR)/bin/tools
@@ -90,11 +95,14 @@ TOOLS_BIN             := $(CURDIR)/bin/tools
 # The tools are built for this machine (GOOS/GOARCH cleared) but analyse the deployment
 # target: the GPIO backend only compiles for Linux, so a native run on macOS fails with
 # undefined: uapi.*. `go run` cannot do both - it would build the tool for the target.
-lint: ensure_dev_certs ## gofmt, go vet, golangci-lint (also -tags swagger) and govulncheck for $(PI_ARCH)
+lint: ensure_dev_certs ## gofmt, go fix, go mod tidy, go vet, golangci-lint and govulncheck (vet and golangci-lint also -tags swagger) for $(PI_ARCH)
 	@test -z "$$(gofmt -l ./app ./cmd ./pkg)" || { echo "not gofmt'ed:"; gofmt -l ./app ./cmd ./pkg; exit 1; }
+	@d="$$($(GOENV_$(PI_ARCH)) go fix -diff ./...)"; test -z "$$d" || { echo "$$d"; echo "go fix has pending changes - run: GOOS=linux go fix ./..."; exit 1; }
+	go mod tidy -diff
 	@GOOS= GOARCH= GOARM= GOBIN=$(TOOLS_BIN) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	@GOOS= GOARCH= GOARM= GOBIN=$(TOOLS_BIN) go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 	$(GOENV_$(PI_ARCH)) go vet ./...
+	$(GOENV_$(PI_ARCH)) go vet -tags swagger ./...
 	$(GOENV_$(PI_ARCH)) $(TOOLS_BIN)/golangci-lint run ./...
 	$(GOENV_$(PI_ARCH)) $(TOOLS_BIN)/golangci-lint run --build-tags swagger ./...
 	$(GOENV_$(PI_ARCH)) $(TOOLS_BIN)/govulncheck ./...
