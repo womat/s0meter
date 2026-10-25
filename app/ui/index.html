@@ -207,9 +207,7 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8p
 <script>
 "use strict";
 const POLL_MS = 3000;
-// The old name stays: a new one would sign every browser out once, and
-// docs/screenshots/capture.py sets the same key.
-const KEY = "s0meter.apiKey";
+const KEY = "s0meter.token";
 const $ = id => document.getElementById(id);
 
 let token = load();
